@@ -35,6 +35,8 @@ const btnProcess     = $('btn-process');
 const btnProcessLbl  = $('btn-process-label');
 const btnPreview     = $('btn-preview');
 const btnPreviewLbl  = $('btn-preview-label');
+const btnAB          = $('btn-ab');
+const abStatus       = $('ab-status');
 const previewIcon    = $('preview-icon');
 const btnSpinner     = $('btn-spinner');
 const btnClearQueue  = $('btn-clear-queue');
@@ -654,16 +656,36 @@ async function downloadResultsAsZip(results) {
 
 // ── Preview Logic ────────────────────────────────────────────────
 let previewSource = null;
+let previewSourceOrig = null;
+let gainCrunched = null;
+let gainOriginal = null;
 let previewCtx = null;
+let isComparingOriginal = false;
 
 async function stopPreview() {
-  if (previewSource) {
-    try { previewSource.stop(); } catch(e) {}
-    previewSource = null;
-  }
+  if (previewSource) { try { previewSource.stop(); } catch(e) {} previewSource = null; }
+  if (previewSourceOrig) { try { previewSourceOrig.stop(); } catch(e) {} previewSourceOrig = null; }
+  
   btnPreview.classList.remove('playing');
   btnPreviewLbl.textContent = 'PREVIEW';
   previewIcon.textContent = '▶';
+  btnAB.style.display = 'none';
+  isComparingOriginal = false;
+  abStatus.textContent = 'CRUNCHED';
+}
+
+function toggleAB() {
+  if (!previewCtx) return;
+  isComparingOriginal = !isComparingOriginal;
+  const now = previewCtx.currentTime;
+  
+  // Crossfade for smooth transition
+  gainOriginal.gain.setTargetAtTime(isComparingOriginal ? 1 : 0, now, 0.04);
+  gainCrunched.gain.setTargetAtTime(isComparingOriginal ? 0 : 1, now, 0.04);
+  
+  abStatus.textContent = isComparingOriginal ? 'ORIGINAL' : 'CRUNCHED';
+  btnAB.classList.toggle('active', isComparingOriginal);
+  log(`compare: switching to ${isComparingOriginal ? 'ORIGINAL' : 'CRUNCHED'}`, 'sys');
 }
 
 async function togglePreview() {
@@ -684,40 +706,67 @@ async function togglePreview() {
     if (!previewCtx) previewCtx = new (window.AudioContext || window.webkitAudioContext)();
     const decoded = await previewCtx.decodeAudioData(rawBuffer);
     
-    // Create a slice of the audio (max 10 seconds)
     const previewLength = Math.min(decoded.duration, 10);
     const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
+    const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
     
     // Resample via OfflineAudioContext
-    const offCtx = new OfflineAudioContext(1, Math.ceil(previewLength * targetRate), targetRate);
+    const offCtx = new OfflineAudioContext(numChannels, Math.ceil(previewLength * targetRate), targetRate);
     const src = offCtx.createBufferSource();
     src.buffer = decoded;
     src.connect(offCtx.destination);
     src.start(0);
     
     const resampled = await offCtx.startRendering();
-    const buf = resampled.getChannelData(0);
-    const samples = new Float32Array(buf);
     
-    // Apply DSP
-    processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+    // Create TWO versions
+    const bufCrunched = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
+    const bufOriginal = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
     
-    // Create new buffer for playback
-    const playbackBuffer = previewCtx.createBuffer(1, samples.length, targetRate);
-    playbackBuffer.getChannelData(0).set(samples);
+    for (let ch = 0; ch < numChannels; ch++) {
+      const data = resampled.getChannelData(ch);
+      const samples = new Float32Array(data);
+      
+      // Original copy
+      bufOriginal.getChannelData(ch).set(samples);
+      
+      // Crunched copy
+      processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+      bufCrunched.getChannelData(ch).set(samples);
+    }
     
-    // Play
+    // Setup Gains
+    gainCrunched = previewCtx.createGain();
+    gainOriginal = previewCtx.createGain();
+    gainCrunched.connect(previewCtx.destination);
+    gainOriginal.connect(previewCtx.destination);
+    
+    // Initial state: hear crunched
+    gainCrunched.gain.value = 1;
+    gainOriginal.gain.value = 0;
+    
+    // Play both in sync
+    const startTime = previewCtx.currentTime + 0.1;
+    
     previewSource = previewCtx.createBufferSource();
-    previewSource.buffer = playbackBuffer;
-    previewSource.connect(previewCtx.destination);
+    previewSource.buffer = bufCrunched;
+    previewSource.connect(gainCrunched);
+    
+    previewSourceOrig = previewCtx.createBufferSource();
+    previewSourceOrig.buffer = bufOriginal;
+    previewSourceOrig.connect(gainOriginal);
+    
     previewSource.onended = stopPreview;
     
-    previewSource.start(0);
+    previewSource.start(startTime);
+    previewSourceOrig.start(startTime);
     
     btnPreview.classList.add('playing');
     btnPreviewLbl.textContent = 'STOP';
     previewIcon.textContent = '■';
-    log(`previewing: ${file.name} (10s limit)`, 'accent');
+    btnAB.style.display = 'inline-flex';
+    
+    log(`previewing: ${file.name} (A/B mode active)`, 'accent');
     
   } catch (err) {
     log(`preview error: ${err.message}`, 'error');
@@ -786,6 +835,9 @@ btnProcess.addEventListener('click', startProcessing);
 
 // ── Preview button ────────────────────────────────────────────────
 btnPreview.addEventListener('click', togglePreview);
+
+// ── A/B button ────────────────────────────────────────────────────
+btnAB.addEventListener('click', toggleAB);
 
 // ── Clear queue ───────────────────────────────────────────────────
 btnClearQueue.addEventListener('click', clearQueue);
