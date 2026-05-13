@@ -243,7 +243,14 @@ function encodeOGG(samples, sampleRate) {
   // Quality 0.0 equals roughly Vorbis quality 0 (similar to -q:a 0)
   // OggVorbisEncoder quality is from -0.1 to 1.0
   const encoder = new OggVorbisEncoder(sampleRate, 1, 0.0);
-  encoder.encode([samples]);
+  
+  // Encode in chunks to prevent Emscripten OOM (TOTAL_MEMORY limit)
+  const CHUNK_SIZE = 65536; // 64k samples per chunk
+  for (let i = 0; i < samples.length; i += CHUNK_SIZE) {
+    const chunk = samples.subarray(i, i + CHUNK_SIZE);
+    encoder.encode([chunk]);
+  }
+  
   return encoder.finish(); // Returns a Blob
 }
 
