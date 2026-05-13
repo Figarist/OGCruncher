@@ -255,6 +255,76 @@ function encodeOGG(samples, sampleRate) {
 }
 
 /* ════════════════════════════════════════════════════════════════════
+   WAV ENCODER
+   Encodes a Float32Array (mono, [-1,1]) → WAV Blob
+   ════════════════════════════════════════════════════════════════════ */
+function encodeWAV(samples, sampleRate, bitDepth) {
+  const bytesPerSample = bitDepth === 16 ? 2 : 1;
+  const buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
+  const view = new DataView(buffer);
+
+  const writeString = (v, offset, str) => {
+    for (let i = 0; i < str.length; i++) v.setUint8(offset + i, str.charCodeAt(i));
+  };
+
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 1 * bytesPerSample, true);
+  view.setUint16(32, 1 * bytesPerSample, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, samples.length * bytesPerSample, true);
+
+  if (bitDepth === 16) {
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+      let s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+  } else {
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 1) {
+      let s = Math.max(-1, Math.min(1, samples[i]));
+      view.setUint8(offset, (s + 1) * 127.5);
+    }
+  }
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   MP3 ENCODER
+   Encodes a Float32Array (mono, [-1,1]) → MP3 Blob using lamejs
+   ════════════════════════════════════════════════════════════════════ */
+function encodeMP3(samples, sampleRate) {
+  const intSamples = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    let s = Math.max(-1, Math.min(1, samples[i]));
+    intSamples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  
+  const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, 128);
+  const mp3Data = [];
+  const sampleBlockSize = 1152;
+  
+  for (let i = 0; i < intSamples.length; i += sampleBlockSize) {
+    const chunk = intSamples.subarray(i, i + sampleBlockSize);
+    const mp3buf = mp3encoder.encodeBuffer(chunk);
+    if (mp3buf.length > 0) mp3Data.push(mp3buf);
+  }
+  
+  const mp3buf = mp3encoder.flush();
+  if (mp3buf.length > 0) mp3Data.push(mp3buf);
+  
+  return new Blob(mp3Data, { type: 'audio/mp3' });
+}
+
+/* ════════════════════════════════════════════════════════════════════
    PROCESS ONE FILE
    Uses OfflineAudioContext to decode → resample, then runs DSP in-place
    ════════════════════════════════════════════════════════════════════ */
@@ -296,19 +366,30 @@ async function processFile(file, index) {
     // ── DSP pipeline (in-place, zero-allocation) ─────────────────
     processDSP(samples, state.bitDepth, state.crushMode);
 
-    // ── Encode to OGG ─────────────────────────────────────────────
-    const blob = encodeOGG(samples, targetRate);
-    const url  = URL.createObjectURL(blob);
+    // ── Encode to Formats ─────────────────────────────────────────────
+    const blobOGG = encodeOGG(samples, targetRate);
+    const blobWAV = encodeWAV(samples, targetRate, state.bitDepth);
+    const blobMP3 = encodeMP3(samples, targetRate);
 
-    const sizeBefore = formatBytes(file.size);
-    const sizeAfter  = formatBytes(blob.size);
     const stem = file.name.replace(/\.[^.]+$/, '');
-    const outName = `${stem}_crunched_${state.bitDepth}bit_${targetRate}hz.ogg`;
+    const outNameBase = `${stem}_crunched_${state.bitDepth}bit_${targetRate}hz`;
 
-    log(`  ✅ Done: ${file.name} [${sizeBefore} → ${sizeAfter}]`, 'ok');
+    const sizeOGG = formatBytes(blobOGG.size);
+    const sizeWAV = formatBytes(blobWAV.size);
+    const sizeMP3 = formatBytes(blobMP3.size);
+
+    console.log(`[OGCruncher] ${file.name} future sizes -> OGG: ${sizeOGG}, WAV: ${sizeWAV}, MP3: ${sizeMP3}`);
+    log(`  ✅ Done: ${file.name} [OGG: ${sizeOGG} | WAV: ${sizeWAV} | MP3: ${sizeMP3}]`, 'ok');
     setItemState(index, 'done', '✓');
 
-    return { url, outName, sizeAfter };
+    return {
+      name: outNameBase,
+      formats: [
+        { ext: 'ogg', url: URL.createObjectURL(blobOGG), size: sizeOGG },
+        { ext: 'wav', url: URL.createObjectURL(blobWAV), size: sizeWAV },
+        { ext: 'mp3', url: URL.createObjectURL(blobMP3), size: sizeMP3 }
+      ]
+    };
 
   } catch (err) {
     log(`  ❌ Error processing ${file.name}: ${err.message}`, 'error');
@@ -355,10 +436,16 @@ async function startProcessing() {
     for (const r of results) {
       const div = document.createElement('div');
       div.className = 'result-item';
+      div.style.flexWrap = 'wrap';
       div.innerHTML = `
-        <span class="result-item__name" title="${r.outName}">${r.outName}</span>
-        <span class="result-item__size">${r.sizeAfter}</span>
-        <a href="${r.url}" download="${r.outName}" class="btn-download" aria-label="Download ${r.outName}">DOWNLOAD</a>`;
+        <span class="result-item__name" title="${r.name}" style="flex:1; width:100%; margin-bottom:8px;">${r.name}</span>
+        <div style="display:flex; gap:8px; width:100%;">
+          ${r.formats.map(f => `
+            <a href="${f.url}" download="${r.name}.${f.ext}" class="btn-download" aria-label="Download ${f.ext}" title="${f.size}" style="flex:1; text-align:center;">
+              ${f.ext.toUpperCase()} <small style="opacity:0.7; font-size:10px;">${f.size}</small>
+            </a>
+          `).join('')}
+        </div>`;
       resultsArea.appendChild(div);
     }
     log(`done: ${results.length}/${state.files.length} file(s) ready`, 'ok');
