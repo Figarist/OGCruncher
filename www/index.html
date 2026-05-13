@@ -110,7 +110,10 @@
       <div class="control-group" id="group-presets">
         <div class="control-header">
           <span class="control-label">PRESETS</span>
-          <button id="btn-save-custom" class="btn btn--ghost btn--xs" title="Save current settings as your custom preset">SAVE CURRENT</button>
+          <div style="display:flex; gap:4px;">
+            <button id="btn-copy-link" class="btn btn--ghost btn--xs" title="Copy current settings as a shareable link">COPY LINK</button>
+            <button id="btn-save-custom" class="btn btn--ghost btn--xs" title="Save current settings as your custom preset">SAVE CURRENT</button>
+          </div>
         </div>
         <div class="preset-grid">
           <button id="btn-preset-author" class="btn btn--preset-card active" aria-label="Apply Author's LO-Q preset (8-bit, 22050Hz)">
@@ -168,6 +171,17 @@
             <div class="slider-pips" aria-hidden="true">
               <span>4k</span><span>11k</span><span>22k</span><span>32k</span><span>48k</span>
             </div>
+          </div>
+          <!-- IMPROVEMENT 1: Snap-to-Standard Buttons -->
+          <div class="sr-snap-row" style="display:flex; gap:4px; margin-top:8px; flex-wrap:wrap;">
+            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="4000" onclick="syncSampleRate(4000)">4k</button>
+            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="8000" onclick="syncSampleRate(8000)">8k</button>
+            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="11025" onclick="syncSampleRate(11025)">11k</button>
+            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="16000" onclick="syncSampleRate(16000)">16k</button>
+            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="22050" onclick="syncSampleRate(22050)">22k</button>
+            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="32000" onclick="syncSampleRate(32000)">32k</button>
+            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="44100" onclick="syncSampleRate(44100)">44.1k</button>
+            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="48000" onclick="syncSampleRate(48000)">48k</button>
           </div>
         </div>
 
@@ -247,6 +261,26 @@
           </button>
         </div>
 
+        <!-- IMPROVEMENT 2: Normalize Toggle -->
+        <div class="control-group" id="group-normalize">
+          <div class="control-header">
+            <label for="toggle-normalize" class="control-label" data-tooltip="Normalizes output peak to 0 dBFS. Keeps all your SFX at consistent loudness across a batch.">NORMALIZE</label>
+            <span id="out-normalize" class="control-value">ON</span>
+          </div>
+          <button
+            role="switch"
+            aria-checked="true"
+            id="toggle-normalize"
+            class="toggle-switch active"
+            aria-label="Enable peak normalization"
+          >
+            <span class="toggle-track">
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-label-text">0 dBFS PEAK</span>
+          </button>
+        </div>
+
       </div>
 
       <!-- Filters & EQ -->
@@ -297,7 +331,7 @@
           <!-- Live Update Toggle -->
           <button id="btn-live-update" class="btn btn--live-toggle" aria-label="Toggle live parameter updates">
             <span class="live-icon">⚡</span>
-            <span class="live-label">LIVE UPDATE</span>
+            <span class="live-label">LIVE UPDATE: <span id="live-status">OFF</span></span>
           </button>
         </div>
       </div>
