@@ -103,12 +103,25 @@
     <section class="panel panel--controls" aria-label="Processing controls">
       <div class="panel-label" aria-hidden="true">[ PARAMETERS ]</div>
 
-      <!-- Preset -->
-      <button id="btn-wearoseee" class="btn btn--preset" aria-label="Apply Low Quality preset (8-bit, 22050Hz)">
-        <span class="btn-icon" aria-hidden="true">◉</span>
-        LO-Q MODE
-        <span class="btn-tag">8-bit / 22050 Hz</span>
-      </button>
+      <!-- Presets -->
+      <div class="control-group" id="group-presets">
+        <div class="control-header">
+          <span class="control-label">PRESETS</span>
+          <button id="btn-save-custom" class="btn btn--ghost btn--xs" title="Save current settings as your custom preset">SAVE CURRENT</button>
+        </div>
+        <div class="preset-grid">
+          <button id="btn-preset-author" class="btn btn--preset-card active" aria-label="Apply Author's LO-Q preset (8-bit, 22050Hz)">
+            <span class="preset-card__icon">◈</span>
+            <span class="preset-card__title">LO-Q MODE</span>
+            <span class="preset-card__meta">8-bit / 22050 Hz</span>
+          </button>
+          <button id="btn-preset-user" class="btn btn--preset-card" aria-label="Apply your custom preset" disabled>
+            <span class="preset-card__icon">👤</span>
+            <span class="preset-card__title">MY PRESET</span>
+            <span id="preset-user-meta" class="preset-card__meta">NOT SAVED</span>
+          </button>
+        </div>
+      </div>
 
       <!-- Bit Depth -->
       <div class="control-group" id="group-bitdepth">
@@ -154,6 +167,44 @@
         <p class="control-hint" id="hint-samplerate">● 22050 Hz ← lo-fi default</p>
       </div>
 
+      <!-- Saturation (Grit) -->
+      <div class="control-group" id="group-grit">
+        <div class="control-header">
+          <label for="slider-grit" class="control-label">SATURATION / GRIT</label>
+          <output id="out-grit" for="slider-grit" class="control-value">1.5</output>
+        </div>
+        <div class="slider-track-wrap">
+          <input
+            type="range"
+            id="slider-grit"
+            min="1.0" max="10.0" value="1.5" step="0.1"
+            class="slider"
+            aria-valuemin="1.0" aria-valuemax="10.0" aria-valuenow="1.5"
+            aria-label="Saturation drive amount"
+          />
+        </div>
+        <p class="control-hint">● 1.5 ← soft warm | 5.0+ ← heavy drive</p>
+      </div>
+
+      <!-- Noise Floor -->
+      <div class="control-group" id="group-noise">
+        <div class="control-header">
+          <label for="slider-noise" class="control-label">NOISE FLOOR</label>
+          <output id="out-noise" for="slider-noise" class="control-value">0</output>
+        </div>
+        <div class="slider-track-wrap">
+          <input
+            type="range"
+            id="slider-noise"
+            min="0" max="0.05" value="0" step="0.001"
+            class="slider"
+            aria-valuemin="0" aria-valuemax="0.05" aria-valuenow="0"
+            aria-label="Noise floor level"
+          />
+        </div>
+        <p class="control-hint">● subtle hiss for texture</p>
+      </div>
+
       <!-- Mode toggle -->
       <div class="control-group" id="group-mariomode">
         <div class="control-header">
@@ -174,8 +225,32 @@
         </button>
       </div>
 
+      <!-- Stereo Toggle -->
+      <div class="control-group" id="group-stereo">
+        <div class="control-header">
+          <label for="toggle-stereo" class="control-label">OUTPUT MODE</label>
+          <span id="out-stereo" class="control-value">MONO</span>
+        </div>
+        <button
+          role="switch"
+          aria-checked="false"
+          id="toggle-stereo"
+          class="toggle-switch"
+          aria-label="Toggle between Mono and Stereo output"
+        >
+          <span class="toggle-track">
+            <span class="toggle-thumb"></span>
+          </span>
+          <span class="toggle-label-text">FORCE MONO (REDUCED SIZE)</span>
+        </button>
+      </div>
+
       <!-- Action buttons -->
       <div class="action-row">
+        <button id="btn-preview" class="btn btn--secondary" disabled aria-label="Preview bit-crush effect on first file">
+          <span class="btn-icon" id="preview-icon">▶</span>
+          <span id="btn-preview-label">PREVIEW</span>
+        </button>
         <button id="btn-process" class="btn btn--primary" disabled aria-label="Process all queued files">
           <span class="btn-spinner" id="btn-spinner" aria-hidden="true"></span>
           <span id="btn-process-label">CRUNCH</span>

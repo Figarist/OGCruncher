@@ -17,6 +17,9 @@ const state = {
   bitDepth: 8,
   sampleRate: 22050,
   crushMode: true,    // expander + dither + anti-alias pipeline
+  grit: 1.5,
+  noise: 0.0,
+  stereo: false,
 };
 
 /* ════════════════════════════════════════════════════════════════════
@@ -30,15 +33,27 @@ const fileQueue      = $('file-queue');
 const queueHeader    = $('queue-header');
 const btnProcess     = $('btn-process');
 const btnProcessLbl  = $('btn-process-label');
+const btnPreview     = $('btn-preview');
+const btnPreviewLbl  = $('btn-preview-label');
+const previewIcon    = $('preview-icon');
 const btnSpinner     = $('btn-spinner');
 const btnClearQueue  = $('btn-clear-queue');
-const btnWearoseee   = $('btn-wearoseee');
+const btnPresetAuthor = $('btn-preset-author');
+const btnPresetUser   = $('btn-preset-user');
+const btnSaveCustom   = $('btn-save-custom');
+const userPresetMeta  = $('preset-user-meta');
 const btnMarioToggle = $('toggle-mariomode');
+const btnStereoToggle = $('toggle-stereo');
 const sliderBit      = $('slider-bitdepth');
 const sliderSr       = $('slider-samplerate');
+const sliderGrit     = $('slider-grit');
+const sliderNoise    = $('slider-noise');
 const outBit         = $('out-bitdepth');
 const outSr          = $('out-samplerate');
+const outGrit        = $('out-grit');
+const outNoise       = $('out-noise');
 const outMario       = $('out-mariomode');
+const outStereo      = $('out-stereo');
 const progressWrap   = $('progress-wrap');
 const progressFill   = $('progress-fill');
 const progressText   = $('progress-text');
@@ -104,6 +119,20 @@ function syncSampleRate(val) {
   updateSliderTrack(sliderSr);
 }
 
+function syncGrit(val) {
+  state.grit = +val;
+  sliderGrit.value = val;
+  outGrit.textContent = val;
+  updateSliderTrack(sliderGrit);
+}
+
+function syncNoise(val) {
+  state.noise = +val;
+  sliderNoise.value = val;
+  outNoise.textContent = val;
+  updateSliderTrack(sliderNoise);
+}
+
 /* ════════════════════════════════════════════════════════════════════
    QUEUE MANAGEMENT
    ════════════════════════════════════════════════════════════════════ */
@@ -132,6 +161,7 @@ function addFiles(newFiles) {
   if (state.files.length > 0) {
     queueHeader.hidden = false;
     btnProcess.disabled = false;
+    btnPreview.disabled = false;
     log(`${state.files.length} file(s) in queue.`, 'info');
   }
 }
@@ -141,6 +171,8 @@ function clearQueue() {
   fileQueue.innerHTML = '';
   queueHeader.hidden = true;
   btnProcess.disabled = true;
+  btnPreview.disabled = true;
+  stopPreview();
   resultsArea.innerHTML = '';
   resultsArea.hidden = true;
   log('Queue cleared.', 'sys');
@@ -177,9 +209,18 @@ function setProgress(pct, text) {
  * @param {Float32Array} buf       — mono channel buffer, values in [-1, 1]
  * @param {number}       bitDepth  — quantization bit depth (1–16)
  * @param {boolean}      crushMode — enable expander + dither + anti-alias
+ * @param {number}       grit      — saturation drive amount (1.0-10.0)
+ * @param {number}       noise     — white noise floor level (0.0-0.05)
  */
-function processDSP(buf, bitDepth, crushMode) {
+function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
   const N = buf.length;
+
+  // ── 0. Noise Floor ─────────────────────────────────────────────
+  if (noise > 0) {
+    for (let i = 0; i < N; i++) {
+      buf[i] += (Math.random() * 2 - 1) * noise;
+    }
+  }
 
   // ── 1. DC Offset Removal ────────────────────────────────────────
   let sum = 0;
@@ -228,27 +269,30 @@ function processDSP(buf, bitDepth, crushMode) {
   }
 
   // ── 7. Saturation + Soft Clip (tanh) ───────────────────────────
-  // Matches: samples * 1.5 → tanh → scale
+  // Matches: samples * grit → tanh → scale
   for (let i = 0; i < N; i++) {
-    buf[i] = Math.tanh(buf[i] * 1.5);
+    buf[i] = Math.tanh(buf[i] * grit);
   }
-  // buf is now in (-1, 1) — leave in float range; WAV encoder scales separately
 }
 
 /* ════════════════════════════════════════════════════════════════════
    OGG VORBIS ENCODER
    Encodes a Float32Array (mono, [-1,1]) → OGG Blob using OggVorbisEncoder.js
    ════════════════════════════════════════════════════════════════════ */
-function encodeOGG(samples, sampleRate) {
+function encodeOGG(channels, sampleRate) {
   // Quality 0.0 equals roughly Vorbis quality 0 (similar to -q:a 0)
   // OggVorbisEncoder quality is from -0.1 to 1.0
-  const encoder = new OggVorbisEncoder(sampleRate, 1, 0.0);
+  const numChannels = channels.length;
+  const encoder = new OggVorbisEncoder(sampleRate, numChannels, 0.0);
   
   // Encode in chunks to prevent Emscripten OOM (TOTAL_MEMORY limit)
   const CHUNK_SIZE = 65536; // 64k samples per chunk
-  for (let i = 0; i < samples.length; i += CHUNK_SIZE) {
-    const chunk = samples.subarray(i, i + CHUNK_SIZE);
-    encoder.encode([chunk]);
+  const totalSamples = channels[0].length;
+
+  for (let i = 0; i < totalSamples; i += CHUNK_SIZE) {
+    const chunkEnd = Math.min(i + CHUNK_SIZE, totalSamples);
+    const chunks = channels.map(ch => ch.subarray(i, chunkEnd));
+    encoder.encode(chunks);
   }
   
   return encoder.finish(); // Returns a Blob
@@ -258,9 +302,12 @@ function encodeOGG(samples, sampleRate) {
    WAV ENCODER
    Encodes a Float32Array (mono, [-1,1]) → WAV Blob
    ════════════════════════════════════════════════════════════════════ */
-function encodeWAV(samples, sampleRate, bitDepth) {
+function encodeWAV(channels, sampleRate, bitDepth) {
+  const numChannels = channels.length;
+  const numSamples = channels[0].length;
   const bytesPerSample = bitDepth === 16 ? 2 : 1;
-  const buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
+  const blockAlign = numChannels * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + numSamples * blockAlign);
   const view = new DataView(buffer);
 
   const writeString = (v, offset, str) => {
@@ -268,30 +315,30 @@ function encodeWAV(samples, sampleRate, bitDepth) {
   };
 
   writeString(view, 0, 'RIFF');
-  view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+  view.setUint32(4, 36 + numSamples * blockAlign, true);
   writeString(view, 8, 'WAVE');
   writeString(view, 12, 'fmt ');
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
+  view.setUint16(22, numChannels, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 1 * bytesPerSample, true);
-  view.setUint16(32, 1 * bytesPerSample, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
   view.setUint16(34, bitDepth, true);
   writeString(view, 36, 'data');
-  view.setUint32(40, samples.length * bytesPerSample, true);
+  view.setUint32(40, numSamples * blockAlign, true);
 
-  if (bitDepth === 16) {
-    let offset = 44;
-    for (let i = 0; i < samples.length; i++, offset += 2) {
-      let s = Math.max(-1, Math.min(1, samples[i]));
-      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    }
-  } else {
-    let offset = 44;
-    for (let i = 0; i < samples.length; i++, offset += 1) {
-      let s = Math.max(-1, Math.min(1, samples[i]));
-      view.setUint8(offset, (s + 1) * 127.5);
+  let offset = 44;
+  for (let i = 0; i < numSamples; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      let s = Math.max(-1, Math.min(1, channels[ch][i]));
+      if (bitDepth === 16) {
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        offset += 2;
+      } else {
+        view.setUint8(offset, (s + 1) * 127.5);
+        offset += 1;
+      }
     }
   }
   return new Blob([view], { type: 'audio/wav' });
@@ -301,20 +348,35 @@ function encodeWAV(samples, sampleRate, bitDepth) {
    MP3 ENCODER
    Encodes a Float32Array (mono, [-1,1]) → MP3 Blob using lamejs
    ════════════════════════════════════════════════════════════════════ */
-function encodeMP3(samples, sampleRate) {
-  const intSamples = new Int16Array(samples.length);
-  for (let i = 0; i < samples.length; i++) {
-    let s = Math.max(-1, Math.min(1, samples[i]));
-    intSamples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-  }
+function encodeMP3(channels, sampleRate) {
+  const numChannels = channels.length;
+  const numSamples = channels[0].length;
   
-  const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, 128);
+  const mp3encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, 128);
   const mp3Data = [];
   const sampleBlockSize = 1152;
   
-  for (let i = 0; i < intSamples.length; i += sampleBlockSize) {
-    const chunk = intSamples.subarray(i, i + sampleBlockSize);
-    const mp3buf = mp3encoder.encodeBuffer(chunk);
+  // Prepare Int16 buffers
+  const intChannels = channels.map(ch => {
+    const i16 = new Int16Array(ch.length);
+    for (let i = 0; i < ch.length; i++) {
+      let s = Math.max(-1, Math.min(1, ch[i]));
+      i16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return i16;
+  });
+
+  for (let i = 0; i < numSamples; i += sampleBlockSize) {
+    const chunkEnd = Math.min(i + sampleBlockSize, numSamples);
+    const leftChunk = intChannels[0].subarray(i, chunkEnd);
+    const rightChunk = numChannels > 1 ? intChannels[1].subarray(i, chunkEnd) : leftChunk;
+    
+    let mp3buf;
+    if (numChannels === 1) {
+      mp3buf = mp3encoder.encodeBuffer(leftChunk);
+    } else {
+      mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
+    }
     if (mp3buf.length > 0) mp3Data.push(mp3buf);
   }
   
@@ -342,10 +404,11 @@ async function processFile(file, index) {
     await decodeCtx.close();
 
     const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
+    const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
 
     // OfflineAudioContext for high-quality resampling
     const offCtx = new OfflineAudioContext(
-      1,                               // force mono
+      numChannels,
       Math.ceil(decoded.duration * targetRate),
       targetRate
     );
@@ -356,20 +419,22 @@ async function processFile(file, index) {
     src.start(0);
 
     const resampled = await offCtx.startRendering();
+    
+    // Process channels
+    const channels = [];
+    for (let ch = 0; ch < numChannels; ch++) {
+      const buf = resampled.getChannelData(ch);
+      const samples = new Float32Array(buf);
+      processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+      channels.push(samples);
+    }
 
-    // Extract mono channel as Float32Array (copy — we mutate it next)
-    const buf = resampled.getChannelData(0);  // direct view
-    const samples = new Float32Array(buf);    // owned copy for mutation
-
-    log(`  Decoded: ${decoded.numberOfChannels}ch → mono | ${decoded.sampleRate}Hz → ${targetRate}Hz | ${samples.length} samples`, 'sys');
-
-    // ── DSP pipeline (in-place, zero-allocation) ─────────────────
-    processDSP(samples, state.bitDepth, state.crushMode);
+    log(`  Decoded: ${decoded.numberOfChannels}ch → ${numChannels}ch | ${decoded.sampleRate}Hz → ${targetRate}Hz`, 'sys');
 
     // ── Encode to Formats ─────────────────────────────────────────────
-    const blobOGG = encodeOGG(samples, targetRate);
-    const blobWAV = encodeWAV(samples, targetRate, state.bitDepth);
-    const blobMP3 = encodeMP3(samples, targetRate);
+    const blobOGG = encodeOGG(channels, targetRate);
+    const blobWAV = encodeWAV(channels, targetRate, state.bitDepth);
+    const blobMP3 = encodeMP3(channels, targetRate);
 
     const stem = file.name.replace(/\.[^.]+$/, '');
     const outNameBase = `${stem}_crunched_${state.bitDepth}bit_${targetRate}hz`;
@@ -485,6 +550,8 @@ fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files
 // ── Sliders ───────────────────────────────────────────────────────
 sliderBit.addEventListener('input', () => syncBitDepth(sliderBit.value));
 sliderSr.addEventListener('input',  () => syncSampleRate(sliderSr.value));
+sliderGrit.addEventListener('input', () => syncGrit(sliderGrit.value));
+sliderNoise.addEventListener('input', () => syncNoise(sliderNoise.value));
 
 // ── Toggle Crush Mode ─────────────────────────────────────────────
 btnMarioToggle.addEventListener('click', () => {
@@ -495,17 +562,149 @@ btnMarioToggle.addEventListener('click', () => {
   log(`Crush mode: ${state.crushMode ? 'ENABLED' : 'DISABLED'}`, 'sys');
 });
 
-// ── LO-Q Preset ──────────────────────────────────────────────
-btnWearoseee.addEventListener('click', () => {
+// ── Toggle Stereo ─────────────────────────────────────────────────
+btnStereoToggle.addEventListener('click', () => {
+  state.stereo = !state.stereo;
+  btnStereoToggle.setAttribute('aria-checked', state.stereo);
+  btnStereoToggle.classList.toggle('active', state.stereo);
+  outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
+  log(`Output mode: ${state.stereo ? 'STEREO' : 'MONO'}`, 'sys');
+});
+
+// ── Preview Logic ────────────────────────────────────────────────
+let previewSource = null;
+let previewCtx = null;
+
+async function stopPreview() {
+  if (previewSource) {
+    try { previewSource.stop(); } catch(e) {}
+    previewSource = null;
+  }
+  btnPreview.classList.remove('playing');
+  btnPreviewLbl.textContent = 'PREVIEW';
+  previewIcon.textContent = '▶';
+}
+
+async function togglePreview() {
+  if (btnPreview.classList.contains('playing')) {
+    stopPreview();
+    return;
+  }
+
+  if (state.files.length === 0) return;
+  
+  btnPreview.disabled = true;
+  btnPreviewLbl.textContent = 'LOADING…';
+  
+  try {
+    const file = state.files[0];
+    const rawBuffer = await file.arrayBuffer();
+    
+    if (!previewCtx) previewCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded = await previewCtx.decodeAudioData(rawBuffer);
+    
+    // Create a slice of the audio (max 10 seconds)
+    const previewLength = Math.min(decoded.duration, 10);
+    const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
+    
+    // Resample via OfflineAudioContext
+    const offCtx = new OfflineAudioContext(1, Math.ceil(previewLength * targetRate), targetRate);
+    const src = offCtx.createBufferSource();
+    src.buffer = decoded;
+    src.connect(offCtx.destination);
+    src.start(0);
+    
+    const resampled = await offCtx.startRendering();
+    const buf = resampled.getChannelData(0);
+    const samples = new Float32Array(buf);
+    
+    // Apply DSP
+    processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+    
+    // Create new buffer for playback
+    const playbackBuffer = previewCtx.createBuffer(1, samples.length, targetRate);
+    playbackBuffer.getChannelData(0).set(samples);
+    
+    // Play
+    previewSource = previewCtx.createBufferSource();
+    previewSource.buffer = playbackBuffer;
+    previewSource.connect(previewCtx.destination);
+    previewSource.onended = stopPreview;
+    
+    previewSource.start(0);
+    
+    btnPreview.classList.add('playing');
+    btnPreviewLbl.textContent = 'STOP';
+    previewIcon.textContent = '■';
+    log(`previewing: ${file.name} (10s limit)`, 'accent');
+    
+  } catch (err) {
+    log(`preview error: ${err.message}`, 'error');
+    showToast('❌ preview failed', 'error');
+  } finally {
+    btnPreview.disabled = false;
+  }
+}
+
+// ── Presets ──────────────────────────────────────────────────────
+function updatePresetUI(type) {
+  btnPresetAuthor.classList.toggle('active', type === 'author');
+  btnPresetUser.classList.toggle('active', type === 'user');
+}
+
+btnPresetAuthor.addEventListener('click', () => {
   syncBitDepth(8);
   syncSampleRate(22050);
+  syncGrit(1.5);
+  syncNoise(0);
   if (!state.crushMode) btnMarioToggle.click();
-  log('lo-q preset: 8-bit / 22050 Hz / crush on', 'accent');
-  showToast('◉ lo-q mode on', 'info');
+  if (state.stereo) btnStereoToggle.click();
+  updatePresetUI('author');
+  log('preset: LO-Q (author default)', 'accent');
+  showToast('◉ author preset loaded', 'info');
+});
+
+btnPresetUser.addEventListener('click', () => {
+  const saved = localStorage.getItem('ogcruncher_preset');
+  if (!saved) return;
+  const p = JSON.parse(saved);
+  syncBitDepth(p.bitDepth);
+  syncSampleRate(p.sampleRate);
+  if (p.grit !== undefined) syncGrit(p.grit);
+  if (p.noise !== undefined) syncNoise(p.noise);
+  if (state.crushMode !== p.crushMode) btnMarioToggle.click();
+  if (p.stereo !== undefined && state.stereo !== p.stereo) btnStereoToggle.click();
+  updatePresetUI('user');
+  log('preset: MY PRESET (user custom)', 'accent');
+  showToast('👤 custom preset loaded', 'info');
+});
+
+btnSaveCustom.addEventListener('click', () => {
+  const preset = {
+    bitDepth: state.bitDepth,
+    sampleRate: state.sampleRate,
+    crushMode: state.crushMode,
+    grit: state.grit,
+    noise: state.noise,
+    stereo: state.stereo,
+    ts: Date.now()
+  };
+  localStorage.setItem('ogcruncher_preset', JSON.stringify(preset));
+  
+  // Enable button & update label
+  btnPresetUser.disabled = false;
+  userPresetMeta.textContent = `${preset.bitDepth}-bit / ${preset.sampleRate}Hz`;
+  
+  updatePresetUI('user');
+  log('custom preset saved to localstorage', 'ok');
+  showToast('💾 custom preset saved', 'ok');
 });
 
 // ── Process button ────────────────────────────────────────────────
 btnProcess.addEventListener('click', startProcessing);
+
+// ── Preview button ────────────────────────────────────────────────
+btnPreview.addEventListener('click', togglePreview);
 
 // ── Clear queue ───────────────────────────────────────────────────
 btnClearQueue.addEventListener('click', clearQueue);
@@ -516,6 +715,16 @@ btnClearQueue.addEventListener('click', clearQueue);
 (function init() {
   syncBitDepth(8);
   syncSampleRate(22050);
+  syncGrit(1.5);
+  syncNoise(0);
+
+  // Check for saved preset
+  const saved = localStorage.getItem('ogcruncher_preset');
+  if (saved) {
+    const p = JSON.parse(saved);
+    btnPresetUser.disabled = false;
+    userPresetMeta.textContent = `${p.bitDepth}-bit / ${p.sampleRate}Hz`;
+  }
 
   // PWA service worker registration
   if ('serviceWorker' in navigator) {
