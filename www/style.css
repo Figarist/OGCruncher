@@ -159,6 +159,51 @@ a { text-decoration: none; color: inherit; }
   align-items: start;
 }
 
+/* ── Tooltips ────────────────────────────────────────────────── */
+[data-tooltip] {
+  position: relative;
+  cursor: help;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 140%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a1a1a;
+  font-size: 1rem; 
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: normal;
+  width: 240px;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1000;
+  text-align: center;
+  backdrop-filter: blur(12px);
+}
+
+/* Dark mode adjustment for tooltips */
+@media (prefers-color-scheme: dark) {
+  [data-tooltip]::after {
+    background: rgba(30, 30, 35, 0.95);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* ── BENTO CARDS ───────────────────────────────────────────────── */
 .panel {
   background: var(--card-bg);
