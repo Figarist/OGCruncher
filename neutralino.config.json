@@ -2,8 +2,8 @@
   "applicationId": "io.github.figarist.ogcruncher",
   "version": "1.0.0",
   "defaultMode": "window",
-  "documentRoot": "/",
-  "url": "index.html",
+  "documentRoot": "/www/",
+  "url": "/index.html",
   "port": 0,
   "enableServer": true,
   "enableNativeAPI": true,
@@ -40,13 +40,13 @@
   },
   "cli": {
     "binaryName": "OGCruncher",
-    "resourcesPath": "/www/",
+    "resourcesPath": "./www/",
     "extensionsPath": "./extensions/",
     "clientLibrary": "/neutralino.js",
     "binaryVersion": "5.3.0",
     "clientVersion": "5.3.0",
     "frontendLibrary": {
-      "patchFile": "/www/index.html",
+      "patchFile": "./www/index.html",
       "devUrl": "http://localhost:3000"
     }
   }
