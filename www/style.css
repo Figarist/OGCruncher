@@ -335,6 +335,37 @@ a { text-decoration: none; color: inherit; }
 
 .btn--preset-card.active .preset-card__meta { opacity: 0.8; }
 
+/* Audio Rack (Grid) */
+.audio-rack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 14px;
+  background: var(--bg-color);
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.03);
+}
+
+.audio-rack .control-value {
+  font-size: 1.15rem;
+}
+
+.audio-rack .control-group {
+  gap: 8px;
+}
+
+.audio-rack .toggle-switch {
+  padding: 8px 10px;
+  height: 100%;
+}
+
+@media (max-width: 600px) {
+  .audio-rack {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Control groups */
 .control-group { display: flex; flex-direction: column; gap: 10px; }
 

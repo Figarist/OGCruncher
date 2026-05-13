@@ -123,126 +123,127 @@
         </div>
       </div>
 
-      <!-- Bit Depth -->
-      <div class="control-group" id="group-bitdepth">
-        <div class="control-header">
-          <label for="slider-bitdepth" class="control-label">BIT DEPTH</label>
-          <output id="out-bitdepth" for="slider-bitdepth" class="control-value">8</output>
-        </div>
-        <div class="slider-track-wrap">
-          <input
-            type="range"
-            id="slider-bitdepth"
-            min="1" max="16" value="8" step="1"
-            class="slider"
-            aria-valuemin="1" aria-valuemax="16" aria-valuenow="8"
-            aria-label="Bit depth"
-          />
-          <div class="slider-pips" aria-hidden="true">
-            <span>1</span><span>4</span><span>8</span><span>12</span><span>16</span>
+      <!-- ── AUDIO RACK (Grid) ── -->
+      <div class="audio-rack">
+        
+        <!-- Bit Depth -->
+        <div class="control-group" id="group-bitdepth">
+          <div class="control-header">
+            <label for="slider-bitdepth" class="control-label">BIT DEPTH</label>
+            <output id="out-bitdepth" for="slider-bitdepth" class="control-value">8</output>
+          </div>
+          <div class="slider-track-wrap">
+            <input
+              type="range"
+              id="slider-bitdepth"
+              min="1" max="16" value="8" step="1"
+              class="slider"
+              aria-valuemin="1" aria-valuemax="16" aria-valuenow="8"
+              aria-label="Bit depth"
+            />
+            <div class="slider-pips" aria-hidden="true">
+              <span>1</span><span>4</span><span>8</span><span>12</span><span>16</span>
+            </div>
           </div>
         </div>
-        <p class="control-hint" id="hint-bitdepth">● 8-bit ← lo-fi sweet spot</p>
-      </div>
 
-      <!-- Sample Rate -->
-      <div class="control-group" id="group-samplerate">
-        <div class="control-header">
-          <label for="slider-samplerate" class="control-label">SAMPLE RATE</label>
-          <output id="out-samplerate" for="slider-samplerate" class="control-value">22050 <span class="unit">Hz</span></output>
-        </div>
-        <div class="slider-track-wrap">
-          <input
-            type="range"
-            id="slider-samplerate"
-            min="4000" max="48000" value="22050" step="50"
-            class="slider"
-            aria-valuemin="4000" aria-valuemax="48000" aria-valuenow="22050"
-            aria-label="Sample rate in Hz"
-          />
-          <div class="slider-pips" aria-hidden="true">
-            <span>4k</span><span>11k</span><span>22k</span><span>32k</span><span>48k</span>
+        <!-- Sample Rate -->
+        <div class="control-group" id="group-samplerate">
+          <div class="control-header">
+            <label for="slider-samplerate" class="control-label">SAMPLE RATE</label>
+            <output id="out-samplerate" for="slider-samplerate" class="control-value">22050 <span class="unit">Hz</span></output>
+          </div>
+          <div class="slider-track-wrap">
+            <input
+              type="range"
+              id="slider-samplerate"
+              min="4000" max="48000" value="22050" step="50"
+              class="slider"
+              aria-valuemin="4000" aria-valuemax="48000" aria-valuenow="22050"
+              aria-label="Sample rate in Hz"
+            />
+            <div class="slider-pips" aria-hidden="true">
+              <span>4k</span><span>11k</span><span>22k</span><span>32k</span><span>48k</span>
+            </div>
           </div>
         </div>
-        <p class="control-hint" id="hint-samplerate">● 22050 Hz ← lo-fi default</p>
-      </div>
 
-      <!-- Saturation (Grit) -->
-      <div class="control-group" id="group-grit">
-        <div class="control-header">
-          <label for="slider-grit" class="control-label">SATURATION / GRIT</label>
-          <output id="out-grit" for="slider-grit" class="control-value">1.5</output>
+        <!-- Saturation (Grit) -->
+        <div class="control-group" id="group-grit">
+          <div class="control-header">
+            <label for="slider-grit" class="control-label">GRIT</label>
+            <output id="out-grit" for="slider-grit" class="control-value">1.5</output>
+          </div>
+          <div class="slider-track-wrap">
+            <input
+              type="range"
+              id="slider-grit"
+              min="1.0" max="10.0" value="1.5" step="0.1"
+              class="slider"
+              aria-valuemin="1.0" aria-valuemax="10.0" aria-valuenow="1.5"
+              aria-label="Saturation drive amount"
+            />
+          </div>
         </div>
-        <div class="slider-track-wrap">
-          <input
-            type="range"
-            id="slider-grit"
-            min="1.0" max="10.0" value="1.5" step="0.1"
-            class="slider"
-            aria-valuemin="1.0" aria-valuemax="10.0" aria-valuenow="1.5"
-            aria-label="Saturation drive amount"
-          />
-        </div>
-        <p class="control-hint">● 1.5 ← soft warm | 5.0+ ← heavy drive</p>
-      </div>
 
-      <!-- Noise Floor -->
-      <div class="control-group" id="group-noise">
-        <div class="control-header">
-          <label for="slider-noise" class="control-label">NOISE FLOOR</label>
-          <output id="out-noise" for="slider-noise" class="control-value">0</output>
+        <!-- Noise Floor -->
+        <div class="control-group" id="group-noise">
+          <div class="control-header">
+            <label for="slider-noise" class="control-label">NOISE</label>
+            <output id="out-noise" for="slider-noise" class="control-value">0</output>
+          </div>
+          <div class="slider-track-wrap">
+            <input
+              type="range"
+              id="slider-noise"
+              min="0" max="0.05" value="0" step="0.001"
+              class="slider"
+              aria-valuemin="0" aria-valuemax="0.05" aria-valuenow="0"
+              aria-label="Noise floor level"
+            />
+          </div>
         </div>
-        <div class="slider-track-wrap">
-          <input
-            type="range"
-            id="slider-noise"
-            min="0" max="0.05" value="0" step="0.001"
-            class="slider"
-            aria-valuemin="0" aria-valuemax="0.05" aria-valuenow="0"
-            aria-label="Noise floor level"
-          />
-        </div>
-        <p class="control-hint">● subtle hiss for texture</p>
-      </div>
 
-      <!-- Mode toggle -->
-      <div class="control-group" id="group-mariomode">
-        <div class="control-header">
-          <label for="toggle-mariomode" class="control-label">CRUSH MODE</label>
-          <span id="out-mariomode" class="control-value" aria-live="polite">ON</span>
+        <!-- Mode toggle -->
+        <div class="control-group" id="group-mariomode">
+          <div class="control-header">
+            <label for="toggle-mariomode" class="control-label">CRUSH MODE</label>
+            <span id="out-mariomode" class="control-value" aria-live="polite">ON</span>
+          </div>
+          <button
+            role="switch"
+            aria-checked="true"
+            id="toggle-mariomode"
+            class="toggle-switch active"
+            aria-label="Enable expander, dither and anti-alias pipeline"
+          >
+            <span class="toggle-track">
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-label-text">EXPANDER</span>
+          </button>
         </div>
-        <button
-          role="switch"
-          aria-checked="true"
-          id="toggle-mariomode"
-          class="toggle-switch active"
-          aria-label="Enable expander, dither and anti-alias pipeline"
-        >
-          <span class="toggle-track">
-            <span class="toggle-thumb"></span>
-          </span>
-          <span class="toggle-label-text">EXPANDER · DITHER · ANTI-ALIAS</span>
-        </button>
-      </div>
 
-      <!-- Stereo Toggle -->
-      <div class="control-group" id="group-stereo">
-        <div class="control-header">
-          <label for="toggle-stereo" class="control-label">OUTPUT MODE</label>
-          <span id="out-stereo" class="control-value">MONO</span>
+        <!-- Stereo Toggle -->
+        <div class="control-group" id="group-stereo">
+          <div class="control-header">
+            <label for="toggle-stereo" class="control-label">OUTPUT</label>
+            <span id="out-stereo" class="control-value">MONO</span>
+          </div>
+          <button
+            role="switch"
+            aria-checked="false"
+            id="toggle-stereo"
+            class="toggle-switch"
+            aria-label="Toggle between Mono and Stereo output"
+          >
+            <span class="toggle-track">
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-label-text">FORCE MONO</span>
+          </button>
         </div>
-        <button
-          role="switch"
-          aria-checked="false"
-          id="toggle-stereo"
-          class="toggle-switch"
-          aria-label="Toggle between Mono and Stereo output"
-        >
-          <span class="toggle-track">
-            <span class="toggle-thumb"></span>
-          </span>
-          <span class="toggle-label-text">FORCE MONO (REDUCED SIZE)</span>
-        </button>
+
       </div>
 
       <!-- Filters & EQ -->
