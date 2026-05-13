@@ -904,9 +904,15 @@ function drawVisualizer() {
 
   const barWidth = (width / bufferLength) * 2.2;
   
-  // ── 2. Draw Original (Blue) ───────────────────────────────────
-  // Using a soft blue with transparency
-  ctx.fillStyle = 'rgba(162, 194, 225, 0.5)'; 
+  // ── 2. Determine Alpha levels based on current A/B state ───────
+  const alphaActive = 0.85;
+  const alphaGhost  = 0.25;
+
+  const colorOrig = isComparingOriginal ? `rgba(162, 194, 225, ${alphaActive})` : `rgba(162, 194, 225, ${alphaGhost})`;
+  const colorCr   = isComparingOriginal ? `rgba(229, 115, 115, ${alphaGhost})` : `rgba(229, 115, 115, ${alphaActive})`;
+
+  // ── 3. Draw Original (Blue) ───────────────────────────────────
+  ctx.fillStyle = colorOrig; 
   let x = 0;
   for (let i = 0; i < bufferLength; i++) {
     const bh = dataOrig[i] / 255 * height;
@@ -914,9 +920,8 @@ function drawVisualizer() {
     x += barWidth + 1;
   }
 
-  // ── 3. Draw Crunched (Red/Plum) ───────────────────────────────
-  // Using a vibrant red/coral to highlight the difference
-  ctx.fillStyle = 'rgba(229, 115, 115, 0.6)'; 
+  // ── 4. Draw Crunched (Red/Plum) ───────────────────────────────
+  ctx.fillStyle = colorCr; 
   x = 0;
   for (let i = 0; i < bufferLength; i++) {
     const bh = dataCr[i] / 255 * height;
