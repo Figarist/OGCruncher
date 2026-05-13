@@ -546,14 +546,45 @@ async function startProcessing() {
    EVENT LISTENERS
    ════════════════════════════════════════════════════════════════════ */
 
-// ── Drag & Drop ───────────────────────────────────────────────────
+// ── Drag & Drop (Folder Support) ──────────────────────────────────
+async function handleItems(items) {
+  const allFiles = [];
+  
+  async function traverseEntry(entry) {
+    if (entry.isFile) {
+      const file = await new Promise(res => entry.file(res));
+      if (file.type.startsWith('audio/') || /\.(wav|mp3|flac|ogg|aiff?|m4a)$/i.test(file.name)) {
+        allFiles.push(file);
+      }
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const entries = await new Promise(res => reader.readEntries(res));
+      for (const e of entries) await traverseEntry(e);
+    }
+  }
+
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry();
+    if (entry) await traverseEntry(entry);
+  }
+  
+  if (allFiles.length > 0) addFiles(allFiles);
+}
+
 dropZone.addEventListener('dragenter', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragover',  e => { e.preventDefault(); });
 dropZone.addEventListener('dragleave', e => { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
-dropZone.addEventListener('drop', e => {
+
+dropZone.addEventListener('drop', async e => {
   e.preventDefault();
   dropZone.classList.remove('drag-over');
-  addFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('audio/') || /\.(wav|mp3|flac|ogg|aiff?|m4a)$/i.test(f.name)));
+  
+  if (e.dataTransfer.items) {
+    await handleItems(e.dataTransfer.items);
+  } else {
+    // Fallback for older browsers
+    addFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('audio/') || /\.(wav|mp3|flac|ogg|aiff?|m4a)$/i.test(f.name)));
+  }
 });
 
 // Click to browse
