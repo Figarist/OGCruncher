@@ -679,6 +679,43 @@ a { text-decoration: none; color: inherit; }
 .btn--ghost:hover { border-color: #e57373; color: #c0392b; }
 .btn--xs { font-size: .65rem; padding: 4px 10px; }
 
+.btn-remove {
+  background: transparent;
+  border: none;
+  color: #e57373;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 4px;
+  transition: all var(--t-fast);
+}
+
+.btn-remove:hover {
+  background: #ffeb3b40;
+  color: #c0392b;
+  transform: scale(1.1);
+}
+
+.hotkey {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  opacity: 0.6;
+  background: rgba(0,0,0,0.06);
+  padding: 2px 5px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 600;
+  border: 1px solid rgba(0,0,0,0.04);
+  letter-spacing: 0.05em;
+}
+
+.btn--hero .hotkey {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
 /* Spinner */
 .btn-spinner {
   display: none;

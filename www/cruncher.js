@@ -25,6 +25,30 @@ const state = {
   bass: 0,
 };
 
+function saveState() {
+  const { files, processing, ...persistentState } = state;
+  localStorage.setItem('ogcruncher_last_state', JSON.stringify(persistentState));
+}
+
+function loadState() {
+  const saved = localStorage.getItem('ogcruncher_last_state');
+  if (!saved) return;
+  try {
+    const p = JSON.parse(saved);
+    if (p.bitDepth !== undefined) syncBitDepth(p.bitDepth);
+    if (p.sampleRate !== undefined) syncSampleRate(p.sampleRate);
+    if (p.grit !== undefined) syncGrit(p.grit);
+    if (p.noise !== undefined) syncNoise(p.noise);
+    if (p.hpf !== undefined) syncHpf(p.hpf);
+    if (p.lpf !== undefined) syncLpf(p.lpf);
+    if (p.bass !== undefined) syncBass(p.bass);
+    if (p.crushMode !== undefined && p.crushMode !== state.crushMode) btnMarioToggle.click();
+    if (p.stereo !== undefined && p.stereo !== state.stereo) btnStereoToggle.click();
+  } catch (e) {
+    console.error('Failed to load state', e);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════════
    DOM REFS
    ════════════════════════════════════════════════════════════════════ */
@@ -74,6 +98,12 @@ const logWindow      = $('log-window');
 const resultsArea    = $('results-area');
 const badgeStatus    = $('badge-status');
 const toast          = $('toast');
+const dropContent    = $('drop-content');
+const visualizer     = $('visualizer');
+
+let analyserCrunched = null;
+let analyserOriginal = null;
+let visDrawId = null;
 
 /* ════════════════════════════════════════════════════════════════════
    LOGGING
@@ -121,6 +151,7 @@ function syncBitDepth(val) {
   outBit.textContent = val;
   sliderBit.setAttribute('aria-valuenow', val);
   updateSliderTrack(sliderBit);
+  saveState();
 }
 
 function syncSampleRate(val) {
@@ -129,6 +160,7 @@ function syncSampleRate(val) {
   outSr.innerHTML = `${(+val).toLocaleString()} <span class="unit">Hz</span>`;
   sliderSr.setAttribute('aria-valuenow', val);
   updateSliderTrack(sliderSr);
+  saveState();
 }
 
 function syncGrit(val) {
@@ -136,6 +168,7 @@ function syncGrit(val) {
   sliderGrit.value = val;
   outGrit.textContent = val;
   updateSliderTrack(sliderGrit);
+  saveState();
 }
 
 function syncNoise(val) {
@@ -143,6 +176,7 @@ function syncNoise(val) {
   sliderNoise.value = val;
   outNoise.textContent = val;
   updateSliderTrack(sliderNoise);
+  saveState();
 }
 
 function syncHpf(val) {
@@ -150,6 +184,7 @@ function syncHpf(val) {
   sliderHpf.value = val;
   outHpf.textContent = val > 20 ? `${val} Hz` : '20 Hz';
   updateSliderTrack(sliderHpf);
+  saveState();
 }
 
 function syncLpf(val) {
@@ -157,6 +192,7 @@ function syncLpf(val) {
   sliderLpf.value = val;
   outLpf.textContent = val < 20000 ? `${val} Hz` : 'OFF';
   updateSliderTrack(sliderLpf);
+  saveState();
 }
 
 function syncBass(val) {
@@ -164,6 +200,7 @@ function syncBass(val) {
   sliderBass.value = val;
   outBass.textContent = val > 0 ? `+${val} dB` : '0 dB';
   updateSliderTrack(sliderBass);
+  saveState();
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -177,27 +214,43 @@ function formatBytes(b) {
 
 function addFiles(newFiles) {
   for (const f of newFiles) {
-    if (state.files.some(x => x.name === f.name && x.size === f.size)) continue;
+    if (state.files.some(x => x && x.name === f.name && x.size === f.size)) continue;
     state.files.push(f);
+    const index = state.files.length - 1;
 
     const li = document.createElement('li');
     li.className = 'queue-item queue-item--idle';
-    li.id = `qi-${state.files.length - 1}`;
+    li.id = `qi-${index}`;
     li.innerHTML = `
       <span class="queue-item__icon">◎</span>
       <span class="queue-item__name" title="${f.name}">${f.name}</span>
       <span class="queue-item__size">${formatBytes(f.size)}</span>
-      <span class="queue-item__status" id="qs-${state.files.length - 1}">IDLE</span>`;
+      <span class="queue-item__status" id="qs-${index}">IDLE</span>
+      <button class="btn-remove" aria-label="Remove" onclick="removeFile(${index})">×</button>`;
     fileQueue.appendChild(li);
   }
 
-  if (state.files.length > 0) {
+  const validFiles = state.files.filter(f => f !== null);
+  if (validFiles.length > 0) {
     queueHeader.hidden = false;
     btnProcess.disabled = false;
     btnPreview.disabled = false;
-    log(`${state.files.length} file(s) in queue.`, 'info');
+    log(`${validFiles.length} file(s) in queue.`, 'info');
   }
 }
+
+window.removeFile = function(index) {
+  state.files[index] = null;
+  const li = $(`qi-${index}`);
+  if (li) li.remove();
+  
+  const validFiles = state.files.filter(f => f !== null);
+  if (validFiles.length === 0) {
+    clearQueue();
+  } else {
+    log(`${validFiles.length} file(s) in queue.`, 'info');
+  }
+};
 
 function clearQueue() {
   state.files = [];
@@ -542,14 +595,19 @@ async function startProcessing() {
   log(`${state.bitDepth}-bit · ${state.sampleRate} Hz · crush=${state.crushMode}`, 'sys');
 
   const results = [];
+  const validFiles = state.files.filter(f => f !== null);
+  let processedCount = 0;
 
   for (let i = 0; i < state.files.length; i++) {
-    const pct = (i / state.files.length) * 100;
-    setProgress(pct, `File ${i + 1} / ${state.files.length}`);
+    if (!state.files[i]) continue;
+    
+    const pct = (processedCount / validFiles.length) * 100;
+    setProgress(pct, `File ${processedCount + 1} / ${validFiles.length}`);
 
     const result = await processFile(state.files[i], i);
     if (result) results.push(result);
 
+    processedCount++;
     // Yield to UI thread between files
     await new Promise(r => setTimeout(r, 0));
   }
@@ -691,6 +749,7 @@ btnMarioToggle.addEventListener('click', () => {
   btnMarioToggle.classList.toggle('active', state.crushMode);
   outMario.textContent = state.crushMode ? 'ON' : 'OFF';
   log(`Crush mode: ${state.crushMode ? 'ENABLED' : 'DISABLED'}`, 'sys');
+  saveState();
 });
 
 // ── Toggle Stereo ─────────────────────────────────────────────────
@@ -701,6 +760,7 @@ btnStereoToggle.addEventListener('click', () => {
   btnStereoToggle.classList.toggle('active', isForceMono);
   outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
   log(`Output mode: ${state.stereo ? 'STEREO' : 'MONO'}`, 'sys');
+  saveState();
 });
 
 // ── ZIP Export ───────────────────────────────────────────────────
@@ -789,6 +849,10 @@ let previewCtx = null;
 let isComparingOriginal = false;
 
 async function stopPreview() {
+  if (visDrawId) cancelAnimationFrame(visDrawId);
+  if (visualizer) visualizer.style.display = 'none';
+  if (dropContent) dropContent.style.display = 'flex';
+
   if (previewSource) { try { previewSource.stop(); } catch(e) {} previewSource = null; }
   if (previewSourceOrig) { try { previewSourceOrig.stop(); } catch(e) {} previewSourceOrig = null; }
   
@@ -799,6 +863,35 @@ async function stopPreview() {
   isComparingOriginal = false;
   abStatus.textContent = 'CRUNCHED';
   btnAB.classList.remove('active');
+}
+
+function drawVisualizer() {
+  if (!visualizer || visualizer.style.display === 'none') return;
+  const ctx = visualizer.getContext('2d');
+  const width = visualizer.width;
+  const height = visualizer.height;
+  
+  const analyser = isComparingOriginal ? analyserOriginal : analyserCrunched;
+  if (!analyser) return;
+  
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  analyser.getByteFrequencyData(dataArray);
+  
+  ctx.clearRect(0, 0, width, height);
+  
+  const barWidth = (width / bufferLength) * 2.5;
+  let x = 0;
+  
+  ctx.fillStyle = isComparingOriginal ? '#a2c2e1' : '#6b3fa0';
+  
+  for (let i = 0; i < bufferLength; i++) {
+    const barHeight = dataArray[i] / 255 * height;
+    ctx.fillRect(x, height - barHeight, barWidth, barHeight);
+    x += barWidth + 1;
+  }
+  
+  visDrawId = requestAnimationFrame(drawVisualizer);
 }
 
 function toggleAB() {
@@ -814,6 +907,7 @@ function toggleAB() {
   btnAB.classList.toggle('active', isComparingOriginal);
 }
 
+
 async function togglePreview() {
   if (btnPreview.classList.contains('playing')) {
     stopPreview();
@@ -823,43 +917,29 @@ async function togglePreview() {
   if (state.files.length === 0) return;
   
   btnPreview.disabled = true;
-  btnPreviewLbl.textContent = 'LOADING…';
-  
+
   try {
-    const file = state.files[0];
+    const firstValidIdx = state.files.findIndex(f => f !== null);
+    if (firstValidIdx === -1) return;
+    
+    const file = state.files[firstValidIdx];
     const rawBuffer = await file.arrayBuffer();
-    
-    if (!previewCtx) previewCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    if (!previewCtx) previewCtx = new AudioContext();
     const decoded = await previewCtx.decodeAudioData(rawBuffer);
-    
-    const previewLength = Math.min(decoded.duration, 10);
-    const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
+
+    const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
     const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
-    
-    // Resample via OfflineAudioContext
-    const offCtx = new OfflineAudioContext(numChannels, Math.ceil(previewLength * targetRate), targetRate);
+
+    const offCtx = new OfflineAudioContext(
+      numChannels,
+      Math.ceil(decoded.duration * targetRate),
+      targetRate
+    );
+
     const src = offCtx.createBufferSource();
     src.buffer = decoded;
-    
-    // Apply filters to preview as well
-    let lastNode = src;
-    if (state.hpf > 20) {
-      const hpf = offCtx.createBiquadFilter();
-      hpf.type = 'highpass'; hpf.frequency.value = state.hpf;
-      lastNode.connect(hpf); lastNode = hpf;
-    }
-    if (state.lpf < 20000) {
-      const lpf = offCtx.createBiquadFilter();
-      lpf.type = 'lowpass'; lpf.frequency.value = state.lpf;
-      lastNode.connect(lpf); lastNode = lpf;
-    }
-    if (state.bass > 0) {
-      const bass = offCtx.createBiquadFilter();
-      bass.type = 'peaking'; bass.frequency.value = 80; bass.gain.value = state.bass;
-      lastNode.connect(bass); lastNode = bass;
-    }
-
-    lastNode.connect(offCtx.destination);
+    src.connect(offCtx.destination);
     src.start(0);
     
     const resampled = await offCtx.startRendering();
@@ -886,6 +966,14 @@ async function togglePreview() {
     gainCrunched.connect(previewCtx.destination);
     gainOriginal.connect(previewCtx.destination);
     
+    // Setup Analysers
+    analyserCrunched = previewCtx.createAnalyser();
+    analyserOriginal = previewCtx.createAnalyser();
+    analyserCrunched.fftSize = 512;
+    analyserOriginal.fftSize = 512;
+    gainCrunched.connect(analyserCrunched);
+    gainOriginal.connect(analyserOriginal);
+    
     // Initial state: hear crunched
     gainCrunched.gain.value = 1;
     gainOriginal.gain.value = 0;
@@ -911,6 +999,11 @@ async function togglePreview() {
     previewIcon.textContent = '■';
     abContainer.style.display = 'flex';
     
+    // Show visualizer
+    dropContent.style.display = 'none';
+    visualizer.style.display = 'block';
+    drawVisualizer();
+    
     log(`previewing: ${file.name} (A/B mode active)`, 'accent');
     
   } catch (err) {
@@ -920,6 +1013,7 @@ async function togglePreview() {
     btnPreview.disabled = false;
   }
 }
+
 
 // ── Presets ──────────────────────────────────────────────────────
 function updatePresetUI(type) {
@@ -940,6 +1034,7 @@ btnPresetAuthor.addEventListener('click', () => {
   updatePresetUI('author');
   log('preset: LO-Q (author default)', 'accent');
   showToast('◉ author preset loaded', 'info');
+  saveState();
 });
 
 btnPresetUser.addEventListener('click', () => {
@@ -1021,6 +1116,21 @@ btnClearQueue.addEventListener('click', clearQueue);
     navigator.serviceWorker.register('sw.js').catch(() => {/* offline optional */});
   }
 
+  loadState();
   log('ready. drop files or click browse.', 'ok');
   setBadge('IDLE', 'badge--amber');
 })();
+// ── Hotkeys ──────────────────────────────────────────────────────
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (!btnPreview.disabled) btnPreview.click();
+  } else if (e.code === 'Enter') {
+    e.preventDefault();
+    if (!btnProcess.disabled) btnProcess.click();
+  } else if (e.code === 'KeyC') {
+    if (abContainer.style.display !== 'none') btnAB.click();
+  }
+});

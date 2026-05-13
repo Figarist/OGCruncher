@@ -71,16 +71,19 @@
         aria-label="Drag and drop audio files here"
         tabindex="0"
       >
-        <div class="drop-icon" aria-hidden="true">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="1" y="1" width="54" height="54" rx="3" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 3"/>
-            <path d="M28 36V20M28 20L21 27M28 20L35 27" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M16 40H40" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
-          </svg>
+        <div id="drop-content" style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+          <div class="drop-icon" aria-hidden="true">
+            <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="1" y="1" width="54" height="54" rx="3" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 3"/>
+              <path d="M28 36V20M28 20L21 27M28 20L35 27" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M16 40H40" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+            </svg>
+          </div>
+          <p class="drop-title">DROP AUDIO FILES HERE</p>
+          <p class="drop-sub">or <label for="file-input" class="file-label-btn">BROWSE FILES</label></p>
+          <p class="drop-formats">WAV · MP3 · FLAC · OGG · AIFF</p>
         </div>
-        <p class="drop-title">DROP AUDIO FILES HERE</p>
-        <p class="drop-sub">or <label for="file-input" class="file-label-btn">BROWSE FILES</label></p>
-        <p class="drop-formats">WAV · MP3 · FLAC · OGG · AIFF</p>
+        <canvas id="visualizer" width="300" height="120" style="display:none; width:100%; height:120px; border-radius:8px;"></canvas>
         <input
           type="file"
           id="file-input"
@@ -129,7 +132,7 @@
         <!-- Bit Depth -->
         <div class="control-group" id="group-bitdepth">
           <div class="control-header">
-            <label for="slider-bitdepth" class="control-label">BIT DEPTH</label>
+            <label for="slider-bitdepth" class="control-label" title="Якість звуку (кількість біт). Менше біт = більше 'піксельного' шуму та артефактів лоу-фай.">BIT DEPTH</label>
             <output id="out-bitdepth" for="slider-bitdepth" class="control-value">8</output>
           </div>
           <div class="slider-track-wrap">
@@ -150,7 +153,7 @@
         <!-- Sample Rate -->
         <div class="control-group" id="group-samplerate">
           <div class="control-header">
-            <label for="slider-samplerate" class="control-label">RATE</label>
+            <label for="slider-samplerate" class="control-label" title="Частота дискретизації. Нижчі значення роблять звук глухим і додають металевий присмак (аліасинг).">RATE</label>
             <output id="out-samplerate" for="slider-samplerate" class="control-value">22050 <span class="unit">Hz</span></output>
           </div>
           <div class="slider-track-wrap">
@@ -168,10 +171,10 @@
           </div>
         </div>
 
-        <!-- Saturation (Grit) -->
+        <!-- Grit -->
         <div class="control-group" id="group-grit">
           <div class="control-header">
-            <label for="slider-grit" class="control-label">GRIT</label>
+            <label for="slider-grit" class="control-label" title="Насиченість та яскравість. Додає характеру та енергії, роблячи звук більш щільним та гучним.">GRIT</label>
             <output id="out-grit" for="slider-grit" class="control-value">1.5</output>
           </div>
           <div class="slider-track-wrap">
@@ -186,10 +189,10 @@
           </div>
         </div>
 
-        <!-- Noise Floor -->
+        <!-- Noise -->
         <div class="control-group" id="group-noise">
           <div class="control-header">
-            <label for="slider-noise" class="control-label">NOISE</label>
+            <label for="slider-noise" class="control-label" title="Додає легке шипіння старого обладнання або касети для більшої атмосфери та лоу-фай текстури.">NOISE</label>
             <output id="out-noise" for="slider-noise" class="control-value">0</output>
           </div>
           <div class="slider-track-wrap">
@@ -204,10 +207,10 @@
           </div>
         </div>
 
-        <!-- Mode toggle -->
+        <!-- Mario Toggle -->
         <div class="control-group" id="group-mariomode">
           <div class="control-header">
-            <label for="toggle-mariomode" class="control-label">CRUSH MODE</label>
+            <label for="toggle-mariomode" class="control-label" title="Робить звук більш 'гострим' та динамічним, посилюючи піки та атаки для ефекту ретро-ігор.">CRUSH MODE</label>
             <span id="out-mariomode" class="control-value" aria-live="polite">ON</span>
           </div>
           <button
@@ -227,7 +230,7 @@
         <!-- Stereo Toggle -->
         <div class="control-group" id="group-stereo">
           <div class="control-header">
-            <label for="toggle-stereo" class="control-label">OUTPUT</label>
+            <label for="toggle-stereo" class="control-label" title="Перетворює стерео-звук у моно. Ідеально для ігрових звуків, щоб зекономити пам'ять.">OUTPUT</label>
             <span id="out-stereo" class="control-value">MONO</span>
           </div>
           <button
@@ -276,16 +279,19 @@
           <button id="btn-preview" class="btn btn--secondary" disabled aria-label="Preview">
             <span class="btn-icon" id="preview-icon">▶</span>
             <span id="btn-preview-label">PREVIEW</span>
+            <kbd class="hotkey">Space</kbd>
           </button>
           <button id="btn-process" class="btn btn--primary btn--hero" disabled aria-label="Crunch all">
             <span class="btn-spinner" id="btn-spinner" aria-hidden="true"></span>
             <span id="btn-process-label">CRUNCH</span>
+            <kbd class="hotkey">Enter</kbd>
           </button>
         </div>
         <div id="ab-container" class="ab-container" style="display:none;">
           <button id="btn-ab" class="btn btn--ab-toggle" aria-label="Toggle comparison">
             <span class="ab-label">COMPARING:</span>
             <span id="ab-status" class="ab-value">CRUNCHED</span>
+            <kbd class="hotkey" style="margin-left:6px">C</kbd>
           </button>
         </div>
       </div>
