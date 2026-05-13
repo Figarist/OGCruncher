@@ -20,6 +20,9 @@ const state = {
   grit: 1.5,
   noise: 0.0,
   stereo: false,
+  hpf: 20,
+  lpf: 20000,
+  bass: 0,
 };
 
 /* ════════════════════════════════════════════════════════════════════
@@ -56,6 +59,13 @@ const outGrit        = $('out-grit');
 const outNoise       = $('out-noise');
 const outMario       = $('out-mariomode');
 const outStereo      = $('out-stereo');
+const abContainer    = $('ab-container');
+const sliderHpf      = $('slider-hpf');
+const sliderLpf      = $('slider-lpf');
+const sliderBass     = $('slider-bass');
+const outHpf         = $('out-hpf');
+const outLpf         = $('out-lpf');
+const outBass        = $('out-bass');
 const progressWrap   = $('progress-wrap');
 const progressFill   = $('progress-fill');
 const progressText   = $('progress-text');
@@ -133,6 +143,27 @@ function syncNoise(val) {
   sliderNoise.value = val;
   outNoise.textContent = val;
   updateSliderTrack(sliderNoise);
+}
+
+function syncHpf(val) {
+  state.hpf = +val;
+  sliderHpf.value = val;
+  outHpf.textContent = val > 20 ? `${val} Hz` : '20 Hz';
+  updateSliderTrack(sliderHpf);
+}
+
+function syncLpf(val) {
+  state.lpf = +val;
+  sliderLpf.value = val;
+  outLpf.textContent = val < 20000 ? `${val} Hz` : 'OFF';
+  updateSliderTrack(sliderLpf);
+}
+
+function syncBass(val) {
+  state.bass = +val;
+  sliderBass.value = val;
+  outBass.textContent = val > 0 ? `+${val} dB` : '0 dB';
+  updateSliderTrack(sliderBass);
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -417,7 +448,35 @@ async function processFile(file, index) {
 
     const src = offCtx.createBufferSource();
     src.buffer = decoded;
-    src.connect(offCtx.destination);
+
+    // ── BIQUAD FILTERS ──────────────────────────────────────────
+    let lastNode = src;
+
+    if (state.hpf > 20) {
+      const hpf = offCtx.createBiquadFilter();
+      hpf.type = 'highpass';
+      hpf.frequency.value = state.hpf;
+      lastNode.connect(hpf);
+      lastNode = hpf;
+    }
+    if (state.lpf < 20000) {
+      const lpf = offCtx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = state.lpf;
+      lastNode.connect(lpf);
+      lastNode = lpf;
+    }
+    if (state.bass > 0) {
+      const bass = offCtx.createBiquadFilter();
+      bass.type = 'peaking';
+      bass.frequency.value = 80;
+      bass.Q.value = 0.7;
+      bass.gain.value = state.bass;
+      lastNode.connect(bass);
+      lastNode = bass;
+    }
+
+    lastNode.connect(offCtx.destination);
     src.start(0);
 
     const resampled = await offCtx.startRendering();
@@ -599,6 +658,9 @@ sliderBit.addEventListener('input', () => syncBitDepth(sliderBit.value));
 sliderSr.addEventListener('input',  () => syncSampleRate(sliderSr.value));
 sliderGrit.addEventListener('input', () => syncGrit(sliderGrit.value));
 sliderNoise.addEventListener('input', () => syncNoise(sliderNoise.value));
+sliderHpf.addEventListener('input', () => syncHpf(sliderHpf.value));
+sliderLpf.addEventListener('input', () => syncLpf(sliderLpf.value));
+sliderBass.addEventListener('input', () => syncBass(sliderBass.value));
 
 // ── Toggle Crush Mode ─────────────────────────────────────────────
 btnMarioToggle.addEventListener('click', () => {
@@ -669,9 +731,10 @@ async function stopPreview() {
   btnPreview.classList.remove('playing');
   btnPreviewLbl.textContent = 'PREVIEW';
   previewIcon.textContent = '▶';
-  btnAB.style.display = 'none';
+  abContainer.style.display = 'none';
   isComparingOriginal = false;
   abStatus.textContent = 'CRUNCHED';
+  btnAB.classList.remove('active');
 }
 
 function toggleAB() {
@@ -685,7 +748,6 @@ function toggleAB() {
   
   abStatus.textContent = isComparingOriginal ? 'ORIGINAL' : 'CRUNCHED';
   btnAB.classList.toggle('active', isComparingOriginal);
-  log(`compare: switching to ${isComparingOriginal ? 'ORIGINAL' : 'CRUNCHED'}`, 'sys');
 }
 
 async function togglePreview() {
@@ -714,7 +776,26 @@ async function togglePreview() {
     const offCtx = new OfflineAudioContext(numChannels, Math.ceil(previewLength * targetRate), targetRate);
     const src = offCtx.createBufferSource();
     src.buffer = decoded;
-    src.connect(offCtx.destination);
+    
+    // Apply filters to preview as well
+    let lastNode = src;
+    if (state.hpf > 20) {
+      const hpf = offCtx.createBiquadFilter();
+      hpf.type = 'highpass'; hpf.frequency.value = state.hpf;
+      lastNode.connect(hpf); lastNode = hpf;
+    }
+    if (state.lpf < 20000) {
+      const lpf = offCtx.createBiquadFilter();
+      lpf.type = 'lowpass'; lpf.frequency.value = state.lpf;
+      lastNode.connect(lpf); lastNode = lpf;
+    }
+    if (state.bass > 0) {
+      const bass = offCtx.createBiquadFilter();
+      bass.type = 'peaking'; bass.frequency.value = 80; bass.gain.value = state.bass;
+      lastNode.connect(bass); lastNode = bass;
+    }
+
+    lastNode.connect(offCtx.destination);
     src.start(0);
     
     const resampled = await offCtx.startRendering();
@@ -764,7 +845,7 @@ async function togglePreview() {
     btnPreview.classList.add('playing');
     btnPreviewLbl.textContent = 'STOP';
     previewIcon.textContent = '■';
-    btnAB.style.display = 'inline-flex';
+    abContainer.style.display = 'flex';
     
     log(`previewing: ${file.name} (A/B mode active)`, 'accent');
     
@@ -787,6 +868,9 @@ btnPresetAuthor.addEventListener('click', () => {
   syncSampleRate(22050);
   syncGrit(1.5);
   syncNoise(0);
+  syncHpf(20);
+  syncLpf(20000);
+  syncBass(0);
   if (!state.crushMode) btnMarioToggle.click();
   if (state.stereo) btnStereoToggle.click();
   updatePresetUI('author');
@@ -802,6 +886,9 @@ btnPresetUser.addEventListener('click', () => {
   syncSampleRate(p.sampleRate);
   if (p.grit !== undefined) syncGrit(p.grit);
   if (p.noise !== undefined) syncNoise(p.noise);
+  if (p.hpf !== undefined) syncHpf(p.hpf);
+  if (p.lpf !== undefined) syncLpf(p.lpf);
+  if (p.bass !== undefined) syncBass(p.bass);
   if (state.crushMode !== p.crushMode) btnMarioToggle.click();
   if (p.stereo !== undefined && state.stereo !== p.stereo) btnStereoToggle.click();
   updatePresetUI('user');
@@ -817,6 +904,9 @@ btnSaveCustom.addEventListener('click', () => {
     grit: state.grit,
     noise: state.noise,
     stereo: state.stereo,
+    hpf: state.hpf,
+    lpf: state.lpf,
+    bass: state.bass,
     ts: Date.now()
   };
   localStorage.setItem('ogcruncher_preset', JSON.stringify(preset));
@@ -850,6 +940,9 @@ btnClearQueue.addEventListener('click', clearQueue);
   syncSampleRate(22050);
   syncGrit(1.5);
   syncNoise(0);
+  syncHpf(20);
+  syncLpf(20000);
+  syncBass(0);
 
   // Check for saved preset
   const saved = localStorage.getItem('ogcruncher_preset');

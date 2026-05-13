@@ -245,19 +245,48 @@
         </button>
       </div>
 
+      <!-- Filters & EQ -->
+      <div class="control-group" id="group-filters">
+        <div class="control-header">
+          <span class="control-label">FILTERS & EQ</span>
+        </div>
+        <div class="filter-grid">
+          <div class="filter-item">
+            <label for="slider-hpf" class="filter-label">HPF (CUT LOWS)</label>
+            <input type="range" id="slider-hpf" min="20" max="1000" value="20" step="10" class="slider slider--small">
+            <output id="out-hpf" class="filter-value">20 Hz</output>
+          </div>
+          <div class="filter-item">
+            <label for="slider-lpf" class="filter-label">LPF (CUT HIGHS)</label>
+            <input type="range" id="slider-lpf" min="500" max="20000" value="20000" step="100" class="slider slider--small">
+            <output id="out-lpf" class="filter-value">OFF</output>
+          </div>
+          <div class="filter-item filter-item--full">
+            <label for="slider-bass" class="filter-label">BASS BOOST (80Hz)</label>
+            <input type="range" id="slider-bass" min="0" max="15" value="0" step="0.5" class="slider slider--small">
+            <output id="out-bass" class="filter-value">+0 dB</output>
+          </div>
+        </div>
+      </div>
+
       <!-- Action buttons -->
-      <div class="action-row">
-        <button id="btn-preview" class="btn btn--secondary" disabled aria-label="Preview bit-crush effect on first file">
-          <span class="btn-icon" id="preview-icon">▶</span>
-          <span id="btn-preview-label">PREVIEW</span>
-        </button>
-        <button id="btn-ab" class="btn btn--ghost btn--xs" style="display:none;" aria-label="Toggle between Original and Crunched sound">
-          COMPARE: <span id="ab-status">CRUNCHED</span>
-        </button>
-        <button id="btn-process" class="btn btn--primary" disabled aria-label="Process all queued files">
-          <span class="btn-spinner" id="btn-spinner" aria-hidden="true"></span>
-          <span id="btn-process-label">CRUNCH</span>
-        </button>
+      <div class="action-stack">
+        <div class="action-row">
+          <button id="btn-preview" class="btn btn--secondary" disabled aria-label="Preview">
+            <span class="btn-icon" id="preview-icon">▶</span>
+            <span id="btn-preview-label">PREVIEW</span>
+          </button>
+          <button id="btn-process" class="btn btn--primary btn--hero" disabled aria-label="Crunch all">
+            <span class="btn-spinner" id="btn-spinner" aria-hidden="true"></span>
+            <span id="btn-process-label">CRUNCH</span>
+          </button>
+        </div>
+        <div id="ab-container" class="ab-container" style="display:none;">
+          <button id="btn-ab" class="btn btn--ab-toggle" aria-label="Toggle comparison">
+            <span class="ab-label">COMPARING:</span>
+            <span id="ab-status" class="ab-value">CRUNCHED</span>
+          </button>
+        </div>
       </div>
 
       <!-- Progress bar -->
