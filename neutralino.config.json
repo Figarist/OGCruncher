@@ -33,7 +33,6 @@
       "hidden": false,
       "fullScreen": false,
       "alwaysOnTop": false,
-      "icon": "icons/icon.png",
       "enableInspector": false,
       "borderless": false,
       "extendUserAgentWith": "OGCruncher/1.0"
@@ -41,13 +40,13 @@
   },
   "cli": {
     "binaryName": "OGCruncher",
-    "resourcesPath": "./resources/",
+    "resourcesPath": "/www/",
     "extensionsPath": "./extensions/",
     "clientLibrary": "/neutralino.js",
     "binaryVersion": "5.3.0",
     "clientVersion": "5.3.0",
     "frontendLibrary": {
-      "patchFile": "index.html",
+      "patchFile": "/www/index.html",
       "devUrl": "http://localhost:3000"
     }
   }

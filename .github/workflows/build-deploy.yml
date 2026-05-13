@@ -64,8 +64,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Всі наші файли знаходяться в корені
-          path: '.'
+          path: './www'
           
       - name: Deploy to GitHub Pages
         id: deployment
