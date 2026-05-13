@@ -40,10 +40,12 @@
     }
   },
   "cli": {
-    "binaryName": "WristAudioCruncher",
+    "binaryName": "OGCruncher",
     "resourcesPath": "./resources/",
     "extensionsPath": "./extensions/",
     "clientLibrary": "/neutralino.js",
+    "binaryVersion": "5.3.0",
+    "clientVersion": "5.3.0",
     "frontendLibrary": {
       "patchFile": "index.html",
       "devUrl": "http://localhost:3000"
