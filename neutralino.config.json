@@ -1,0 +1,52 @@
+{
+  "applicationId": "io.github.figarist.ogcruncher",
+  "version": "1.0.0",
+  "defaultMode": "window",
+  "documentRoot": "/",
+  "url": "index.html",
+  "port": 0,
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "tokenSecurity": "one-time",
+  "logging": {
+    "enabled": false
+  },
+  "nativeAllowList": [
+    "app.*",
+    "os.*",
+    "filesystem.*",
+    "debug.*",
+    "window.*"
+  ],
+  "globalVariables": {
+    "APP_NAME": "OGCruncher"
+  },
+  "modes": {
+    "window": {
+      "title": "OGCruncher — Audio Bit-Crusher",
+      "width": 1280,
+      "height": 780,
+      "minWidth": 800,
+      "minHeight": 560,
+      "resizable": true,
+      "maximize": false,
+      "hidden": false,
+      "fullScreen": false,
+      "alwaysOnTop": false,
+      "icon": "icons/icon.png",
+      "enableInspector": false,
+      "borderless": false,
+      "extendUserAgentWith": "OGCruncher/1.0"
+    }
+  },
+  "cli": {
+    "binaryName": "WristAudioCruncher",
+    "resourcesPath": "./resources/",
+    "extensionsPath": "./extensions/",
+    "clientLibrary": "/neutralino.js",
+    "frontendLibrary": {
+      "patchFile": "index.html",
+      "devUrl": "http://localhost:3000"
+    }
+  }
+}
