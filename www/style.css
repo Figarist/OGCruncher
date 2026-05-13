@@ -907,11 +907,23 @@ a { text-decoration: none; color: inherit; }
   color: #fff;
   border: none;
   border-radius: 99px;
-  cursor: pointer;
+  cursor: grab;
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: all var(--t-fast);
   box-shadow: 0 2px 8px rgba(122,184,36,.25);
+  position: relative;
+}
+
+.btn-download:active { cursor: grabbing; }
+
+.btn-download[draggable="true"]::before {
+  content: '⠿';
+  font-size: 8px;
+  opacity: 0.5;
+  margin-right: -2px;
 }
 
 .btn-download:hover { background: #629618; box-shadow: 0 4px 14px rgba(122,184,36,.4); }

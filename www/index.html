@@ -80,19 +80,19 @@
             </svg>
           </div>
           <p class="drop-title">DROP AUDIO FILES HERE</p>
-          <p class="drop-sub">or <span class="file-label-btn">BROWSE FILES</span></p>
+          <p class="drop-sub">or <label for="file-input" class="file-label-btn">BROWSE FILES</label></p>
           <p class="drop-formats">WAV · MP3 · FLAC · OGG · AIFF</p>
         </div>
         <canvas id="visualizer" width="300" height="120" style="display:none; width:100%; height:120px; border-radius:8px;"></canvas>
-        <input
-          type="file"
-          id="file-input"
-          accept="audio/*,.wav,.mp3,.flac,.ogg,.aiff,.aif"
-          multiple
-          style="display:none;"
-          aria-label="Choose audio files"
-        />
       </div>
+      <input
+        type="file"
+        id="file-input"
+        accept="audio/*,.wav,.mp3,.flac,.ogg,.aiff,.aif"
+        multiple
+        style="display:none;"
+        aria-label="Choose audio files"
+      />
 
       <!-- File queue -->
       <div class="queue-header" id="queue-header" hidden>

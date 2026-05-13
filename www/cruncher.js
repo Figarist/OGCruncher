@@ -656,7 +656,14 @@ async function startProcessing() {
         <div style="display:flex; gap:8px; width:100%; flex-wrap: wrap;">
           ${r.formats.map(f => `
             <div class="download-group" style="flex: 1; display: flex; gap: 2px;">
-              <a href="${f.url}" download="${r.name}.${f.ext}" class="btn-download" aria-label="Download ${f.ext}" title="${f.size}" style="flex:1; text-align:center;">
+              <a href="${f.url}" 
+                 download="${r.name}.${f.ext}" 
+                 draggable="true"
+                 ondragstart="handleDragStart(event, '${f.blob.type}', '${r.name}.${f.ext}', '${f.url}')"
+                 class="btn-download" 
+                 aria-label="Download ${f.ext}" 
+                 title="Drag me to DAW or Unity! (${f.size})" 
+                 style="flex:1; text-align:center;">
                 ${f.ext.toUpperCase()} <small style="opacity:0.7; font-size:10px;">${f.size}</small>
               </a>
               ${canShare ? `
@@ -843,6 +850,14 @@ async function shareFile(name, ext, url) {
   }
 }
 
+// ── Drag-out to DAW/Unity ────────────────────────────────────────
+window.handleDragStart = function(e, type, name, url) {
+  // Standard Chromium hack to drag files out of the browser
+  const downloadData = `${type}:${name}:${url}`;
+  e.dataTransfer.setData('DownloadURL', downloadData);
+  e.dataTransfer.effectAllowed = 'copy';
+};
+
 // ── Preview Logic ────────────────────────────────────────────────
 let previewSource = null;
 let previewSourceOrig = null;
@@ -868,7 +883,6 @@ async function stopPreview() {
   abStatus.textContent = 'CRUNCHED';
   btnAB.classList.remove('active');
   previewDecoded = null;
-}
 }
 
 function drawVisualizer() {
