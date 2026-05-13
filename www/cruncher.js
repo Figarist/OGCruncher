@@ -696,8 +696,9 @@ btnMarioToggle.addEventListener('click', () => {
 // ── Toggle Stereo ─────────────────────────────────────────────────
 btnStereoToggle.addEventListener('click', () => {
   state.stereo = !state.stereo;
-  btnStereoToggle.setAttribute('aria-checked', state.stereo);
-  btnStereoToggle.classList.toggle('active', state.stereo);
+  const isForceMono = !state.stereo;
+  btnStereoToggle.setAttribute('aria-checked', isForceMono);
+  btnStereoToggle.classList.toggle('active', isForceMono);
   outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
   log(`Output mode: ${state.stereo ? 'STEREO' : 'MONO'}`, 'sys');
 });
