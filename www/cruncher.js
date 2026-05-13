@@ -871,23 +871,56 @@ function drawVisualizer() {
   const width = visualizer.width;
   const height = visualizer.height;
   
-  const analyser = isComparingOriginal ? analyserOriginal : analyserCrunched;
-  if (!analyser) return;
+  if (!analyserOriginal || !analyserCrunched) return;
   
-  const bufferLength = analyser.frequencyBinCount;
-  const dataArray = new Uint8Array(bufferLength);
-  analyser.getByteFrequencyData(dataArray);
+  const bufferLength = analyserOriginal.frequencyBinCount;
+  const dataOrig = new Uint8Array(bufferLength);
+  const dataCr   = new Uint8Array(bufferLength);
+  
+  analyserOriginal.getByteFrequencyData(dataOrig);
+  analyserCrunched.getByteFrequencyData(dataCr);
   
   ctx.clearRect(0, 0, width, height);
+
+  // ── 1. Grid & Labels ──────────────────────────────────────────
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.fillStyle   = 'rgba(0,0,0,0.4)';
+  ctx.font        = '600 9px var(--font-mono)';
+  ctx.lineWidth   = 1;
+
+  const freqs = [1000, 5000, 10000, 20000];
+  const nyquist = previewCtx.sampleRate / 2;
   
-  const barWidth = (width / bufferLength) * 2.5;
+  freqs.forEach(f => {
+    const x = (f / nyquist) * width;
+    if (x < width) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+      ctx.fillText(f >= 1000 ? (f/1000)+'kHz' : f+'Hz', x + 3, 10);
+    }
+  });
+
+  const barWidth = (width / bufferLength) * 2.2;
+  
+  // ── 2. Draw Original (Blue) ───────────────────────────────────
+  // Using a soft blue with transparency
+  ctx.fillStyle = 'rgba(162, 194, 225, 0.5)'; 
   let x = 0;
-  
-  ctx.fillStyle = isComparingOriginal ? '#a2c2e1' : '#6b3fa0';
-  
   for (let i = 0; i < bufferLength; i++) {
-    const barHeight = dataArray[i] / 255 * height;
-    ctx.fillRect(x, height - barHeight, barWidth, barHeight);
+    const bh = dataOrig[i] / 255 * height;
+    ctx.fillRect(x, height - bh, barWidth, bh);
+    x += barWidth + 1;
+  }
+
+  // ── 3. Draw Crunched (Red/Plum) ───────────────────────────────
+  // Using a vibrant red/coral to highlight the difference
+  ctx.fillStyle = 'rgba(229, 115, 115, 0.6)'; 
+  x = 0;
+  for (let i = 0; i < bufferLength; i++) {
+    const bh = dataCr[i] / 255 * height;
+    ctx.fillRect(x, height - bh, barWidth, bh);
     x += barWidth + 1;
   }
   
