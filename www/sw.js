@@ -1,13 +1,15 @@
 // Service Worker — Wrist Audio Cruncher PWA
 // Cache-first strategy for offline support
 
-const CACHE_NAME = 'wac-v1';
+const CACHE_NAME = 'ogc-v2';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './cruncher.js',
   './manifest.json',
+  './OggVorbisEncoder.min.js',
+  './OggVorbisEncoder.min.js.mem'
 ];
 
 self.addEventListener('install', e => {
