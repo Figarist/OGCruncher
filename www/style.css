@@ -646,6 +646,7 @@ a { text-decoration: none; color: inherit; }
 .ab-container {
   display: flex;
   justify-content: center;
+  gap: 12px;
   animation: item-in .3s ease;
 }
 
@@ -676,6 +677,37 @@ a { text-decoration: none; color: inherit; }
   color: #fff;
   border-color: transparent;
 }
+
+.btn--live-toggle {
+  background: var(--card-bg);
+  border: 1.5px solid var(--border-light);
+  border-radius: 99px;
+  padding: 8px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--t-fast);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.btn--live-toggle:hover {
+  background: var(--bg-color);
+  transform: translateY(-1px);
+}
+
+.btn--live-toggle.active {
+  background: var(--accent-amber);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(244,165,53,0.25);
+}
+
+.live-icon { font-size: 10px; }
+.live-label { font-weight: 500; }
 
 .ab-label { opacity: 0.7; font-weight: 400; }
 .ab-value { font-weight: 700; letter-spacing: 0.05em; }
@@ -795,10 +827,10 @@ a { text-decoration: none; color: inherit; }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
-  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent-blue-d), var(--accent-plum));
   width: 0%;
-  transition: width .3s ease;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 99px;
 }
 
 .progress-scanline { display: none; }

@@ -11,18 +11,8 @@
 /* ════════════════════════════════════════════════════════════════════
    STATE
    ════════════════════════════════════════════════════════════════════ */
-const state = {
-  files: [],          // File objects queued
-  processing: false,
-  bitDepth: 8,
-  sampleRate: 22050,
-  crushMode: true,    // expander + dither + anti-alias pipeline
-  grit: 1.5,
-  noise: 0.0,
-  stereo: false,
-  hpf: 20,
-  lpf: 20000,
   bass: 0,
+  liveUpdate: false,
 };
 
 function saveState() {
@@ -100,10 +90,14 @@ const badgeStatus    = $('badge-status');
 const toast          = $('toast');
 const dropContent    = $('drop-content');
 const visualizer     = $('visualizer');
+const btnLiveUpdate  = $('btn-live-update');
 
-let analyserCrunched = null;
 let analyserOriginal = null;
 let visDrawId = null;
+let liveUpdateTimer = null;
+let previewStartTime = 0;
+let previewDecoded = null;
+let isUpdatingPreview = false;
 
 /* ════════════════════════════════════════════════════════════════════
    LOGGING
@@ -152,6 +146,7 @@ function syncBitDepth(val) {
   sliderBit.setAttribute('aria-valuenow', val);
   updateSliderTrack(sliderBit);
   saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
 }
 
 function syncSampleRate(val) {
@@ -161,6 +156,7 @@ function syncSampleRate(val) {
   sliderSr.setAttribute('aria-valuenow', val);
   updateSliderTrack(sliderSr);
   saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
 }
 
 function syncGrit(val) {
@@ -169,6 +165,7 @@ function syncGrit(val) {
   outGrit.textContent = val;
   updateSliderTrack(sliderGrit);
   saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
 }
 
 function syncNoise(val) {
@@ -177,6 +174,7 @@ function syncNoise(val) {
   outNoise.textContent = val;
   updateSliderTrack(sliderNoise);
   saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
 }
 
 function syncHpf(val) {
@@ -185,6 +183,7 @@ function syncHpf(val) {
   outHpf.textContent = val > 20 ? `${val} Hz` : '20 Hz';
   updateSliderTrack(sliderHpf);
   saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
 }
 
 function syncLpf(val) {
@@ -193,6 +192,7 @@ function syncLpf(val) {
   outLpf.textContent = val < 20000 ? `${val} Hz` : 'OFF';
   updateSliderTrack(sliderLpf);
   saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
 }
 
 function syncBass(val) {
@@ -201,6 +201,7 @@ function syncBass(val) {
   outBass.textContent = val > 0 ? `+${val} dB` : '0 dB';
   updateSliderTrack(sliderBass);
   saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -747,9 +748,10 @@ btnMarioToggle.addEventListener('click', () => {
   state.crushMode = !state.crushMode;
   btnMarioToggle.setAttribute('aria-checked', state.crushMode);
   btnMarioToggle.classList.toggle('active', state.crushMode);
+  saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
   outMario.textContent = state.crushMode ? 'ON' : 'OFF';
   log(`Crush mode: ${state.crushMode ? 'ENABLED' : 'DISABLED'}`, 'sys');
-  saveState();
 });
 
 // ── Toggle Stereo ─────────────────────────────────────────────────
@@ -758,9 +760,10 @@ btnStereoToggle.addEventListener('click', () => {
   const isForceMono = !state.stereo;
   btnStereoToggle.setAttribute('aria-checked', isForceMono);
   btnStereoToggle.classList.toggle('active', isForceMono);
+  saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
   outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
   log(`Output mode: ${state.stereo ? 'STEREO' : 'MONO'}`, 'sys');
-  saveState();
 });
 
 // ── ZIP Export ───────────────────────────────────────────────────
@@ -849,6 +852,7 @@ let previewCtx = null;
 let isComparingOriginal = false;
 
 async function stopPreview() {
+  if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
   if (visDrawId) cancelAnimationFrame(visDrawId);
   if (visualizer) visualizer.style.display = 'none';
   if (dropContent) dropContent.style.display = 'flex';
@@ -863,6 +867,8 @@ async function stopPreview() {
   isComparingOriginal = false;
   abStatus.textContent = 'CRUNCHED';
   btnAB.classList.remove('active');
+  previewDecoded = null;
+}
 }
 
 function drawVisualizer() {
@@ -1029,6 +1035,9 @@ async function togglePreview() {
     
     previewSource.onended = stopPreview;
     
+    previewStartTime = previewCtx.currentTime;
+    previewDecoded = decoded;
+    
     previewSource.start(startTime);
     previewSourceOrig.start(startTime);
     
@@ -1128,6 +1137,83 @@ btnAB.addEventListener('click', toggleAB);
 
 // ── Clear queue ───────────────────────────────────────────────────
 btnClearQueue.addEventListener('click', clearQueue);
+
+
+function requestPreviewUpdate() {
+  if (!btnPreview.classList.contains('playing') || !previewDecoded) return;
+  
+  clearTimeout(liveUpdateTimer);
+  liveUpdateTimer = setTimeout(async () => {
+    if (isUpdatingPreview) return;
+    isUpdatingPreview = true;
+    
+    try {
+      const decoded = previewDecoded;
+      const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
+      const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
+      const currentPos = (previewCtx.currentTime - previewStartTime);
+      
+      const offCtx = new OfflineAudioContext(
+        numChannels,
+        Math.ceil(decoded.duration * targetRate),
+        targetRate
+      );
+
+      const src = offCtx.createBufferSource();
+      src.buffer = decoded;
+      src.connect(offCtx.destination);
+      src.start(0);
+      
+      const resampled = await offCtx.startRendering();
+      
+      const bufCrunched = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
+      const bufOriginal = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
+      
+      for (let ch = 0; ch < numChannels; ch++) {
+        const data = resampled.getChannelData(ch);
+        const samples = new Float32Array(data);
+        bufOriginal.getChannelData(ch).set(samples);
+        processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+        bufCrunched.getChannelData(ch).set(samples);
+      }
+      
+      // Hot-swap
+      const oldSource = previewSource;
+      const oldSourceOrig = previewSourceOrig;
+      const startTime = previewCtx.currentTime + 0.05;
+      
+      previewSource = previewCtx.createBufferSource();
+      previewSource.buffer = bufCrunched;
+      previewSource.connect(gainCrunched);
+      
+      previewSourceOrig = previewCtx.createBufferSource();
+      previewSourceOrig.buffer = bufOriginal;
+      previewSourceOrig.connect(gainOriginal);
+      
+      previewSource.onended = stopPreview;
+      
+      previewSource.start(startTime, currentPos % decoded.duration);
+      previewSourceOrig.start(startTime, currentPos % decoded.duration);
+      previewStartTime = startTime - (currentPos % decoded.duration);
+      
+      if (oldSource) { try { oldSource.stop(startTime); } catch(e) {} }
+      if (oldSourceOrig) { try { oldSourceOrig.stop(startTime); } catch(e) {} }
+      
+      log(`live update applied at ${currentPos.toFixed(1)}s`, 'sys');
+    } catch (e) {
+      console.error('Live update failed', e);
+    } finally {
+      isUpdatingPreview = false;
+    }
+  }, 300);
+}
+
+btnLiveUpdate.addEventListener('click', () => {
+  state.liveUpdate = !state.liveUpdate;
+  btnLiveUpdate.classList.toggle('active', state.liveUpdate);
+  log(`live update: ${state.liveUpdate ? 'ON' : 'OFF'}`, 'sys');
+  if (state.liveUpdate) requestPreviewUpdate();
+});
 
 /* ════════════════════════════════════════════════════════════════════
    INIT
