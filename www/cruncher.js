@@ -236,42 +236,15 @@ function processDSP(buf, bitDepth, crushMode) {
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   WAV ENCODER
-   Encodes a Float32Array (mono, [-1,1]) → 16-bit PCM WAV ArrayBuffer
+   OGG VORBIS ENCODER
+   Encodes a Float32Array (mono, [-1,1]) → OGG Blob using OggVorbisEncoder.js
    ════════════════════════════════════════════════════════════════════ */
-function encodeWAV(samples, sampleRate) {
-  const numSamples = samples.length;
-  const buffer = new ArrayBuffer(44 + numSamples * 2);
-  const view   = new DataView(buffer);
-
-  function writeStr(offset, str) {
-    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-  }
-
-  writeStr(0,  'RIFF');
-  view.setUint32(4,  36 + numSamples * 2, true);
-  writeStr(8,  'WAVE');
-  writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true);           // PCM chunk size
-  view.setUint16(20, 1,  true);           // PCM format
-  view.setUint16(22, 1,  true);           // mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true); // byte rate
-  view.setUint16(32, 2,  true);           // block align
-  view.setUint16(34, 16, true);           // bits per sample
-  writeStr(36, 'data');
-  view.setUint32(40, numSamples * 2, true);
-
-  // Convert float32 [-1,1] → int16
-  let offset = 44;
-  for (let i = 0; i < numSamples; i++) {
-    let s = samples[i];
-    s = s >  1 ?  1 : s < -1 ? -1 : s;   // clamp
-    view.setInt16(offset, s * 0x7fff, true);
-    offset += 2;
-  }
-
-  return buffer;
+function encodeOGG(samples, sampleRate) {
+  // Quality 0.0 equals roughly Vorbis quality 0 (similar to -q:a 0)
+  // OggVorbisEncoder quality is from -0.1 to 1.0
+  const encoder = new OggVorbisEncoder(sampleRate, 1, 0.0);
+  encoder.encode([samples]);
+  return encoder.finish(); // Returns a Blob
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -316,15 +289,14 @@ async function processFile(file, index) {
     // ── DSP pipeline (in-place, zero-allocation) ─────────────────
     processDSP(samples, state.bitDepth, state.crushMode);
 
-    // ── Encode to WAV ─────────────────────────────────────────────
-    const wavBuffer = encodeWAV(samples, targetRate);
-    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+    // ── Encode to OGG ─────────────────────────────────────────────
+    const blob = encodeOGG(samples, targetRate);
     const url  = URL.createObjectURL(blob);
 
     const sizeBefore = formatBytes(file.size);
     const sizeAfter  = formatBytes(blob.size);
     const stem = file.name.replace(/\.[^.]+$/, '');
-    const outName = `${stem}_crunched_${state.bitDepth}bit_${targetRate}hz.wav`;
+    const outName = `${stem}_crunched_${state.bitDepth}bit_${targetRate}hz.ogg`;
 
     log(`  ✅ Done: ${file.name} [${sizeBefore} → ${sizeAfter}]`, 'ok');
     setItemState(index, 'done', '✓');

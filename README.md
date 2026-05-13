@@ -17,7 +17,7 @@
   - Soft Clipping (`tanh` saturation)
 - **LO-Q Preset**: One-click 8-bit / 22050 Hz preset (the lo-fi sweet spot).
 - **Batch Processing**: Drag and drop multiple files and convert them instantly.
-- **WAV Export**: Custom PCM WAV encoder for direct, browser-native downloads.
+- **OGG Vorbis Export**: Encodes directly to heavily compressed OGG Vorbis (quality 0) for tiny file sizes, ideal for game engines.
 
 ## Tech Stack
 
