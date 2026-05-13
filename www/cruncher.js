@@ -55,53 +55,53 @@ function loadState() {
    ════════════════════════════════════════════════════════════════════ */
 const $ = id => document.getElementById(id);
 
-const dropZone       = $('drop-zone');
-const fileInput      = $('file-input');
-const fileQueue      = $('file-queue');
-const queueHeader    = $('queue-header');
-const btnProcess     = $('btn-process');
-const btnProcessLbl  = $('btn-process-label');
-const btnPreview     = $('btn-preview');
-const btnPreviewLbl  = $('btn-preview-label');
-const btnAB          = $('btn-ab');
-const abStatus       = $('ab-status');
-const previewIcon    = $('preview-icon');
-const btnSpinner     = $('btn-spinner');
-const btnClearQueue  = $('btn-clear-queue');
+const dropZone = $('drop-zone');
+const fileInput = $('file-input');
+const fileQueue = $('file-queue');
+const queueHeader = $('queue-header');
+const btnProcess = $('btn-process');
+const btnProcessLbl = $('btn-process-label');
+const btnPreview = $('btn-preview');
+const btnPreviewLbl = $('btn-preview-label');
+const btnAB = $('btn-ab');
+const abStatus = $('ab-status');
+const previewIcon = $('preview-icon');
+const btnSpinner = $('btn-spinner');
+const btnClearQueue = $('btn-clear-queue');
 const btnPresetAuthor = $('btn-preset-author');
-const btnPresetUser   = $('btn-preset-user');
-const btnSaveCustom   = $('btn-save-custom');
-const userPresetMeta  = $('preset-user-meta');
+const btnPresetUser = $('btn-preset-user');
+const btnSaveCustom = $('btn-save-custom');
+const userPresetMeta = $('preset-user-meta');
 const btnMarioToggle = $('toggle-mariomode');
 const btnStereoToggle = $('toggle-stereo');
-const sliderBit      = $('slider-bitdepth');
-const sliderSr       = $('slider-samplerate');
-const sliderGrit     = $('slider-grit');
-const sliderNoise    = $('slider-noise');
-const outBit         = $('out-bitdepth');
-const outSr          = $('out-samplerate');
-const outGrit        = $('out-grit');
-const outNoise       = $('out-noise');
-const outMario       = $('out-mariomode');
-const outStereo      = $('out-stereo');
-const abContainer    = $('ab-container');
-const sliderHpf      = $('slider-hpf');
-const sliderLpf      = $('slider-lpf');
-const sliderBass     = $('slider-bass');
-const outHpf         = $('out-hpf');
-const outLpf         = $('out-lpf');
-const outBass        = $('out-bass');
-const progressWrap   = $('progress-wrap');
-const progressFill   = $('progress-fill');
-const progressText   = $('progress-text');
-const progressPct    = $('progress-pct');
-const logWindow      = $('log-window');
-const resultsArea    = $('results-area');
-const badgeStatus    = $('badge-status');
-const toast          = $('toast');
-const dropContent    = $('drop-content');
-const visualizer     = $('visualizer');
-const btnLiveUpdate  = $('btn-live-update');
+const sliderBit = $('slider-bitdepth');
+const sliderSr = $('slider-samplerate');
+const sliderGrit = $('slider-grit');
+const sliderNoise = $('slider-noise');
+const outBit = $('out-bitdepth');
+const outSr = $('out-samplerate');
+const outGrit = $('out-grit');
+const outNoise = $('out-noise');
+const outMario = $('out-mariomode');
+const outStereo = $('out-stereo');
+const abContainer = $('ab-container');
+const sliderHpf = $('slider-hpf');
+const sliderLpf = $('slider-lpf');
+const sliderBass = $('slider-bass');
+const outHpf = $('out-hpf');
+const outLpf = $('out-lpf');
+const outBass = $('out-bass');
+const progressWrap = $('progress-wrap');
+const progressFill = $('progress-fill');
+const progressText = $('progress-text');
+const progressPct = $('progress-pct');
+const logWindow = $('log-window');
+const resultsArea = $('results-area');
+const badgeStatus = $('badge-status');
+const toast = $('toast');
+const dropContent = $('drop-content');
+const visualizer = $('visualizer');
+const btnLiveUpdate = $('btn-live-update');
 
 let analyserOriginal = null;
 let visDrawId = null;
@@ -251,11 +251,11 @@ function addFiles(newFiles) {
   }
 }
 
-window.removeFile = function(index) {
+window.removeFile = function (index) {
   state.files[index] = null;
   const li = $(`qi-${index}`);
   if (li) li.remove();
-  
+
   const validFiles = state.files.filter(f => f !== null);
   if (validFiles.length === 0) {
     clearQueue();
@@ -291,7 +291,7 @@ function setItemState(index, status, icon) {
 function setProgress(pct, text) {
   progressFill.style.width = pct + '%';
   progressText.textContent = text;
-  progressPct.textContent  = Math.round(pct) + '%';
+  progressPct.textContent = Math.round(pct) + '%';
   progressWrap
     .querySelector('.progress-bar')
     .setAttribute('aria-valuenow', Math.round(pct));
@@ -319,6 +319,11 @@ function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
       buf[i] += (Math.random() * 2 - 1) * noise;
     }
   }
+
+  // Safety clamps
+  bitDepth = Math.max(1, Math.min(16, bitDepth || 8));
+  grit = Math.max(1.0, Math.min(10.0, grit || 1.5));
+  noise = Math.max(0.0, Math.min(1.0, noise || 0.0));
 
   // ── 1. DC Offset Removal ────────────────────────────────────────
   let sum = 0;
@@ -353,8 +358,8 @@ function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
     }
 
     // ── 5. Quantization ───────────────────────────────────────────
-    const levels   = 1 << bitDepth;         // 2^bitDepth
-    const halfLev  = levels >> 1;           // levels / 2
+    const levels = 1 << bitDepth;         // 2^bitDepth
+    const halfLev = levels >> 1;           // levels / 2
     for (let i = 0; i < N; i++) {
       buf[i] = Math.round(buf[i] * halfLev) / halfLev;
     }
@@ -382,7 +387,7 @@ function encodeOGG(channels, sampleRate) {
   // OggVorbisEncoder quality is from -0.1 to 1.0
   const numChannels = channels.length;
   const encoder = new OggVorbisEncoder(sampleRate, numChannels, 0.0);
-  
+
   // Encode in chunks to prevent Emscripten OOM (TOTAL_MEMORY limit)
   const CHUNK_SIZE = 65536; // 64k samples per chunk
   const totalSamples = channels[0].length;
@@ -392,7 +397,7 @@ function encodeOGG(channels, sampleRate) {
     const chunks = channels.map(ch => ch.subarray(i, chunkEnd));
     encoder.encode(chunks);
   }
-  
+
   return encoder.finish(); // Returns a Blob
 }
 
@@ -449,11 +454,11 @@ function encodeWAV(channels, sampleRate, bitDepth) {
 function encodeMP3(channels, sampleRate) {
   const numChannels = channels.length;
   const numSamples = channels[0].length;
-  
+
   const mp3encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, 128);
   const mp3Data = [];
   const sampleBlockSize = 1152;
-  
+
   // Prepare Int16 buffers
   const intChannels = channels.map(ch => {
     const i16 = new Int16Array(ch.length);
@@ -468,7 +473,7 @@ function encodeMP3(channels, sampleRate) {
     const chunkEnd = Math.min(i + sampleBlockSize, numSamples);
     const leftChunk = intChannels[0].subarray(i, chunkEnd);
     const rightChunk = numChannels > 1 ? intChannels[1].subarray(i, chunkEnd) : leftChunk;
-    
+
     let mp3buf;
     if (numChannels === 1) {
       mp3buf = mp3encoder.encodeBuffer(leftChunk);
@@ -477,10 +482,10 @@ function encodeMP3(channels, sampleRate) {
     }
     if (mp3buf.length > 0) mp3Data.push(mp3buf);
   }
-  
+
   const mp3buf = mp3encoder.flush();
   if (mp3buf.length > 0) mp3Data.push(mp3buf);
-  
+
   return new Blob(mp3Data, { type: 'audio/mp3' });
 }
 
@@ -497,9 +502,13 @@ async function processFile(file, index) {
     const rawBuffer = await file.arrayBuffer();
 
     // Decode via temporary AudioContext (standard, not offline)
-    const decodeCtx  = new AudioContext();
-    const decoded    = await decodeCtx.decodeAudioData(rawBuffer);
-    await decodeCtx.close();
+    const decodeCtx = new AudioContext();
+    let decoded;
+    try {
+      decoded = await decodeCtx.decodeAudioData(rawBuffer);
+    } finally {
+      await decodeCtx.close();
+    }
 
     const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
     const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
@@ -545,7 +554,7 @@ async function processFile(file, index) {
     src.start(0);
 
     const resampled = await offCtx.startRendering();
-    
+
     // Process channels
     const channels = [];
     for (let ch = 0; ch < numChannels; ch++) {
@@ -612,7 +621,7 @@ async function startProcessing() {
 
   for (let i = 0; i < state.files.length; i++) {
     if (!state.files[i]) continue;
-    
+
     const pct = (processedCount / validFiles.length) * 100;
     setProgress(pct, `File ${processedCount + 1} / ${validFiles.length}`);
 
@@ -637,7 +646,7 @@ async function startProcessing() {
       batchDiv.style.display = 'flex';
       batchDiv.style.gap = '8px';
       batchDiv.style.marginBottom = '12px';
-      
+
       batchDiv.innerHTML = `
         <button id="btn-download-zip" class="btn btn--primary btn--zip" style="flex:1;">
           <span class="btn-icon">📦</span> DOWNLOAD ALL (.ZIP)
@@ -659,9 +668,9 @@ async function startProcessing() {
       const div = document.createElement('div');
       div.className = 'result-item';
       div.style.flexWrap = 'wrap';
-      
+
       const canShare = !!navigator.share;
-      
+
       div.innerHTML = `
         <span class="result-item__name" title="${r.name}" style="flex:1; width:100%; margin-bottom:8px;">${r.name}</span>
         <div style="display:flex; gap:8px; width:100%; flex-wrap: wrap;">
@@ -709,7 +718,7 @@ async function startProcessing() {
 // ── Drag & Drop (Folder Support) ──────────────────────────────────
 async function handleItems(items) {
   const allFiles = [];
-  
+
   async function traverseEntry(entry) {
     if (entry.isFile) {
       const file = await new Promise(res => entry.file(res));
@@ -727,18 +736,18 @@ async function handleItems(items) {
     const entry = item.webkitGetAsEntry();
     if (entry) await traverseEntry(entry);
   }
-  
+
   if (allFiles.length > 0) addFiles(allFiles);
 }
 
 dropZone.addEventListener('dragenter', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragover',  e => { e.preventDefault(); });
+dropZone.addEventListener('dragover', e => { e.preventDefault(); });
 dropZone.addEventListener('dragleave', e => { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
 
 dropZone.addEventListener('drop', async e => {
   e.preventDefault();
   dropZone.classList.remove('drag-over');
-  
+
   if (e.dataTransfer.items) {
     await handleItems(e.dataTransfer.items);
   } else {
@@ -754,7 +763,7 @@ fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files
 
 // ── Sliders ───────────────────────────────────────────────────────
 sliderBit.addEventListener('input', () => syncBitDepth(sliderBit.value));
-sliderSr.addEventListener('input',  () => syncSampleRate(sliderSr.value));
+sliderSr.addEventListener('input', () => syncSampleRate(sliderSr.value));
 sliderGrit.addEventListener('input', () => syncGrit(sliderGrit.value));
 sliderNoise.addEventListener('input', () => syncNoise(sliderNoise.value));
 sliderHpf.addEventListener('input', () => syncHpf(sliderHpf.value));
@@ -789,20 +798,20 @@ async function downloadResultsAsZip(results, isShare = false) {
   const zip = new JSZip();
   const btn = isShare ? $('btn-share-zip') : $('btn-download-zip');
   const originalText = btn.innerHTML;
-  
+
   btn.disabled = true;
   btn.innerHTML = isShare ? '…' : '<span class="btn-spinner" style="display:block"></span> PACKING…';
-  
+
   try {
     results.forEach(r => {
       r.formats.forEach(f => {
         zip.file(`${r.name}.${f.ext}`, f.blob);
       });
     });
-    
+
     const content = await zip.generateAsync({ type: 'blob' });
     const filename = `OGCruncher_batch_${new Date().getTime()}.zip`;
-    
+
     if (isShare && navigator.share) {
       const file = new File([content], filename, { type: 'application/zip' });
       await navigator.share({
@@ -833,12 +842,12 @@ async function downloadResultsAsZip(results, isShare = false) {
 // ── Share API ────────────────────────────────────────────────────
 async function shareFile(name, ext, url) {
   if (!navigator.share) return;
-  
+
   try {
     const response = await fetch(url);
     const blob = await response.blob();
     const file = new File([blob], `${name}.${ext}`, { type: blob.type });
-    
+
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({
         files: [file],
@@ -862,7 +871,7 @@ async function shareFile(name, ext, url) {
 }
 
 // ── Drag-out to DAW/Unity ────────────────────────────────────────
-window.handleDragStart = function(e, type, name, url) {
+window.handleDragStart = function (e, type, name, url) {
   // Standard Chromium hack to drag files out of the browser
   const downloadData = `${type}:${name}:${url}`;
   e.dataTransfer.setData('DownloadURL', downloadData);
@@ -883,9 +892,9 @@ async function stopPreview() {
   if (visualizer) visualizer.style.display = 'none';
   if (dropContent) dropContent.style.display = 'flex';
 
-  if (previewSource) { try { previewSource.stop(); } catch(e) {} previewSource = null; }
-  if (previewSourceOrig) { try { previewSourceOrig.stop(); } catch(e) {} previewSourceOrig = null; }
-  
+  if (previewSource) { try { previewSource.stop(); } catch (e) { } previewSource = null; }
+  if (previewSourceOrig) { try { previewSourceOrig.stop(); } catch (e) { } previewSourceOrig = null; }
+
   btnPreview.classList.remove('playing');
   btnPreviewLbl.textContent = 'PREVIEW';
   previewIcon.textContent = '▶';
@@ -901,27 +910,27 @@ function drawVisualizer() {
   const ctx = visualizer.getContext('2d');
   const width = visualizer.width;
   const height = visualizer.height;
-  
+
   if (!analyserOriginal || !analyserCrunched) return;
-  
+
   const bufferLength = analyserOriginal.frequencyBinCount;
   const dataOrig = new Uint8Array(bufferLength);
-  const dataCr   = new Uint8Array(bufferLength);
-  
+  const dataCr = new Uint8Array(bufferLength);
+
   analyserOriginal.getByteFrequencyData(dataOrig);
   analyserCrunched.getByteFrequencyData(dataCr);
-  
+
   ctx.clearRect(0, 0, width, height);
 
   // ── 1. Grid & Labels ──────────────────────────────────────────
   ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-  ctx.fillStyle   = 'rgba(0,0,0,0.4)';
-  ctx.font        = '600 9px var(--font-mono)';
-  ctx.lineWidth   = 1;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.font = '600 9px var(--font-mono)';
+  ctx.lineWidth = 1;
 
   const freqs = [1000, 5000, 10000, 20000];
   const nyquist = previewCtx.sampleRate / 2;
-  
+
   freqs.forEach(f => {
     const x = (f / nyquist) * width;
     if (x < width) {
@@ -929,21 +938,21 @@ function drawVisualizer() {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, height);
       ctx.stroke();
-      ctx.fillText(f >= 1000 ? (f/1000)+'kHz' : f+'Hz', x + 3, 10);
+      ctx.fillText(f >= 1000 ? (f / 1000) + 'kHz' : f + 'Hz', x + 3, 10);
     }
   });
 
   const barWidth = (width / bufferLength) * 2.2;
-  
+
   // ── 2. Determine Alpha levels based on current A/B state ───────
   const alphaActive = 0.85;
-  const alphaGhost  = 0.25;
+  const alphaGhost = 0.25;
 
   const colorOrig = isComparingOriginal ? `rgba(162, 194, 225, ${alphaActive})` : `rgba(162, 194, 225, ${alphaGhost})`;
-  const colorCr   = isComparingOriginal ? `rgba(229, 115, 115, ${alphaGhost})` : `rgba(229, 115, 115, ${alphaActive})`;
+  const colorCr = isComparingOriginal ? `rgba(229, 115, 115, ${alphaGhost})` : `rgba(229, 115, 115, ${alphaActive})`;
 
   // ── 3. Draw Original (Blue) ───────────────────────────────────
-  ctx.fillStyle = colorOrig; 
+  ctx.fillStyle = colorOrig;
   let x = 0;
   for (let i = 0; i < bufferLength; i++) {
     const bh = dataOrig[i] / 255 * height;
@@ -952,14 +961,14 @@ function drawVisualizer() {
   }
 
   // ── 4. Draw Crunched (Red/Plum) ───────────────────────────────
-  ctx.fillStyle = colorCr; 
+  ctx.fillStyle = colorCr;
   x = 0;
   for (let i = 0; i < bufferLength; i++) {
     const bh = dataCr[i] / 255 * height;
     ctx.fillRect(x, height - bh, barWidth, bh);
     x += barWidth + 1;
   }
-  
+
   visDrawId = requestAnimationFrame(drawVisualizer);
 }
 
@@ -967,11 +976,11 @@ function toggleAB() {
   if (!previewCtx) return;
   isComparingOriginal = !isComparingOriginal;
   const now = previewCtx.currentTime;
-  
+
   // Crossfade for smooth transition
   gainOriginal.gain.setTargetAtTime(isComparingOriginal ? 1 : 0, now, 0.04);
   gainCrunched.gain.setTargetAtTime(isComparingOriginal ? 0 : 1, now, 0.04);
-  
+
   abStatus.textContent = isComparingOriginal ? 'ORIGINAL' : 'CRUNCHED';
   btnAB.classList.toggle('active', isComparingOriginal);
 }
@@ -984,17 +993,19 @@ async function togglePreview() {
   }
 
   if (state.files.length === 0) return;
-  
+
   btnPreview.disabled = true;
 
   try {
     const firstValidIdx = state.files.findIndex(f => f !== null);
     if (firstValidIdx === -1) return;
-    
+
     const file = state.files[firstValidIdx];
     const rawBuffer = await file.arrayBuffer();
 
     if (!previewCtx) previewCtx = new AudioContext();
+    if (previewCtx.state === 'suspended') await previewCtx.resume();
+    
     const decoded = await previewCtx.decodeAudioData(rawBuffer);
 
     const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
@@ -1010,31 +1021,31 @@ async function togglePreview() {
     src.buffer = decoded;
     src.connect(offCtx.destination);
     src.start(0);
-    
+
     const resampled = await offCtx.startRendering();
-    
+
     // Create TWO versions
     const bufCrunched = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
     const bufOriginal = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
-    
+
     for (let ch = 0; ch < numChannels; ch++) {
       const data = resampled.getChannelData(ch);
       const samples = new Float32Array(data);
-      
+
       // Original copy
       bufOriginal.getChannelData(ch).set(samples);
-      
+
       // Crunched copy
       processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
       bufCrunched.getChannelData(ch).set(samples);
     }
-    
+
     // Setup Gains
     gainCrunched = previewCtx.createGain();
     gainOriginal = previewCtx.createGain();
     gainCrunched.connect(previewCtx.destination);
     gainOriginal.connect(previewCtx.destination);
-    
+
     // Setup Analysers
     analyserCrunched = previewCtx.createAnalyser();
     analyserOriginal = previewCtx.createAnalyser();
@@ -1042,42 +1053,42 @@ async function togglePreview() {
     analyserOriginal.fftSize = 512;
     gainCrunched.connect(analyserCrunched);
     gainOriginal.connect(analyserOriginal);
-    
+
     // Initial state: hear crunched
     gainCrunched.gain.value = 1;
     gainOriginal.gain.value = 0;
-    
+
     // Play both in sync
     const startTime = previewCtx.currentTime + 0.1;
-    
+
     previewSource = previewCtx.createBufferSource();
     previewSource.buffer = bufCrunched;
     previewSource.connect(gainCrunched);
-    
+
     previewSourceOrig = previewCtx.createBufferSource();
     previewSourceOrig.buffer = bufOriginal;
     previewSourceOrig.connect(gainOriginal);
-    
+
     previewSource.onended = stopPreview;
-    
+
     previewStartTime = previewCtx.currentTime;
     previewDecoded = decoded;
-    
+
     previewSource.start(startTime);
     previewSourceOrig.start(startTime);
-    
+
     btnPreview.classList.add('playing');
     btnPreviewLbl.textContent = 'STOP';
     previewIcon.textContent = '■';
     abContainer.style.display = 'flex';
-    
+
     // Show visualizer
     dropContent.style.display = 'none';
     visualizer.style.display = 'block';
     drawVisualizer();
-    
+
     log(`previewing: ${file.name} (A/B mode active)`, 'accent');
-    
+
   } catch (err) {
     log(`preview error: ${err.message}`, 'error');
     showToast('❌ preview failed', 'error');
@@ -1141,11 +1152,11 @@ btnSaveCustom.addEventListener('click', () => {
     ts: Date.now()
   };
   localStorage.setItem('ogcruncher_preset', JSON.stringify(preset));
-  
+
   // Enable button & update label
   btnPresetUser.disabled = false;
   userPresetMeta.textContent = `${preset.bitDepth}-bit / ${preset.sampleRate}Hz`;
-  
+
   updatePresetUI('user');
   log('custom preset saved to localstorage', 'ok');
   showToast('💾 custom preset saved', 'ok');
@@ -1166,18 +1177,18 @@ btnClearQueue.addEventListener('click', clearQueue);
 
 function requestPreviewUpdate() {
   if (!btnPreview.classList.contains('playing') || !previewDecoded) return;
-  
+
   clearTimeout(liveUpdateTimer);
   liveUpdateTimer = setTimeout(async () => {
     if (isUpdatingPreview) return;
     isUpdatingPreview = true;
-    
+
     try {
       const decoded = previewDecoded;
       const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
       const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
       const currentPos = (previewCtx.currentTime - previewStartTime);
-      
+
       const offCtx = new OfflineAudioContext(
         numChannels,
         Math.ceil(decoded.duration * targetRate),
@@ -1188,12 +1199,12 @@ function requestPreviewUpdate() {
       src.buffer = decoded;
       src.connect(offCtx.destination);
       src.start(0);
-      
+
       const resampled = await offCtx.startRendering();
-      
+
       const bufCrunched = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
       const bufOriginal = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
-      
+
       for (let ch = 0; ch < numChannels; ch++) {
         const data = resampled.getChannelData(ch);
         const samples = new Float32Array(data);
@@ -1201,29 +1212,29 @@ function requestPreviewUpdate() {
         processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
         bufCrunched.getChannelData(ch).set(samples);
       }
-      
+
       // Hot-swap
       const oldSource = previewSource;
       const oldSourceOrig = previewSourceOrig;
       const startTime = previewCtx.currentTime + 0.05;
-      
+
       previewSource = previewCtx.createBufferSource();
       previewSource.buffer = bufCrunched;
       previewSource.connect(gainCrunched);
-      
+
       previewSourceOrig = previewCtx.createBufferSource();
       previewSourceOrig.buffer = bufOriginal;
       previewSourceOrig.connect(gainOriginal);
-      
+
       previewSource.onended = stopPreview;
-      
+
       previewSource.start(startTime, currentPos % decoded.duration);
       previewSourceOrig.start(startTime, currentPos % decoded.duration);
       previewStartTime = startTime - (currentPos % decoded.duration);
-      
-      if (oldSource) { try { oldSource.stop(startTime); } catch(e) {} }
-      if (oldSourceOrig) { try { oldSourceOrig.stop(startTime); } catch(e) {} }
-      
+
+      if (oldSource) { try { oldSource.stop(startTime); } catch (e) { } }
+      if (oldSourceOrig) { try { oldSourceOrig.stop(startTime); } catch (e) { } }
+
       log(`live update applied at ${currentPos.toFixed(1)}s`, 'sys');
     } catch (e) {
       console.error('Live update failed', e);
@@ -1262,7 +1273,7 @@ btnLiveUpdate.addEventListener('click', () => {
 
   // PWA service worker registration
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {/* offline optional */});
+    navigator.serviceWorker.register('sw.js').catch(() => {/* offline optional */ });
   }
 
   loadState();
@@ -1272,7 +1283,7 @@ btnLiveUpdate.addEventListener('click', () => {
 // ── Hotkeys ──────────────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  
+
   if (e.code === 'Space') {
     e.preventDefault();
     if (!btnPreview.disabled) btnPreview.click();
