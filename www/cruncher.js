@@ -103,6 +103,7 @@ const dropContent = $('drop-content');
 const visualizer = $('visualizer');
 const btnLiveUpdate = $('btn-live-update');
 
+let analyserCrunched = null;
 let analyserOriginal = null;
 let visDrawId = null;
 let liveUpdateTimer = null;
