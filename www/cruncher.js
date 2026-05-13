@@ -564,26 +564,48 @@ async function startProcessing() {
     if (results.length > 1) {
       const batchDiv = document.createElement('div');
       batchDiv.className = 'batch-actions';
+      batchDiv.style.display = 'flex';
+      batchDiv.style.gap = '8px';
+      batchDiv.style.marginBottom = '12px';
+      
       batchDiv.innerHTML = `
-        <button id="btn-download-zip" class="btn btn--primary btn--zip" style="width:100%; margin-bottom:12px;">
+        <button id="btn-download-zip" class="btn btn--primary btn--zip" style="flex:1;">
           <span class="btn-icon">📦</span> DOWNLOAD ALL (.ZIP)
         </button>
+        ${canShare ? `
+          <button id="btn-share-zip" class="btn btn--secondary" style="padding: 10px 15px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          </button>
+        ` : ''}
       `;
       resultsArea.appendChild(batchDiv);
       $('btn-download-zip').onclick = () => downloadResultsAsZip(results);
+      if (canShare) {
+        $('btn-share-zip').onclick = () => downloadResultsAsZip(results, true);
+      }
     }
 
     for (const r of results) {
       const div = document.createElement('div');
       div.className = 'result-item';
       div.style.flexWrap = 'wrap';
+      
+      const canShare = !!navigator.share;
+      
       div.innerHTML = `
         <span class="result-item__name" title="${r.name}" style="flex:1; width:100%; margin-bottom:8px;">${r.name}</span>
-        <div style="display:flex; gap:8px; width:100%;">
+        <div style="display:flex; gap:8px; width:100%; flex-wrap: wrap;">
           ${r.formats.map(f => `
-            <a href="${f.url}" download="${r.name}.${f.ext}" class="btn-download" aria-label="Download ${f.ext}" title="${f.size}" style="flex:1; text-align:center;">
-              ${f.ext.toUpperCase()} <small style="opacity:0.7; font-size:10px;">${f.size}</small>
-            </a>
+            <div class="download-group" style="flex: 1; display: flex; gap: 2px;">
+              <a href="${f.url}" download="${r.name}.${f.ext}" class="btn-download" aria-label="Download ${f.ext}" title="${f.size}" style="flex:1; text-align:center;">
+                ${f.ext.toUpperCase()} <small style="opacity:0.7; font-size:10px;">${f.size}</small>
+              </a>
+              ${canShare ? `
+                <button class="btn-share" onclick="shareFile('${r.name}', '${f.ext}', '${f.url}')" title="Share ${f.ext}">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                </button>
+              ` : ''}
+            </div>
           `).join('')}
         </div>`;
       resultsArea.appendChild(div);
@@ -681,38 +703,79 @@ btnStereoToggle.addEventListener('click', () => {
 });
 
 // ── ZIP Export ───────────────────────────────────────────────────
-async function downloadResultsAsZip(results) {
+async function downloadResultsAsZip(results, isShare = false) {
   const zip = new JSZip();
-  const btn = $('btn-download-zip');
+  const btn = isShare ? $('btn-share-zip') : $('btn-download-zip');
   const originalText = btn.innerHTML;
   
   btn.disabled = true;
-  btn.innerHTML = '<span class="btn-spinner" style="display:block"></span> PACKING…';
+  btn.innerHTML = isShare ? '…' : '<span class="btn-spinner" style="display:block"></span> PACKING…';
   
   try {
     results.forEach(r => {
       r.formats.forEach(f => {
-        // We pack all formats? No, let's pack only OGG by default or all?
-        // User probably wants all crunched files.
         zip.file(`${r.name}.${f.ext}`, f.blob);
       });
     });
     
     const content = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(content);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `OGCruncher_batch_${new Date().getTime()}.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const filename = `OGCruncher_batch_${new Date().getTime()}.zip`;
     
-    showToast('📦 ZIP archive ready', 'ok');
+    if (isShare && navigator.share) {
+      const file = new File([content], filename, { type: 'application/zip' });
+      await navigator.share({
+        files: [file],
+        title: 'OGCruncher Batch Export',
+        text: `Shared ${results.length} crunched audio tracks.`
+      });
+    } else {
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('📦 ZIP archive ready', 'ok');
+    }
   } catch (err) {
-    log(`zip error: ${err.message}`, 'error');
-    showToast('❌ zip failed', 'error');
+    if (err.name !== 'AbortError') {
+      log(`zip error: ${err.message}`, 'error');
+      showToast('❌ zip failed', 'error');
+    }
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalText;
+  }
+}
+
+// ── Share API ────────────────────────────────────────────────────
+async function shareFile(name, ext, url) {
+  if (!navigator.share) return;
+  
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const file = new File([blob], `${name}.${ext}`, { type: blob.type });
+    
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: `OGCruncher: ${name}.${ext}`,
+        text: 'Crunched audio via OGCruncher'
+      });
+    } else {
+      // Fallback for text-only sharing
+      await navigator.share({
+        title: name,
+        url: window.location.href,
+        text: `Check out this crunched audio: ${name}.${ext}`
+      });
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      log(`share error: ${err.message}`, 'error');
+      showToast('❌ sharing failed', 'error');
+    }
   }
 }
 

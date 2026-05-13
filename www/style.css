@@ -771,6 +771,35 @@ a { text-decoration: none; color: inherit; }
 
 .btn-download:hover { background: #629618; box-shadow: 0 4px 14px rgba(122,184,36,.4); }
 
+.download-group {
+  transition: transform var(--t-fast);
+}
+
+.download-group:hover { transform: translateY(-1px); }
+
+.btn-share {
+  background: var(--card-bg);
+  border: 1px solid #c3f0d0;
+  border-left: none;
+  border-radius: 0 99px 99px 0;
+  padding: 0 10px;
+  color: var(--accent-green-d);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--t-fast);
+}
+
+.btn-share:hover {
+  background: #e8f9ef;
+  color: var(--accent-plum);
+}
+
+.download-group .btn-download {
+  border-radius: 99px 0 0 99px;
+}
+
 /* ── FOOTER ────────────────────────────────────────────────────── */
 .app-footer {
   text-align: center;
