@@ -497,9 +497,23 @@ a { text-decoration: none; color: inherit; }
   box-shadow: 0 6px 20px rgba(110,159,199,.45);
 }
 
-.btn--primary.processing {
+.btn--primary.processing, .btn--primary.packing {
   background: var(--accent-amber);
   box-shadow: 0 4px 14px rgba(244,165,53,.3);
+}
+
+.btn--zip {
+  background: var(--accent-plum);
+  box-shadow: 0 4px 14px rgba(107,63,160,.2);
+}
+
+.btn--zip:not(:disabled):hover {
+  background: #5a358c;
+  box-shadow: 0 6px 20px rgba(107,63,160,.3);
+}
+
+.batch-actions {
+  animation: item-in .3s ease;
 }
 
 .btn--secondary {

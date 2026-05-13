@@ -450,9 +450,9 @@ async function processFile(file, index) {
     return {
       name: outNameBase,
       formats: [
-        { ext: 'ogg', url: URL.createObjectURL(blobOGG), size: sizeOGG },
-        { ext: 'wav', url: URL.createObjectURL(blobWAV), size: sizeWAV },
-        { ext: 'mp3', url: URL.createObjectURL(blobMP3), size: sizeMP3 }
+        { ext: 'ogg', url: URL.createObjectURL(blobOGG), size: sizeOGG, blob: blobOGG },
+        { ext: 'wav', url: URL.createObjectURL(blobWAV), size: sizeWAV, blob: blobWAV },
+        { ext: 'mp3', url: URL.createObjectURL(blobMP3), size: sizeMP3, blob: blobMP3 }
       ]
     };
 
@@ -498,6 +498,20 @@ async function startProcessing() {
   // ── Render download list ──────────────────────────────────────────
   if (results.length > 0) {
     resultsArea.hidden = false;
+
+    // Add Batch Download button if multiple files
+    if (results.length > 1) {
+      const batchDiv = document.createElement('div');
+      batchDiv.className = 'batch-actions';
+      batchDiv.innerHTML = `
+        <button id="btn-download-zip" class="btn btn--primary btn--zip" style="width:100%; margin-bottom:12px;">
+          <span class="btn-icon">📦</span> DOWNLOAD ALL (.ZIP)
+        </button>
+      `;
+      resultsArea.appendChild(batchDiv);
+      $('btn-download-zip').onclick = () => downloadResultsAsZip(results);
+    }
+
     for (const r of results) {
       const div = document.createElement('div');
       div.className = 'result-item';
@@ -570,6 +584,42 @@ btnStereoToggle.addEventListener('click', () => {
   outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
   log(`Output mode: ${state.stereo ? 'STEREO' : 'MONO'}`, 'sys');
 });
+
+// ── ZIP Export ───────────────────────────────────────────────────
+async function downloadResultsAsZip(results) {
+  const zip = new JSZip();
+  const btn = $('btn-download-zip');
+  const originalText = btn.innerHTML;
+  
+  btn.disabled = true;
+  btn.innerHTML = '<span class="btn-spinner" style="display:block"></span> PACKING…';
+  
+  try {
+    results.forEach(r => {
+      r.formats.forEach(f => {
+        // We pack all formats? No, let's pack only OGG by default or all?
+        // User probably wants all crunched files.
+        zip.file(`${r.name}.${f.ext}`, f.blob);
+      });
+    });
+    
+    const content = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(content);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `OGCruncher_batch_${new Date().getTime()}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('📦 ZIP archive ready', 'ok');
+  } catch (err) {
+    log(`zip error: ${err.message}`, 'error');
+    showToast('❌ zip failed', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+}
 
 // ── Preview Logic ────────────────────────────────────────────────
 let previewSource = null;
