@@ -11,6 +11,17 @@
 /* ════════════════════════════════════════════════════════════════════
    STATE
    ════════════════════════════════════════════════════════════════════ */
+const state = {
+  files: [],          // File objects queued
+  processing: false,
+  bitDepth: 8,
+  sampleRate: 22050,
+  crushMode: true,    // expander + dither + anti-alias pipeline
+  grit: 1.5,
+  noise: 0.0,
+  stereo: false,
+  hpf: 20,
+  lpf: 20000,
   bass: 0,
   liveUpdate: false,
 };
