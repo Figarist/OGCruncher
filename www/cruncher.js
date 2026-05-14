@@ -120,6 +120,7 @@ const toast = $('toast');
 const dropContent = $('drop-content');
 const visualizer = $('visualizer');
 const btnLiveUpdate = $('btn-live-update');
+const headerProgressFill = $('header-progress-fill');
 
 let analyserCrunched = null;
 let analyserOriginal = null;
@@ -326,7 +327,10 @@ function setItemState(id, status, icon) {
    PROGRESS
    ════════════════════════════════════════════════════════════════════ */
 function setProgress(pct, text) {
-  progressFill.style.width = pct + '%';
+  const p = pct + '%';
+  progressFill.style.width = p;
+  headerProgressFill.style.width = p;
+  
   progressText.textContent = text;
   progressPct.textContent = Math.round(pct) + '%';
   progressWrap
@@ -1050,7 +1054,10 @@ let isComparingOriginal = false;
 async function stopPreview() {
   if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
   if (visDrawId) cancelAnimationFrame(visDrawId);
-  if (visualizer) visualizer.style.display = 'none';
+  if (visualizer) {
+    visualizer.style.display = 'none';
+    visualizer.classList.remove('visualizer-glow');
+  }
   if (dropContent) dropContent.style.display = 'flex';
 
   if (previewSource) { try { previewSource.stop(); } catch (e) { } previewSource = null; }
@@ -1108,8 +1115,8 @@ function drawVisualizer() {
   const alphaActive = 0.85;
   const alphaGhost = 0.25;
 
-  const colorOrig = isComparingOriginal ? `rgba(162, 194, 225, ${alphaActive})` : `rgba(162, 194, 225, ${alphaGhost})`;
-  const colorCr = isComparingOriginal ? `rgba(229, 115, 115, ${alphaGhost})` : `rgba(229, 115, 115, ${alphaActive})`;
+  const colorOrig = isComparingOriginal ? `rgba(178, 245, 234, ${alphaActive})` : `rgba(178, 245, 234, ${alphaGhost})`;
+  const colorCr = isComparingOriginal ? `rgba(124, 105, 227, ${alphaGhost})` : `rgba(124, 105, 227, ${alphaActive})`;
 
   ctx.fillStyle = colorOrig;
   let x = 0;
@@ -1264,6 +1271,7 @@ async function togglePreview() {
 
     dropContent.style.display = 'none';
     visualizer.style.display = 'block';
+    visualizer.classList.add('visualizer-glow');
     drawVisualizer();
 
     log(`previewing: ${file.name} (A/B mode active)`, 'accent');
