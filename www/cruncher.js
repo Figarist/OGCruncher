@@ -1345,8 +1345,10 @@ async function togglePreview() {
     previewDecoded = decoded;
 
     const safeOffset = 0; 
-    previewSource.start(startTime, safeOffset);
-    previewSourceOrig.start(startTime, safeOffset);
+    if (bufCrunched.duration > 0) {
+      previewSource.start(startTime, safeOffset);
+      previewSourceOrig.start(startTime, safeOffset);
+    }
 
     btnPreview.classList.add('playing');
     btnPreviewLbl.textContent = 'STOP';
@@ -1546,13 +1548,18 @@ function requestPreviewUpdate() {
 
       const currentPlaybackRate = lastRenderParams.playbackRate || 1.0;
       const freshPos = (previewCtx.currentTime - previewStartTime) * currentPlaybackRate;
-      const safeOffset = Math.max(0, freshPos % decoded.duration);
       
-      previewSource.start(startTime, safeOffset);
-      previewSourceOrig.start(startTime, safeOffset);
-      previewStartTime = startTime - (safeOffset / state.playbackRate);
+      // Use the actual resampled buffer duration for the modulo to avoid offset-out-of-bounds
+      const bufDuration = bufCrunched.duration;
+      const safeOffset = bufDuration > 0 ? Math.max(0, Math.min(freshPos % bufDuration, bufDuration - 0.005)) : 0;
+      
+      if (bufDuration > 0) {
+        previewSource.start(startTime, safeOffset);
+        previewSourceOrig.start(startTime, safeOffset);
+        previewStartTime = startTime - (safeOffset / state.playbackRate);
+      }
 
-      log(`live update applied (${needsReRender ? 're-rendered' : 're-crunched'})`, 'sys');
+      log(`live update applied (${needsWetRender ? 're-rendered' : 're-crunched'})`, 'sys');
     } catch (e) {
       console.error('Live update failed', e);
     } finally {
