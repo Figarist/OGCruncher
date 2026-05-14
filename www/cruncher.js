@@ -109,6 +109,8 @@ let visDrawId = null;
 let liveUpdateTimer = null;
 let previewStartTime = 0;
 let previewDecoded = null;
+let previewResampled = null; 
+let lastRenderParams = {};   
 let isUpdatingPreview = false;
 
 /* ════════════════════════════════════════════════════════════════════
@@ -904,6 +906,8 @@ async function stopPreview() {
   abStatus.textContent = 'CRUNCHED';
   btnAB.classList.remove('active');
   previewDecoded = null;
+  previewResampled = null;
+  lastRenderParams = {};
 }
 
 function drawVisualizer() {
@@ -1020,10 +1024,46 @@ async function togglePreview() {
 
     const src = offCtx.createBufferSource();
     src.buffer = decoded;
-    src.connect(offCtx.destination);
+
+    // ── BIQUAD FILTERS ──────────────────────────────────────────
+    let lastNode = src;
+
+    if (state.hpf > 20) {
+      const hpf = offCtx.createBiquadFilter();
+      hpf.type = 'highpass';
+      hpf.frequency.value = state.hpf;
+      lastNode.connect(hpf);
+      lastNode = hpf;
+    }
+    if (state.lpf < 20000) {
+      const lpf = offCtx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = state.lpf;
+      lastNode.connect(lpf);
+      lastNode = lpf;
+    }
+    if (state.bass > 0) {
+      const bass = offCtx.createBiquadFilter();
+      bass.type = 'peaking';
+      bass.frequency.value = 80;
+      bass.Q.value = 0.7;
+      bass.gain.value = state.bass;
+      lastNode.connect(bass);
+      lastNode = bass;
+    }
+
+    lastNode.connect(offCtx.destination);
     src.start(0);
 
     const resampled = await offCtx.startRendering();
+    previewResampled = resampled;
+    lastRenderParams = {
+      sampleRate: state.sampleRate,
+      hpf: state.hpf,
+      lpf: state.lpf,
+      bass: state.bass,
+      stereo: state.stereo
+    };
 
     // Create TWO versions
     const bufCrunched = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
@@ -1190,21 +1230,68 @@ function requestPreviewUpdate() {
       const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
       const currentPos = (previewCtx.currentTime - previewStartTime);
 
-      const offCtx = new OfflineAudioContext(
-        numChannels,
-        Math.ceil(decoded.duration * targetRate),
-        targetRate
-      );
+      const needsReRender = !previewResampled ||
+        lastRenderParams.sampleRate !== state.sampleRate ||
+        lastRenderParams.hpf !== state.hpf ||
+        lastRenderParams.lpf !== state.lpf ||
+        lastRenderParams.bass !== state.bass ||
+        lastRenderParams.stereo !== state.stereo;
 
-      const src = offCtx.createBufferSource();
-      src.buffer = decoded;
-      src.connect(offCtx.destination);
-      src.start(0);
+      let resampled;
+      if (needsReRender) {
+        const offCtx = new OfflineAudioContext(
+          numChannels,
+          Math.ceil(decoded.duration * targetRate),
+          targetRate
+        );
 
-      const resampled = await offCtx.startRendering();
+        const src = offCtx.createBufferSource();
+        src.buffer = decoded;
 
-      const bufCrunched = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
-      const bufOriginal = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
+        // ── BIQUAD FILTERS ──────────────────────────────────────────
+        let lastNode = src;
+        if (state.hpf > 20) {
+          const hpf = offCtx.createBiquadFilter();
+          hpf.type = 'highpass';
+          hpf.frequency.value = state.hpf;
+          lastNode.connect(hpf);
+          lastNode = hpf;
+        }
+        if (state.lpf < 20000) {
+          const lpf = offCtx.createBiquadFilter();
+          lpf.type = 'lowpass';
+          lpf.frequency.value = state.lpf;
+          lastNode.connect(lpf);
+          lastNode = lpf;
+        }
+        if (state.bass > 0) {
+          const bass = offCtx.createBiquadFilter();
+          bass.type = 'peaking';
+          bass.frequency.value = 80;
+          bass.Q.value = 0.7;
+          bass.gain.value = state.bass;
+          lastNode.connect(bass);
+          lastNode = bass;
+        }
+
+        lastNode.connect(offCtx.destination);
+        src.start(0);
+        resampled = await offCtx.startRendering();
+
+        previewResampled = resampled;
+        lastRenderParams = {
+          sampleRate: state.sampleRate,
+          hpf: state.hpf,
+          lpf: state.lpf,
+          bass: state.bass,
+          stereo: state.stereo
+        };
+      } else {
+        resampled = previewResampled;
+      }
+
+      const bufCrunched = previewCtx.createBuffer(numChannels, resampled.length, resampled.sampleRate);
+      const bufOriginal = previewCtx.createBuffer(numChannels, resampled.length, resampled.sampleRate);
 
       for (let ch = 0; ch < numChannels; ch++) {
         const data = resampled.getChannelData(ch);
@@ -1229,14 +1316,21 @@ function requestPreviewUpdate() {
 
       previewSource.onended = stopPreview;
 
-      previewSource.start(startTime, currentPos % decoded.duration);
-      previewSourceOrig.start(startTime, currentPos % decoded.duration);
-      previewStartTime = startTime - (currentPos % decoded.duration);
+      // Crucial: remove onended from old source to prevent reset during swap
+      if (oldSource) {
+        oldSource.onended = null;
+        try { oldSource.stop(startTime); } catch (e) { }
+      }
+      if (oldSourceOrig) {
+        try { oldSourceOrig.stop(startTime); } catch (e) { }
+      }
 
-      if (oldSource) { try { oldSource.stop(startTime); } catch (e) { } }
-      if (oldSourceOrig) { try { oldSourceOrig.stop(startTime); } catch (e) { } }
+      const playOffset = currentPos % decoded.duration;
+      previewSource.start(startTime, playOffset);
+      previewSourceOrig.start(startTime, playOffset);
+      previewStartTime = startTime - playOffset;
 
-      log(`live update applied at ${currentPos.toFixed(1)}s`, 'sys');
+      log(`live update applied (${needsReRender ? 're-rendered' : 're-crunched'})`, 'sys');
     } catch (e) {
       console.error('Live update failed', e);
     } finally {
@@ -1283,7 +1377,7 @@ btnLiveUpdate.addEventListener('click', () => {
 })();
 // ── Hotkeys ──────────────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if ((e.target.tagName === 'INPUT' && e.target.type !== 'range') || e.target.tagName === 'TEXTAREA') return;
 
   if (e.code === 'Space') {
     e.preventDefault();
