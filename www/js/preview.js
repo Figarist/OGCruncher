@@ -251,6 +251,11 @@ export async function togglePreview() {
 
     // FIXED: Original track now uses high-quality decoded source directly, 
     // so Sample Rate reduction only affects the Crunched track.
+    previewSource = previewCtx.createBufferSource();
+    previewSource.buffer = bufCrunched;
+    previewSource.connect(gainCrunched);
+    previewSource.connect(analyserCrunched);
+
     previewSourceOrig = previewCtx.createBufferSource();
     previewSourceOrig.buffer = decoded;
     previewSourceOrig.playbackRate.value = state.playbackRate;
