@@ -65,7 +65,10 @@
 
     <!-- ── LEFT PANEL: DROP ZONE ── -->
     <section class="panel panel--drop" aria-label="File input panel">
-      <div class="panel-label" aria-hidden="true">[ INPUT ]</div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="panel-label" aria-hidden="true">[ INPUT ]</div>
+        <button id="btn-dual-view" class="btn btn--ghost btn--xs" title="Show both spectra simultaneously">DUAL VIEW: OFF</button>
+      </div>
 
       <div
         id="drop-zone"
