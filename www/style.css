@@ -325,8 +325,15 @@ body.is-dragging * {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  position: relative;
+  z-index: 1;
   transition: transform var(--t-med), box-shadow var(--t-med);
   animation: panel-in 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Elevate panel when tooltip is active to stay above resizers */
+.panel:has([data-tooltip]:hover) {
+  z-index: 50;
 }
 
 .panel:nth-child(1) { animation-delay: 0.1s; }
@@ -791,6 +798,7 @@ body.is-dragging * {
 .ab-container {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 12px;
   animation: item-in .3s ease;
 }
@@ -1198,16 +1206,55 @@ button:focus-visible,
 }
 
 /* ── RESPONSIVE ────────────────────────────────────────────────── */
-@media (max-width: 1100px) {
-  .app-main { grid-template-columns: 1fr 1fr; gap: var(--hub-gap); }
+@media (max-width: 1140px) {
+  .app-main { 
+    grid-template-columns: 1fr 1fr; 
+    gap: var(--hub-gap); 
+    padding: 24px;
+  }
   .panel--log { grid-column: 1 / -1; }
   .resizer { display: none; }
 }
 
-@media (max-width: 720px) {
-  .app-main { grid-template-columns: 1fr; padding: 16px; gap: var(--hub-gap); }
-  .header-inner { flex-wrap: wrap; }
+@media (max-width: 860px) {
+  :root {
+    --hub-gap: 16px;
+    --card-padding: 20px;
+  }
+  .app-main { 
+    grid-template-columns: 1fr; 
+    padding: 16px;
+  }
+  .header-inner { flex-wrap: wrap; justify-content: center; text-align: center; }
+  .logo-block { width: 100%; justify-content: center; margin-bottom: 8px; }
   .resizer { display: none; }
+  
+  .log-window { height: 35vh; min-height: 250px; }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --hub-gap: 12px;
+    --card-padding: 16px;
+    --card-radius: 16px;
+  }
+  
+  .app-main { padding: 12px; }
+  
+  .action-row { flex-direction: column; }
+  .btn--hero { width: 100%; flex: none; }
+  .btn--primary { width: 100%; }
+  
+  .preset-grid { grid-template-columns: 1fr; }
+  .audio-rack { padding: 12px; gap: 12px; }
+  
+  .control-header { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .control-value { font-size: 1.2rem; }
+  
+  .header-badges { width: 100%; justify-content: center; }
+  .badge { font-size: 9px; padding: 2px 8px; }
+
+  .footer-link--donate { width: 100%; margin-top: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
