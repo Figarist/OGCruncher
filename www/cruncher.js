@@ -128,6 +128,7 @@ const visualizer = $('visualizer');
 const btnLiveUpdate = $('btn-live-update');
 const btnDualView = $('btn-dual-view');
 const headerProgressFill = $('header-progress-fill');
+const btnLoadDemo = $('btn-load-demo');
 
 let analyserCrunched = null;
 let analyserOriginal = null;
@@ -298,6 +299,34 @@ function addFiles(newFiles) {
     btnProcess.disabled = false;
     btnPreview.disabled = false;
     log(`${state.files.size} file(s) in queue.`, 'info');
+  }
+}
+
+async function loadDemoTrack() {
+  if (state.processing) return;
+  
+  btnLoadDemo.disabled = true;
+  btnLoadDemo.textContent = 'LOADING...';
+  log('Fetching demo track from server...', 'sys');
+  
+  try {
+    const response = await fetch('demo.mp3');
+    if (!response.ok) throw new Error('Failed to fetch demo track');
+    
+    const blob = await response.blob();
+    const file = new File([blob], 'loksii_demo_track.mp3', { type: 'audio/mpeg' });
+    
+    addFiles([file]);
+    
+    log('Demo track loaded successfully.', 'ok');
+    log('Music by Oleksii Holubiev (Pixabay)', 'accent');
+    showToast('Demo track loaded!', 'ok');
+  } catch (err) {
+    log(`Failed to load demo track: ${err.message}`, 'error');
+    showToast('Failed to load demo', 'error');
+  } finally {
+    btnLoadDemo.disabled = false;
+    btnLoadDemo.textContent = 'TRY DEMO TRACK';
   }
 }
 
@@ -1416,7 +1445,8 @@ function requestPreviewUpdate() {
 
       const needsDryRender = !previewResampled ||
         lastRenderParams.sampleRate !== state.sampleRate ||
-        lastRenderParams.numChannelsOriginal !== numChannelsOriginal; // Use original channels for reference
+        lastRenderParams.playbackRate !== state.playbackRate ||
+        lastRenderParams.numChannelsOriginal !== numChannelsOriginal;
 
       const needsWetRender = needsDryRender ||
         lastRenderParams.hpf !== state.hpf ||
@@ -1427,7 +1457,7 @@ function requestPreviewUpdate() {
       if (needsDryRender) {
         const offCtx = safeOfflineCtx(
           numChannelsOriginal,
-          Math.ceil(decoded.duration * targetRate),
+          Math.ceil((decoded.duration / state.playbackRate) * targetRate),
           targetRate
         );
         const src = offCtx.createBufferSource();
@@ -1457,6 +1487,7 @@ function requestPreviewUpdate() {
 
       lastRenderParams = {
         sampleRate: state.sampleRate,
+        playbackRate: state.playbackRate,
         hpf: state.hpf,
         lpf: state.lpf,
         bass: state.bass,
@@ -1493,13 +1524,15 @@ function requestPreviewUpdate() {
 
       previewSource = previewCtx.createBufferSource();
       previewSource.buffer = bufCrunched;
+      previewSource.playbackRate.value = state.playbackRate;
       previewSource.connect(gainCrunched);
-      previewSource.connect(analyserCrunched); // Pre-gain data
+      previewSource.connect(analyserCrunched);
 
       previewSourceOrig = previewCtx.createBufferSource();
       previewSourceOrig.buffer = bufOriginal;
+      previewSourceOrig.playbackRate.value = state.playbackRate;
       previewSourceOrig.connect(gainOriginal);
-      previewSourceOrig.connect(analyserOriginal); // Pre-gain data
+      previewSourceOrig.connect(analyserOriginal);
 
       previewSource.onended = stopPreview;
 
@@ -1511,12 +1544,13 @@ function requestPreviewUpdate() {
         try { oldSourceOrig.stop(startTime); } catch (e) { }
       }
 
-      const freshPos = previewCtx.currentTime - previewStartTime;
+      const currentPlaybackRate = lastRenderParams.playbackRate || 1.0;
+      const freshPos = (previewCtx.currentTime - previewStartTime) * currentPlaybackRate;
       const safeOffset = Math.max(0, freshPos % decoded.duration);
       
       previewSource.start(startTime, safeOffset);
       previewSourceOrig.start(startTime, safeOffset);
-      previewStartTime = startTime - safeOffset;
+      previewStartTime = startTime - (safeOffset / state.playbackRate);
 
       log(`live update applied (${needsReRender ? 're-rendered' : 're-crunched'})`, 'sys');
     } catch (e) {
@@ -1706,6 +1740,11 @@ function initResizers() {
   
   log('ready. drop files or click browse.', 'ok');
   setBadge('IDLE', 'badge--amber');
+
+  btnLoadDemo.addEventListener('click', (e) => {
+    e.stopPropagation();
+    loadDemoTrack();
+  });
 })();
 
 window.addEventListener('keydown', (e) => {
