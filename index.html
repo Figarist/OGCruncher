@@ -54,6 +54,7 @@
       <div class="header-badges">
         <span class="badge badge--green" id="badge-pwa">PWA READY</span>
         <span class="badge badge--amber" id="badge-status">IDLE</span>
+        <button id="btn-info" class="btn btn--ghost btn--xs badge" style="border-radius:99px; padding: 3px 8px; font-weight:700;" title="About OGCruncher">?</button>
       </div>
     </div>
     <!-- scanline decoration -->
@@ -422,6 +423,21 @@
   <script src="OggVorbisEncoder.min.js"></script>
   <script src="lame.min.js"></script>
   <script src="jszip.min.js"></script>
+  <!-- ══════════════ INFO MODAL ══════════════ -->
+  <div id="modal-info" class="modal-overlay" hidden>
+    <div class="modal-content bento-card">
+      <div class="modal-header">
+        <h2 class="modal-title">ABOUT OGCRUNCHER</h2>
+      </div>
+      <div class="modal-body">
+        <p>OGCruncher is a professional in-browser audio bit-crusher and compressor. It transforms high-quality audio into gritty, lo-fi samples optimized for game development, Wear OS assets, or retro-style projects. Adjust bit depth, sample rate, and saturation to achieve the perfect vintage crunch while keeping file sizes minimal.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-info-ok" class="btn btn--primary" style="width:100%">UNDERSTOOD</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
