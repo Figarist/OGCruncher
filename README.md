@@ -12,11 +12,13 @@
 - **Advanced Parameter Control**:
   - **Bit Depth & Rate**: Precision resolution and sampling control.
   - **Grit & Saturation**: Character-driven `tanh` saturation for warm analog-style clipping.
+  - **Speed / Pitch**: Native playback rate adjustment for "tape-style" pitch shifting and speed control (0.5x - 2.0x).
   - **Crush Mode**: Integrated pipeline with soft expansion, triangular dither, and adjacent-sample anti-aliasing.
   - **Dynamic Filters**: High-Pass (HPF), Low-Pass (LPF), and 80Hz Bass Boost.
 - **Pro Workflow Optimization**:
-  - **Hotkeys**: Global support for `Space` (Preview), `Enter` (Crunch), and `C` (A/B Toggle).
-  - **Auto-Save**: State persistence via `localStorage`—your settings are never lost on refresh.
+  - **Resizable Interface**: Windows-style draggable handles to customize your workspace layout.
+  - **Hotkeys**: Global support for `Space` (Preview), `Enter` (Crunch), `C` (A/B Toggle), and `N` (Live Update).
+  - **Auto-Save**: State persistence via `localStorage`—your parameters and layout widths are saved automatically.
   - **Intelligent Queue**: Individual file management and batch ZIP exports.
 - **English Documentation**: Beginner-friendly professional tooltips for every parameter.
 

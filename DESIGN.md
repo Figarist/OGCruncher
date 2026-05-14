@@ -67,6 +67,10 @@ The interface follows a **Flexible Bento Grid** layout, optimized for a left-to-
 - **A/B Comparison**: Instantaneous toggle between raw and processed signals with synchronized playback.
 - **Stabilized Console**: The log window has a fixed relative height (`50vh`) to prevent layout jumping during processing.
 
+### 4.3 Drag UX
+- **Selection Blocking**: Globally disabling `-webkit-user-select` during active resizer dragging or slider interaction to prevent visual noise.
+- **Custom Cursor**: Context-aware cursor switching (`col-resize`) during layout customization.
+
 ## 5. Professional Workflow Features
 - **Deep Linking**: All parameters are encodable into the URL hash for preset sharing.
 - **Batch Processing**: Parallel file handling with ZIP export via `JSZip`.
@@ -77,4 +81,4 @@ The interface follows a **Flexible Bento Grid** layout, optimized for a left-to-
 ## 6. Technical Constraints
 - **Zero-Allocation DSP**: responsive interface during heavy mutations.
 - **Touch Targets**: Minimum hit area of `44px` for all interactive elements.
-- **Keyboard Shortcuts**: `Space` (Preview), `Enter` (Crunch), `C` (A/B Toggle).
+- **Keyboard Shortcuts**: `Space` (Preview), `Enter` (Crunch), `C` (A/B Toggle), `N` (Live Update).

@@ -67,6 +67,13 @@ body {
 a { text-decoration: none; color: inherit; }
 [hidden] { display: none !important; }
 
+/* Global utility for dragging */
+body.is-dragging, 
+body.is-dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 /* ── SCROLLBAR ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 7px; }
 ::-webkit-scrollbar-track { background: var(--bg-color); }
@@ -467,10 +474,16 @@ a { text-decoration: none; color: inherit; }
   text-align: center;
 }
 
-.btn--preset-card:hover:not(:disabled) {
+.btn--preset-card:not(.active):hover:not(:disabled) {
   border-color: var(--accent-primary);
   background: #fdfcff;
   transform: translateY(-2px);
+}
+
+.btn--preset-card.active:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c4cb8 0%, #3a1a6b 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(107,63,160,0.3);
 }
 
 .btn--preset-card.active {
@@ -779,10 +792,16 @@ a { text-decoration: none; color: inherit; }
   box-shadow: 0 2px 8px rgba(245,194,204,0.3);
 }
 
-.btn--ab-toggle:hover {
+.btn--ab-toggle:not(.active):hover {
   background: #fffafa;
   border-color: var(--accent-secondary-d);
   transform: translateY(-1px);
+}
+
+.btn--ab-toggle.active:hover {
+  background: var(--accent-secondary-d);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(201,24,74,0.3);
 }
 
 .btn--ab-toggle.active {
@@ -807,9 +826,15 @@ a { text-decoration: none; color: inherit; }
   box-shadow: 0 2px 8px rgba(0,0,0,0.03);
 }
 
-.btn--live-toggle:hover {
+.btn--live-toggle:not(.active):hover {
   background: var(--bg-color);
   transform: translateY(-1px);
+}
+
+.btn--live-toggle.active:hover {
+  background: #5bc8bf;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(78,205,196,0.4);
 }
 
 .btn--live-toggle.active {

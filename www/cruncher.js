@@ -21,6 +21,7 @@ const state = {
   grit: 1.0,
   noise: 0.0,
   stereo: false,
+  playbackRate: 1.0,
   hpf: 20,
   lpf: 20000,
   bass: 0,
@@ -57,6 +58,7 @@ function applyParamsToUI(p) {
   if (p.sampleRate !== undefined) syncSampleRate(p.sampleRate);
   if (p.grit !== undefined) syncGrit(p.grit);
   if (p.noise !== undefined) syncNoise(p.noise);
+  if (p.playbackRate !== undefined) syncSpeed(p.playbackRate);
   if (p.hpf !== undefined) syncHpf(p.hpf);
   if (p.lpf !== undefined) syncLpf(p.lpf);
   if (p.bass !== undefined) syncBass(p.bass);
@@ -97,10 +99,12 @@ const sliderBit = $('slider-bitdepth');
 const sliderSr = $('slider-samplerate');
 const sliderGrit = $('slider-grit');
 const sliderNoise = $('slider-noise');
+const sliderSpeed = $('slider-speed');
 const outBit = $('out-bitdepth');
 const outSr = $('out-samplerate');
 const outGrit = $('out-grit');
 const outNoise = $('out-noise');
+const outSpeed = $('out-speed');
 const outMario = $('out-mariomode');
 const outStereo = $('out-stereo');
 const outNormalize = $('out-normalize');
@@ -221,6 +225,15 @@ function syncNoise(val) {
   sliderNoise.value = val;
   outNoise.textContent = val;
   updateSliderTrack(sliderNoise);
+  saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
+}
+
+function syncSpeed(val) {
+  state.playbackRate = parseFloat(val);
+  sliderSpeed.value = state.playbackRate;
+  outSpeed.textContent = Math.round(state.playbackRate * 100) + '%';
+  updateSliderTrack(sliderSpeed);
   saveState();
   if (state.liveUpdate) requestPreviewUpdate();
 }
@@ -603,9 +616,14 @@ function buildFilterChain(offCtx, sourceNode, params) {
  */
 async function renderFilteredBuffer(buffer, params, targetChannels) {
   const numChannels = targetChannels || buffer.numberOfChannels;
-  const offCtx = new OfflineAudioContext(numChannels, buffer.length, buffer.sampleRate);
+  const pRate = params.playbackRate || 1.0;
+  const targetLength = Math.ceil(buffer.length / pRate);
+  
+  const offCtx = new OfflineAudioContext(numChannels, targetLength, buffer.sampleRate);
   const src = offCtx.createBufferSource();
   src.buffer = buffer;
+  src.playbackRate.value = pRate;
+  
   const lastNode = buildFilterChain(offCtx, src, params);
   lastNode.connect(offCtx.destination);
   src.start(0);
@@ -648,16 +666,18 @@ async function processFile(file, id) {
 
     const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
     const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
+    const targetPlaybackRate = state.playbackRate || 1.0;
 
     // IMPROVEMENT 6: Use safeOfflineCtx
     const offCtx = safeOfflineCtx(
       numChannels,
-      Math.ceil(decoded.duration * targetRate),
+      Math.ceil((decoded.duration / targetPlaybackRate) * targetRate),
       targetRate
     );
 
     const src = offCtx.createBufferSource();
     src.buffer = decoded;
+    src.playbackRate.value = targetPlaybackRate;
 
     const lastNode = buildFilterChain(offCtx, src, { hpf: state.hpf, lpf: state.lpf, bass: state.bass });
     lastNode.connect(offCtx.destination);
@@ -916,6 +936,7 @@ sliderBit.addEventListener('input', () => syncBitDepth(sliderBit.value));
 sliderSr.addEventListener('input', () => syncSampleRate(sliderSr.value));
 sliderGrit.addEventListener('input', () => syncGrit(sliderGrit.value));
 sliderNoise.addEventListener('input', () => syncNoise(sliderNoise.value));
+sliderSpeed.addEventListener('input', () => syncSpeed(sliderSpeed.value));
 sliderHpf.addEventListener('input', () => syncHpf(sliderHpf.value));
 sliderLpf.addEventListener('input', () => syncLpf(sliderLpf.value));
 sliderBass.addEventListener('input', () => syncBass(sliderBass.value));
@@ -1227,7 +1248,8 @@ async function togglePreview() {
     const resampledWet = await renderFilteredBuffer(resampledDry, {
       hpf: state.hpf,
       lpf: state.lpf,
-      bass: state.bass
+      bass: state.bass,
+      playbackRate: state.playbackRate
     }, numChannelsProcess);
 
     lastRenderParams = {
@@ -1235,7 +1257,8 @@ async function togglePreview() {
       hpf: state.hpf,
       lpf: state.lpf,
       bass: state.bass,
-      stereo: state.stereo
+      stereo: state.stereo,
+      playbackRate: state.playbackRate
     };
 
     const bufCrunched = previewCtx.createBuffer(numChannelsProcess, resampledDry.length, targetRate);
@@ -1528,6 +1551,7 @@ function updateHash() {
   params.set('bs', state.bass);
   params.set('norm', state.normalize ? 1 : 0);
   params.set('dv', state.dualView ? 1 : 0);
+  params.set('sp', state.playbackRate);
   
   // Use replaceState to avoid polluting back button
   history.replaceState(null, '', '#' + params.toString());
@@ -1551,6 +1575,7 @@ function parseHash() {
     if (params.has('bs')) p.bass = Math.max(0, Math.min(15, +params.get('bs')));
     if (params.has('norm')) p.normalize = params.get('norm') === '1';
     if (params.has('dv')) p.dualView = params.get('dv') === '1';
+    if (params.has('sp')) p.playbackRate = Math.max(0.5, Math.min(2.0, +params.get('sp')));
     
     applyParamsToUI(p);
   } catch (e) {
@@ -1580,6 +1605,7 @@ function initResizers() {
   const onMouseDown = (e) => {
     activeResizer = e.currentTarget.dataset.resizer;
     document.body.style.cursor = 'col-resize';
+    document.body.classList.add('is-dragging'); // Disable selection
     e.currentTarget.classList.add('dragging');
     // Disable transitions during drag for smoothness
     main.style.transition = 'none';
@@ -1630,6 +1656,7 @@ function initResizers() {
     }
     activeResizer = null;
     document.body.style.cursor = '';
+    document.body.classList.remove('is-dragging'); // Re-enable selection
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('mouseup', onMouseUp);
   };
@@ -1643,6 +1670,7 @@ function initResizers() {
   syncSampleRate(22050);
   syncGrit(1.0);
   syncNoise(0);
+  syncSpeed(1.0);
   syncHpf(20);
   syncLpf(20000);
   syncBass(0);
@@ -1691,5 +1719,7 @@ window.addEventListener('keydown', (e) => {
     if (!btnProcess.disabled) btnProcess.click();
   } else if (e.code === 'KeyC') {
     if (abContainer.style.display !== 'none') btnAB.click();
+  } else if (e.code === 'KeyN') {
+    btnLiveUpdate.click();
   }
 });
