@@ -10,6 +10,8 @@ import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.
 import { initQueue, addFiles, clearQueue, startProcessing, loadDemoTrack, handleItems } from './queue.js';
 import { initPreview, togglePreview, toggleAB, requestPreviewUpdate } from './preview.js';
 
+const SITE_URL = 'https://figarist.github.io/OGCruncher/';
+
 /* ════════════════════════════════════════════════════════════════════
    DOM REFS
    ════════════════════════════════════════════════════════════════════ */
@@ -69,6 +71,9 @@ const btnLiveUpdate = $('btn-live-update');
 const btnDualView = $('btn-dual-view');
 const headerProgressFill = $('header-progress-fill');
 const btnLoadDemo = $('btn-load-demo');
+const btnInfo = $('btn-info');
+const modalInfo = $('modal-info');
+const btnInfoOk = $('btn-info-ok');
 
 /* ════════════════════════════════════════════════════════════════════
    SYNC FUNCTIONS
@@ -335,7 +340,8 @@ btnDualView.addEventListener('click', () => {
 
 btnCopyLink.addEventListener('click', async () => {
   try {
-    await navigator.clipboard.writeText(window.location.href);
+    const shareUrl = SITE_URL + window.location.hash;
+    await navigator.clipboard.writeText(shareUrl);
     showToast('🔗 Link copied to clipboard', 'ok');
   } catch (err) {
     showToast('⚠ Copy manually from address bar', 'error');
@@ -411,6 +417,18 @@ btnLoadDemo.addEventListener('click', (e) => {
   loadDemoTrack();
 });
 
+btnInfo.addEventListener('click', () => {
+  modalInfo.hidden = false;
+});
+
+btnInfoOk.addEventListener('click', () => {
+  modalInfo.hidden = true;
+});
+
+modalInfo.addEventListener('click', (e) => {
+  if (e.target === modalInfo) modalInfo.hidden = true;
+});
+
 window.addEventListener('keydown', (e) => {
   if ((e.target.tagName === 'INPUT' && e.target.type !== 'range') || e.target.tagName === 'TEXTAREA') return;
   if (e.code === 'Space') {
@@ -474,6 +492,12 @@ window.addEventListener('keydown', (e) => {
   parseHash(applyParamsToUI);
   initResizers();
   
+  // Show info modal on first visit
+  if (!localStorage.getItem('og_seen_info')) {
+    modalInfo.hidden = false;
+    localStorage.setItem('og_seen_info', 'true');
+  }
+
   log('ready. drop files or click browse.', 'ok');
   setBadge('IDLE', 'badge--amber');
 })();
