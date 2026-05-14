@@ -39,6 +39,7 @@ export function initPreview(domRefs) {
 
 export async function stopPreview() {
   if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
+  isUpdatingPreview = false;
   if (visDrawId) cancelAnimationFrame(visDrawId);
   if (_dom.visualizer) {
     _dom.visualizer.style.display = 'none';

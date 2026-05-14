@@ -1,0 +1,26 @@
+{
+  "name": "ogcruncher",
+  "version": "1.0.0",
+  "description": "**OGCruncher** is a professional-grade, in-browser audio workstation for bit-crushing and lo-fi DSP processing. Built for sound designers and game developers, it enables high-speed batch conversion of audio assets with a focus on efficiency, precision, and aesthetic feedback.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Figarist/OGCruncher.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Figarist/OGCruncher/issues"
+  },
+  "homepage": "https://github.com/Figarist/OGCruncher#readme",
+  "devDependencies": {
+    "vite": "^8.0.13",
+    "vite-plugin-pwa": "^1.3.0"
+  }
+}
