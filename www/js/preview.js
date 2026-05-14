@@ -397,9 +397,12 @@ export function requestPreviewUpdate() {
       const bufDuration = bufCrunched.duration;
       const safeOffset = bufDuration > 0 ? Math.max(0, Math.min(freshPos % bufDuration, bufDuration - 0.005)) : 0;
       
+      // FIXED: Original track offset must be scaled by playbackRate to match the 'baked' crunched buffer
+      const safeOffsetOrig = safeOffset * state.playbackRate;
+
       if (bufDuration > 0) {
         previewSource.start(startTime, safeOffset);
-        previewSourceOrig.start(startTime, safeOffset);
+        previewSourceOrig.start(startTime, safeOffsetOrig);
         previewStartTime = startTime - safeOffset;
       }
 
