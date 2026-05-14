@@ -12,7 +12,8 @@
    STATE
    ════════════════════════════════════════════════════════════════════ */
 const state = {
-  files: [],          // File objects queued
+  files: new Map(),   // Map<id, File> keyed by monotonically increasing counter
+  nextId: 0,          // ID counter for stable queue tracking
   processing: false,
   bitDepth: 8,
   sampleRate: 22050,
@@ -45,12 +46,7 @@ function loadState() {
     if (p.bass !== undefined) syncBass(p.bass);
     if (p.crushMode !== undefined && p.crushMode !== state.crushMode) btnMarioToggle.click();
     if (p.stereo !== undefined && p.stereo !== state.stereo) btnStereoToggle.click();
-    if (p.liveUpdate !== undefined) {
-      state.liveUpdate = p.liveUpdate;
-      btnLiveUpdate.classList.toggle('active', state.liveUpdate);
-      const statusEl = $('live-status');
-      if (statusEl) statusEl.textContent = state.liveUpdate ? 'ON' : 'OFF';
-    }
+    if (p.liveUpdate !== undefined && p.liveUpdate !== state.liveUpdate) btnLiveUpdate.click();
   } catch (e) {
     console.error('Failed to load state', e);
   }
@@ -235,46 +231,46 @@ function formatBytes(b) {
 
 function addFiles(newFiles) {
   for (const f of newFiles) {
-    if (state.files.some(x => x && x.name === f.name && x.size === f.size)) continue;
-    state.files.push(f);
-    const index = state.files.length - 1;
+    if ([...state.files.values()].some(x => x.name === f.name && x.size === f.size)) continue;
+    
+    const id = state.nextId++;
+    state.files.set(id, f);
 
     const li = document.createElement('li');
     li.className = 'queue-item queue-item--idle';
-    li.id = `qi-${index}`;
+    li.id = `qi-${id}`;
     li.innerHTML = `
       <span class="queue-item__icon">◎</span>
       <span class="queue-item__name" title="${f.name}">${f.name}</span>
       <span class="queue-item__size">${formatBytes(f.size)}</span>
-      <span class="queue-item__status" id="qs-${index}">IDLE</span>
-      <button class="btn-remove" aria-label="Remove" onclick="removeFile(${index})">×</button>`;
+      <span class="queue-item__status" id="qs-${id}">IDLE</span>
+      <button class="btn-remove" aria-label="Remove" onclick="removeFile(${id})">×</button>`;
     fileQueue.appendChild(li);
   }
 
-  const validFiles = state.files.filter(f => f !== null);
-  if (validFiles.length > 0) {
+  if (state.files.size > 0) {
     queueHeader.hidden = false;
     btnProcess.disabled = false;
     btnPreview.disabled = false;
-    log(`${validFiles.length} file(s) in queue.`, 'info');
+    log(`${state.files.size} file(s) in queue.`, 'info');
   }
 }
 
-window.removeFile = function (index) {
-  state.files[index] = null;
-  const li = $(`qi-${index}`);
+window.removeFile = function (id) {
+  state.files.delete(id);
+  const li = $(`qi-${id}`);
   if (li) li.remove();
 
-  const validFiles = state.files.filter(f => f !== null);
-  if (validFiles.length === 0) {
+  if (state.files.size === 0) {
     clearQueue();
   } else {
-    log(`${validFiles.length} file(s) in queue.`, 'info');
+    log(`${state.files.size} file(s) in queue.`, 'info');
   }
 };
 
 function clearQueue() {
-  state.files = [];
+  state.files.clear();
+  state.nextId = 0;
   fileQueue.innerHTML = '';
   queueHeader.hidden = true;
   btnProcess.disabled = true;
@@ -285,9 +281,9 @@ function clearQueue() {
   log('Queue cleared.', 'sys');
 }
 
-function setItemState(index, status, icon) {
-  const li = $(`qi-${index}`);
-  const qs = $(`qs-${index}`);
+function setItemState(id, status, icon) {
+  const li = $(`qi-${id}`);
+  const qs = $(`qs-${id}`);
   if (!li || !qs) return;
   li.className = `queue-item queue-item--${status}`;
   li.querySelector('.queue-item__icon').textContent = icon;
@@ -320,6 +316,11 @@ function setProgress(pct, text) {
  * @param {number}       noise     — white noise floor level (0.0-0.05)
  */
 function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
+  // Safety clamps moved to top
+  bitDepth = Math.max(1, Math.min(16, bitDepth || 8));
+  grit = Math.max(1.0, Math.min(10.0, grit || 1.5));
+  noise = Math.max(0.0, Math.min(1.0, noise || 0.0));
+
   const N = buf.length;
 
   // ── 0. Noise Floor ─────────────────────────────────────────────
@@ -328,11 +329,6 @@ function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
       buf[i] += (Math.random() * 2 - 1) * noise;
     }
   }
-
-  // Safety clamps
-  bitDepth = Math.max(1, Math.min(16, bitDepth || 8));
-  grit = Math.max(1.0, Math.min(10.0, grit || 1.5));
-  noise = Math.max(0.0, Math.min(1.0, noise || 0.0));
 
   // ── 1. DC Offset Removal ────────────────────────────────────────
   let sum = 0;
@@ -392,13 +388,10 @@ function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
    Encodes a Float32Array (mono, [-1,1]) → OGG Blob using OggVorbisEncoder.js
    ════════════════════════════════════════════════════════════════════ */
 function encodeOGG(channels, sampleRate) {
-  // Quality 0.0 equals roughly Vorbis quality 0 (similar to -q:a 0)
-  // OggVorbisEncoder quality is from -0.1 to 1.0
   const numChannels = channels.length;
   const encoder = new OggVorbisEncoder(sampleRate, numChannels, 0.0);
 
-  // Encode in chunks to prevent Emscripten OOM (TOTAL_MEMORY limit)
-  const CHUNK_SIZE = 65536; // 64k samples per chunk
+  const CHUNK_SIZE = 65536; 
   const totalSamples = channels[0].length;
 
   for (let i = 0; i < totalSamples; i += CHUNK_SIZE) {
@@ -407,7 +400,7 @@ function encodeOGG(channels, sampleRate) {
     encoder.encode(chunks);
   }
 
-  return encoder.finish(); // Returns a Blob
+  return encoder.finish(); 
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -415,9 +408,10 @@ function encodeOGG(channels, sampleRate) {
    Encodes a Float32Array (mono, [-1,1]) → WAV Blob
    ════════════════════════════════════════════════════════════════════ */
 function encodeWAV(channels, sampleRate, bitDepth) {
+  const containerDepth = bitDepth <= 8 ? 8 : 16;
   const numChannels = channels.length;
   const numSamples = channels[0].length;
-  const bytesPerSample = bitDepth === 16 ? 2 : 1;
+  const bytesPerSample = containerDepth === 16 ? 2 : 1;
   const blockAlign = numChannels * bytesPerSample;
   const buffer = new ArrayBuffer(44 + numSamples * blockAlign);
   const view = new DataView(buffer);
@@ -436,7 +430,7 @@ function encodeWAV(channels, sampleRate, bitDepth) {
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, sampleRate * blockAlign, true);
   view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitDepth, true);
+  view.setUint16(34, containerDepth, true);
   writeString(view, 36, 'data');
   view.setUint32(40, numSamples * blockAlign, true);
 
@@ -444,7 +438,7 @@ function encodeWAV(channels, sampleRate, bitDepth) {
   for (let i = 0; i < numSamples; i++) {
     for (let ch = 0; ch < numChannels; ch++) {
       let s = Math.max(-1, Math.min(1, channels[ch][i]));
-      if (bitDepth === 16) {
+      if (containerDepth === 16) {
         view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
         offset += 2;
       } else {
@@ -468,7 +462,6 @@ function encodeMP3(channels, sampleRate) {
   const mp3Data = [];
   const sampleBlockSize = 1152;
 
-  // Prepare Int16 buffers
   const intChannels = channels.map(ch => {
     const i16 = new Int16Array(ch.length);
     for (let i = 0; i < ch.length; i++) {
@@ -499,22 +492,62 @@ function encodeMP3(channels, sampleRate) {
 }
 
 /* ════════════════════════════════════════════════════════════════════
+   BIQUAD FILTER HELPER
+   ════════════════════════════════════════════════════════════════════ */
+/**
+ * Build a BiquadFilter chain on offCtx and return the last node.
+ * @param {OfflineAudioContext} offCtx
+ * @param {AudioNode} sourceNode
+ * @param {{ hpf: number, lpf: number, bass: number }} params
+ * @returns {AudioNode} last node in the chain
+ */
+function buildFilterChain(offCtx, sourceNode, params) {
+  let lastNode = sourceNode;
+
+  if (params.hpf > 20) {
+    const hpf = offCtx.createBiquadFilter();
+    hpf.type = 'highpass';
+    hpf.frequency.value = params.hpf;
+    lastNode.connect(hpf);
+    lastNode = hpf;
+  }
+  if (params.lpf < 20000) {
+    const lpf = offCtx.createBiquadFilter();
+    lpf.type = 'lowpass';
+    lpf.frequency.value = params.lpf;
+    lastNode.connect(lpf);
+    lastNode = lpf;
+  }
+  if (params.bass > 0) {
+    const bass = offCtx.createBiquadFilter();
+    bass.type = 'peaking';
+    bass.frequency.value = 80;
+    bass.Q.value = 0.7;
+    bass.gain.value = params.bass;
+    lastNode.connect(bass);
+    lastNode = bass;
+  }
+
+  return lastNode;
+}
+
+/* ════════════════════════════════════════════════════════════════════
    PROCESS ONE FILE
    Uses OfflineAudioContext to decode → resample, then runs DSP in-place
    ════════════════════════════════════════════════════════════════════ */
-async function processFile(file, index) {
-  setItemState(index, 'processing', '⟳');
+async function processFile(file, id) {
+  setItemState(id, 'processing', '⟳');
   log(`Processing: ${file.name}`, 'accent');
 
   try {
-    // Read file as ArrayBuffer
     const rawBuffer = await file.arrayBuffer();
 
-    // Decode via temporary AudioContext (standard, not offline)
     const decodeCtx = new AudioContext();
     let decoded;
     try {
       decoded = await decodeCtx.decodeAudioData(rawBuffer);
+    } catch (decodeErr) {
+      throw new Error(`Cannot decode "${file.name}" — unsupported or corrupt file.`);
     } finally {
       await decodeCtx.close();
     }
@@ -522,7 +555,6 @@ async function processFile(file, index) {
     const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
     const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
 
-    // OfflineAudioContext for high-quality resampling
     const offCtx = new OfflineAudioContext(
       numChannels,
       Math.ceil(decoded.duration * targetRate),
@@ -532,39 +564,12 @@ async function processFile(file, index) {
     const src = offCtx.createBufferSource();
     src.buffer = decoded;
 
-    // ── BIQUAD FILTERS ──────────────────────────────────────────
-    let lastNode = src;
-
-    if (state.hpf > 20) {
-      const hpf = offCtx.createBiquadFilter();
-      hpf.type = 'highpass';
-      hpf.frequency.value = state.hpf;
-      lastNode.connect(hpf);
-      lastNode = hpf;
-    }
-    if (state.lpf < 20000) {
-      const lpf = offCtx.createBiquadFilter();
-      lpf.type = 'lowpass';
-      lpf.frequency.value = state.lpf;
-      lastNode.connect(lpf);
-      lastNode = lpf;
-    }
-    if (state.bass > 0) {
-      const bass = offCtx.createBiquadFilter();
-      bass.type = 'peaking';
-      bass.frequency.value = 80;
-      bass.Q.value = 0.7;
-      bass.gain.value = state.bass;
-      lastNode.connect(bass);
-      lastNode = bass;
-    }
-
+    const lastNode = buildFilterChain(offCtx, src, { hpf: state.hpf, lpf: state.lpf, bass: state.bass });
     lastNode.connect(offCtx.destination);
     src.start(0);
 
     const resampled = await offCtx.startRendering();
 
-    // Process channels
     const channels = [];
     for (let ch = 0; ch < numChannels; ch++) {
       const buf = resampled.getChannelData(ch);
@@ -575,7 +580,6 @@ async function processFile(file, index) {
 
     log(`  Decoded: ${decoded.numberOfChannels}ch → ${numChannels}ch | ${decoded.sampleRate}Hz → ${targetRate}Hz`, 'sys');
 
-    // ── Encode to Formats ─────────────────────────────────────────────
     const blobOGG = encodeOGG(channels, targetRate);
     const blobWAV = encodeWAV(channels, targetRate, state.bitDepth);
     const blobMP3 = encodeMP3(channels, targetRate);
@@ -589,7 +593,7 @@ async function processFile(file, index) {
 
     console.log(`[OGCruncher] ${file.name} future sizes -> OGG: ${sizeOGG}, WAV: ${sizeWAV}, MP3: ${sizeMP3}`);
     log(`  ✅ Done: ${file.name} [OGG: ${sizeOGG} | WAV: ${sizeWAV} | MP3: ${sizeMP3}]`, 'ok');
-    setItemState(index, 'done', '✓');
+    setItemState(id, 'done', '✓');
 
     return {
       name: outNameBase,
@@ -602,7 +606,7 @@ async function processFile(file, index) {
 
   } catch (err) {
     log(`  ❌ Error processing ${file.name}: ${err.message}`, 'error');
-    setItemState(index, 'error', '✗');
+    setItemState(id, 'error', '✗');
     return null;
   }
 }
@@ -611,7 +615,7 @@ async function processFile(file, index) {
    BATCH PROCESSING CONTROLLER
    ════════════════════════════════════════════════════════════════════ */
 async function startProcessing() {
-  if (state.processing || state.files.length === 0) return;
+  if (state.processing || state.files.size === 0) return;
 
   state.processing = true;
   btnProcess.disabled = true;
@@ -621,34 +625,31 @@ async function startProcessing() {
   resultsArea.innerHTML = '';
   resultsArea.hidden = true;
   setBadge('PROCESSING', 'badge--amber');
-  log(`processing ${state.files.length} file(s)...`, 'accent');
+  log(`processing ${state.files.size} file(s)...`, 'accent');
   log(`${state.bitDepth}-bit · ${state.sampleRate} Hz · crush=${state.crushMode}`, 'sys');
 
   const results = [];
-  const validFiles = state.files.filter(f => f !== null);
+  const validFiles = [...state.files.values()];
   let processedCount = 0;
 
-  for (let i = 0; i < state.files.length; i++) {
-    if (!state.files[i]) continue;
+  const canShare = !!navigator.share; // Fixed Error: hoisting canShare to block scope
 
+  for (const [id, file] of state.files.entries()) {
     const pct = (processedCount / validFiles.length) * 100;
     setProgress(pct, `File ${processedCount + 1} / ${validFiles.length}`);
 
-    const result = await processFile(state.files[i], i);
+    const result = await processFile(file, id);
     if (result) results.push(result);
 
     processedCount++;
-    // Yield to UI thread between files
     await new Promise(r => setTimeout(r, 0));
   }
 
   setProgress(100, 'Complete');
 
-  // ── Render download list ──────────────────────────────────────────
   if (results.length > 0) {
     resultsArea.hidden = false;
 
-    // Add Batch Download button if multiple files
     if (results.length > 1) {
       const batchDiv = document.createElement('div');
       batchDiv.className = 'batch-actions';
@@ -678,8 +679,6 @@ async function startProcessing() {
       div.className = 'result-item';
       div.style.flexWrap = 'wrap';
 
-      const canShare = !!navigator.share;
-
       div.innerHTML = `
         <span class="result-item__name" title="${r.name}" style="flex:1; width:100%; margin-bottom:8px;">${r.name}</span>
         <div style="display:flex; gap:8px; width:100%; flex-wrap: wrap;">
@@ -705,7 +704,7 @@ async function startProcessing() {
         </div>`;
       resultsArea.appendChild(div);
     }
-    log(`done: ${results.length}/${state.files.length} file(s) ready`, 'ok');
+    log(`done: ${results.length}/${state.files.size} file(s) ready`, 'ok');
     showToast(`✅ ${results.length} file(s) ready`, 'ok');
     setBadge('DONE', 'badge--green');
   } else {
@@ -725,6 +724,18 @@ async function startProcessing() {
    ════════════════════════════════════════════════════════════════════ */
 
 // ── Drag & Drop (Folder Support) ──────────────────────────────────
+async function readAllEntries(reader) {
+  const all = [];
+  while (true) {
+    const batch = await new Promise((res, rej) =>
+      reader.readEntries(res, rej)
+    );
+    if (!batch.length) break;
+    all.push(...batch);
+  }
+  return all;
+}
+
 async function handleItems(items) {
   const allFiles = [];
 
@@ -736,7 +747,7 @@ async function handleItems(items) {
       }
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
-      const entries = await new Promise(res => reader.readEntries(res));
+      const entries = await readAllEntries(reader); // Fixed Bug 4: Chromium 100-file limit
       for (const e of entries) await traverseEntry(e);
     }
   }
@@ -760,17 +771,14 @@ dropZone.addEventListener('drop', async e => {
   if (e.dataTransfer.items) {
     await handleItems(e.dataTransfer.items);
   } else {
-    // Fallback for older browsers
     addFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('audio/') || /\.(wav|mp3|flac|ogg|aiff?|m4a)$/i.test(f.name)));
   }
 });
 
-// Click to browse
 dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fileInput.click(); } });
 fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
 
-// ── Sliders ───────────────────────────────────────────────────────
 sliderBit.addEventListener('input', () => syncBitDepth(sliderBit.value));
 sliderSr.addEventListener('input', () => syncSampleRate(sliderSr.value));
 sliderGrit.addEventListener('input', () => syncGrit(sliderGrit.value));
@@ -779,7 +787,6 @@ sliderHpf.addEventListener('input', () => syncHpf(sliderHpf.value));
 sliderLpf.addEventListener('input', () => syncLpf(sliderLpf.value));
 sliderBass.addEventListener('input', () => syncBass(sliderBass.value));
 
-// ── Toggle Crush Mode ─────────────────────────────────────────────
 btnMarioToggle.addEventListener('click', () => {
   state.crushMode = !state.crushMode;
   btnMarioToggle.setAttribute('aria-checked', state.crushMode);
@@ -790,7 +797,6 @@ btnMarioToggle.addEventListener('click', () => {
   log(`Crush mode: ${state.crushMode ? 'ENABLED' : 'DISABLED'}`, 'sys');
 });
 
-// ── Toggle Stereo ─────────────────────────────────────────────────
 btnStereoToggle.addEventListener('click', () => {
   state.stereo = !state.stereo;
   const isForceMono = !state.stereo;
@@ -864,7 +870,6 @@ async function shareFile(name, ext, url) {
         text: 'Crunched audio via OGCruncher'
       });
     } else {
-      // Fallback for text-only sharing
       await navigator.share({
         title: name,
         url: window.location.href,
@@ -879,9 +884,7 @@ async function shareFile(name, ext, url) {
   }
 }
 
-// ── Drag-out to DAW/Unity ────────────────────────────────────────
 window.handleDragStart = function (e, type, name, url) {
-  // Standard Chromium hack to drag files out of the browser
   const downloadData = `${type}:${name}:${url}`;
   e.dataTransfer.setData('DownloadURL', downloadData);
   e.dataTransfer.effectAllowed = 'copy';
@@ -933,7 +936,6 @@ function drawVisualizer() {
 
   ctx.clearRect(0, 0, width, height);
 
-  // ── 1. Grid & Labels ──────────────────────────────────────────
   ctx.strokeStyle = 'rgba(0,0,0,0.08)';
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.font = '600 9px var(--font-mono)';
@@ -954,15 +956,12 @@ function drawVisualizer() {
   });
 
   const barWidth = (width / bufferLength) * 2.2;
-
-  // ── 2. Determine Alpha levels based on current A/B state ───────
   const alphaActive = 0.85;
   const alphaGhost = 0.25;
 
   const colorOrig = isComparingOriginal ? `rgba(162, 194, 225, ${alphaActive})` : `rgba(162, 194, 225, ${alphaGhost})`;
   const colorCr = isComparingOriginal ? `rgba(229, 115, 115, ${alphaGhost})` : `rgba(229, 115, 115, ${alphaActive})`;
 
-  // ── 3. Draw Original (Blue) ───────────────────────────────────
   ctx.fillStyle = colorOrig;
   let x = 0;
   for (let i = 0; i < bufferLength; i++) {
@@ -971,7 +970,6 @@ function drawVisualizer() {
     x += barWidth + 1;
   }
 
-  // ── 4. Draw Crunched (Red/Plum) ───────────────────────────────
   ctx.fillStyle = colorCr;
   x = 0;
   for (let i = 0; i < bufferLength; i++) {
@@ -988,7 +986,6 @@ function toggleAB() {
   isComparingOriginal = !isComparingOriginal;
   const now = previewCtx.currentTime;
 
-  // Crossfade for smooth transition
   gainOriginal.gain.setTargetAtTime(isComparingOriginal ? 1 : 0, now, 0.04);
   gainCrunched.gain.setTargetAtTime(isComparingOriginal ? 0 : 1, now, 0.04);
 
@@ -996,28 +993,32 @@ function toggleAB() {
   btnAB.classList.toggle('active', isComparingOriginal);
 }
 
-
 async function togglePreview() {
   if (btnPreview.classList.contains('playing')) {
     stopPreview();
     return;
   }
 
-  if (state.files.length === 0) return;
+  if (state.files.size === 0) return;
 
   btnPreview.disabled = true;
 
   try {
-    const firstValidIdx = state.files.findIndex(f => f !== null);
-    if (firstValidIdx === -1) return;
+    const firstValidEntry = state.files.entries().next().value;
+    if (!firstValidEntry) return;
 
-    const file = state.files[firstValidIdx];
+    const [id, file] = firstValidEntry;
     const rawBuffer = await file.arrayBuffer();
 
     if (!previewCtx) previewCtx = new AudioContext();
     if (previewCtx.state === 'suspended') await previewCtx.resume();
     
-    const decoded = await previewCtx.decodeAudioData(rawBuffer);
+    let decoded;
+    try {
+      decoded = await previewCtx.decodeAudioData(rawBuffer);
+    } catch (err) {
+      throw new Error(`Cannot decode "${file.name}" — unsupported or corrupt file.`);
+    }
 
     const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
     const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
@@ -1031,33 +1032,7 @@ async function togglePreview() {
     const src = offCtx.createBufferSource();
     src.buffer = decoded;
 
-    // ── BIQUAD FILTERS ──────────────────────────────────────────
-    let lastNode = src;
-
-    if (state.hpf > 20) {
-      const hpf = offCtx.createBiquadFilter();
-      hpf.type = 'highpass';
-      hpf.frequency.value = state.hpf;
-      lastNode.connect(hpf);
-      lastNode = hpf;
-    }
-    if (state.lpf < 20000) {
-      const lpf = offCtx.createBiquadFilter();
-      lpf.type = 'lowpass';
-      lpf.frequency.value = state.lpf;
-      lastNode.connect(lpf);
-      lastNode = lpf;
-    }
-    if (state.bass > 0) {
-      const bass = offCtx.createBiquadFilter();
-      bass.type = 'peaking';
-      bass.frequency.value = 80;
-      bass.Q.value = 0.7;
-      bass.gain.value = state.bass;
-      lastNode.connect(bass);
-      lastNode = bass;
-    }
-
+    const lastNode = buildFilterChain(offCtx, src, { hpf: state.hpf, lpf: state.lpf, bass: state.bass });
     lastNode.connect(offCtx.destination);
     src.start(0);
 
@@ -1071,29 +1046,22 @@ async function togglePreview() {
       stereo: state.stereo
     };
 
-    // Create TWO versions
     const bufCrunched = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
     const bufOriginal = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
 
     for (let ch = 0; ch < numChannels; ch++) {
       const data = resampled.getChannelData(ch);
       const samples = new Float32Array(data);
-
-      // Original copy
       bufOriginal.getChannelData(ch).set(samples);
-
-      // Crunched copy
       processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
       bufCrunched.getChannelData(ch).set(samples);
     }
 
-    // Setup Gains
     gainCrunched = previewCtx.createGain();
     gainOriginal = previewCtx.createGain();
     gainCrunched.connect(previewCtx.destination);
     gainOriginal.connect(previewCtx.destination);
 
-    // Setup Analysers
     analyserCrunched = previewCtx.createAnalyser();
     analyserOriginal = previewCtx.createAnalyser();
     analyserCrunched.fftSize = 512;
@@ -1101,11 +1069,9 @@ async function togglePreview() {
     gainCrunched.connect(analyserCrunched);
     gainOriginal.connect(analyserOriginal);
 
-    // Initial state: hear crunched
     gainCrunched.gain.value = 1;
     gainOriginal.gain.value = 0;
 
-    // Play both in sync
     const startTime = previewCtx.currentTime + 0.1;
 
     previewSource = previewCtx.createBufferSource();
@@ -1121,15 +1087,15 @@ async function togglePreview() {
     previewStartTime = previewCtx.currentTime;
     previewDecoded = decoded;
 
-    previewSource.start(startTime);
-    previewSourceOrig.start(startTime);
+    const safeOffset = 0; 
+    previewSource.start(startTime, safeOffset);
+    previewSourceOrig.start(startTime, safeOffset);
 
     btnPreview.classList.add('playing');
     btnPreviewLbl.textContent = 'STOP';
     previewIcon.textContent = '■';
     abContainer.style.display = 'flex';
 
-    // Show visualizer
     dropContent.style.display = 'none';
     visualizer.style.display = 'block';
     drawVisualizer();
@@ -1144,8 +1110,6 @@ async function togglePreview() {
   }
 }
 
-
-// ── Presets ──────────────────────────────────────────────────────
 function updatePresetUI(type) {
   btnPresetAuthor.classList.toggle('active', type === 'author');
   btnPresetUser.classList.toggle('active', type === 'user');
@@ -1200,7 +1164,6 @@ btnSaveCustom.addEventListener('click', () => {
   };
   localStorage.setItem('ogcruncher_preset', JSON.stringify(preset));
 
-  // Enable button & update label
   btnPresetUser.disabled = false;
   userPresetMeta.textContent = `${preset.bitDepth}-bit / ${preset.sampleRate}Hz`;
 
@@ -1209,18 +1172,10 @@ btnSaveCustom.addEventListener('click', () => {
   showToast('💾 custom preset saved', 'ok');
 });
 
-// ── Process button ────────────────────────────────────────────────
 btnProcess.addEventListener('click', startProcessing);
-
-// ── Preview button ────────────────────────────────────────────────
 btnPreview.addEventListener('click', togglePreview);
-
-// ── A/B button ────────────────────────────────────────────────────
 btnAB.addEventListener('click', toggleAB);
-
-// ── Clear queue ───────────────────────────────────────────────────
 btnClearQueue.addEventListener('click', clearQueue);
-
 
 function requestPreviewUpdate() {
   if (!btnPreview.classList.contains('playing') || !previewDecoded) return;
@@ -1234,7 +1189,6 @@ function requestPreviewUpdate() {
       const decoded = previewDecoded;
       const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
       const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
-      const currentPos = (previewCtx.currentTime - previewStartTime);
 
       const needsReRender = !previewResampled ||
         lastRenderParams.sampleRate !== state.sampleRate ||
@@ -1254,32 +1208,7 @@ function requestPreviewUpdate() {
         const src = offCtx.createBufferSource();
         src.buffer = decoded;
 
-        // ── BIQUAD FILTERS ──────────────────────────────────────────
-        let lastNode = src;
-        if (state.hpf > 20) {
-          const hpf = offCtx.createBiquadFilter();
-          hpf.type = 'highpass';
-          hpf.frequency.value = state.hpf;
-          lastNode.connect(hpf);
-          lastNode = hpf;
-        }
-        if (state.lpf < 20000) {
-          const lpf = offCtx.createBiquadFilter();
-          lpf.type = 'lowpass';
-          lpf.frequency.value = state.lpf;
-          lastNode.connect(lpf);
-          lastNode = lpf;
-        }
-        if (state.bass > 0) {
-          const bass = offCtx.createBiquadFilter();
-          bass.type = 'peaking';
-          bass.frequency.value = 80;
-          bass.Q.value = 0.7;
-          bass.gain.value = state.bass;
-          lastNode.connect(bass);
-          lastNode = bass;
-        }
-
+        const lastNode = buildFilterChain(offCtx, src, { hpf: state.hpf, lpf: state.lpf, bass: state.bass });
         lastNode.connect(offCtx.destination);
         src.start(0);
         resampled = await offCtx.startRendering();
@@ -1307,7 +1236,6 @@ function requestPreviewUpdate() {
         bufCrunched.getChannelData(ch).set(samples);
       }
 
-      // Hot-swap
       const oldSource = previewSource;
       const oldSourceOrig = previewSourceOrig;
       const startTime = previewCtx.currentTime + 0.05;
@@ -1322,7 +1250,6 @@ function requestPreviewUpdate() {
 
       previewSource.onended = stopPreview;
 
-      // Crucial: remove onended from old source to prevent reset during swap
       if (oldSource) {
         oldSource.onended = null;
         try { oldSource.stop(startTime); } catch (e) { }
@@ -1331,10 +1258,13 @@ function requestPreviewUpdate() {
         try { oldSourceOrig.stop(startTime); } catch (e) { }
       }
 
-      const playOffset = currentPos % decoded.duration;
-      previewSource.start(startTime, playOffset);
-      previewSourceOrig.start(startTime, playOffset);
-      previewStartTime = startTime - playOffset;
+      // Fixed Bug 5: Capture position immediately before start
+      const freshPos = previewCtx.currentTime - previewStartTime;
+      const safeOffset = Math.max(0, freshPos % decoded.duration);
+      
+      previewSource.start(startTime, safeOffset);
+      previewSourceOrig.start(startTime, safeOffset);
+      previewStartTime = startTime - safeOffset;
 
       log(`live update applied (${needsReRender ? 're-rendered' : 're-crunched'})`, 'sys');
     } catch (e) {
@@ -1355,9 +1285,6 @@ btnLiveUpdate.addEventListener('click', () => {
   if (state.liveUpdate) requestPreviewUpdate();
 });
 
-/* ════════════════════════════════════════════════════════════════════
-   INIT
-   ════════════════════════════════════════════════════════════════════ */
 (function init() {
   syncBitDepth(8);
   syncSampleRate(22050);
@@ -1367,7 +1294,6 @@ btnLiveUpdate.addEventListener('click', () => {
   syncLpf(20000);
   syncBass(0);
 
-  // Check for saved preset
   const saved = localStorage.getItem('ogcruncher_preset');
   if (saved) {
     const p = JSON.parse(saved);
@@ -1375,16 +1301,15 @@ btnLiveUpdate.addEventListener('click', () => {
     userPresetMeta.textContent = `${p.bitDepth}-bit / ${p.sampleRate}Hz`;
   }
 
-  // PWA service worker registration
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {/* offline optional */ });
+    navigator.serviceWorker.register('sw.js').catch(() => { });
   }
 
   loadState();
   log('ready. drop files or click browse.', 'ok');
   setBadge('IDLE', 'badge--amber');
 })();
-// ── Hotkeys ──────────────────────────────────────────────────────
+
 window.addEventListener('keydown', (e) => {
   if ((e.target.tagName === 'INPUT' && e.target.type !== 'range') || e.target.tagName === 'TEXTAREA') return;
 
