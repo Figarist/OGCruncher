@@ -45,6 +45,12 @@ function loadState() {
     if (p.bass !== undefined) syncBass(p.bass);
     if (p.crushMode !== undefined && p.crushMode !== state.crushMode) btnMarioToggle.click();
     if (p.stereo !== undefined && p.stereo !== state.stereo) btnStereoToggle.click();
+    if (p.liveUpdate !== undefined) {
+      state.liveUpdate = p.liveUpdate;
+      btnLiveUpdate.classList.toggle('active', state.liveUpdate);
+      const statusEl = $('live-status');
+      if (statusEl) statusEl.textContent = state.liveUpdate ? 'ON' : 'OFF';
+    }
   } catch (e) {
     console.error('Failed to load state', e);
   }
@@ -1342,7 +1348,10 @@ function requestPreviewUpdate() {
 btnLiveUpdate.addEventListener('click', () => {
   state.liveUpdate = !state.liveUpdate;
   btnLiveUpdate.classList.toggle('active', state.liveUpdate);
+  const statusEl = $('live-status');
+  if (statusEl) statusEl.textContent = state.liveUpdate ? 'ON' : 'OFF';
   log(`live update: ${state.liveUpdate ? 'ON' : 'OFF'}`, 'sys');
+  saveState();
   if (state.liveUpdate) requestPreviewUpdate();
 });
 
