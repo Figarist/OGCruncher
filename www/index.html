@@ -232,6 +232,27 @@
           </div>
         </div>
 
+        <!-- Speed / Pitch -->
+        <div class="control-group" id="group-speed">
+          <div class="control-header">
+            <label for="slider-speed" class="control-label" data-tooltip="Adjust playback speed. Lowering it creates a 'slow & chopped' effect with lower pitch.">SPEED / PITCH</label>
+            <output id="out-speed" for="slider-speed" class="control-value">100%</output>
+          </div>
+          <div class="slider-track-wrap">
+            <input
+              type="range"
+              id="slider-speed"
+              min="0.5" max="2.0" value="1.0" step="0.01"
+              class="slider"
+              aria-valuemin="0.5" aria-valuemax="2.0" aria-valuenow="1.0"
+              aria-label="Playback speed and pitch"
+            />
+            <div class="slider-pips" aria-hidden="true">
+              <span>0.5x</span><span>1.0x</span><span>1.5x</span><span>2.0x</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Mario Toggle -->
         <div class="control-group" id="group-mariomode">
           <div class="control-header">
@@ -343,6 +364,7 @@
           <button id="btn-live-update" class="btn btn--live-toggle" aria-label="Toggle live parameter updates">
             <span class="live-icon">⚡</span>
             <span class="live-label">LIVE UPDATE: <span id="live-status">OFF</span></span>
+            <kbd class="hotkey" style="margin-left:6px">N</kbd>
           </button>
         </div>
       </div>
