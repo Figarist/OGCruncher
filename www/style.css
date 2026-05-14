@@ -19,8 +19,8 @@
   /* Accents (V2.1 Purple System) */
   --accent-primary:   #7c69e3;
   --accent-primary-d: #6351c4;
-  --accent-secondary: #ffc2d1;
-  --accent-secondary-d: #e8a8b8;
+  --accent-secondary: #ff85a1;
+  --accent-secondary-d: #c9184a;
   --accent-green:     #c6f6d5;
   --accent-green-d:   #7ab824;
   --accent-plum:      #6b3fa0;
@@ -179,7 +179,7 @@ a { text-decoration: none; color: inherit; }
   /* Columns: Left | Resizer | Center | Resizer | Right */
   grid-template-columns: var(--col-left, 1fr) 6px var(--col-center, 420px) 6px var(--col-right, 1fr);
   gap: 0; /* Gap is replaced by resizer columns */
-  align-items: start;
+  align-items: stretch;
 }
 
 /* ── RESIZERS ─────────────────────────────────────────────────── */
@@ -194,29 +194,73 @@ a { text-decoration: none; color: inherit; }
   position: relative;
   z-index: 10;
   transition: background var(--t-fast);
+  background: transparent;
+}
+
+/* Subtle line always visible */
+.resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-light);
+  opacity: 0.5;
 }
 
 .resizer:hover {
-  background: rgba(124, 105, 227, 0.05);
+  background: rgba(124, 105, 227, 0.04);
 }
 
 .resizer-line {
-  width: 2px;
-  height: 60px;
-  background: var(--border-light);
-  border-radius: 99px;
+  width: 4px;
+  height: 100%; /* Full height */
+  background: transparent;
+  border-radius: 0;
+  transition: all var(--t-fast);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Draggable handle icon in the center */
+.resizer-line::after {
+  content: '⋮'; /* Vertical dots handle */
+  position: absolute;
+  font-size: 24px;
+  color: var(--text-muted);
+  background: var(--bg-color);
+  width: 20px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-card);
+  opacity: 0.8;
   transition: all var(--t-fast);
 }
 
+.resizer:hover .resizer-line::after {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  transform: scale(1.1);
+  opacity: 1;
+}
+
 .resizer:hover .resizer-line {
-  background: var(--accent-primary);
-  height: 100px;
-  box-shadow: 0 0 10px rgba(124, 105, 227, 0.4);
+  background: rgba(124, 105, 227, 0.1);
 }
 
 .resizer.dragging .resizer-line {
-  background: var(--accent-primary-d);
-  height: 100%;
+  background: var(--accent-primary);
+  width: 2px;
+}
+
+.resizer.dragging .resizer-line::after {
+  opacity: 0;
 }
 
 /* ── Tooltips ────────────────────────────────────────────────── */
@@ -708,7 +752,8 @@ a { text-decoration: none; color: inherit; }
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: auto; /* Push to bottom of panel */
+  padding-top: 16px;
 }
 
 .ab-container {
@@ -922,14 +967,19 @@ a { text-decoration: none; color: inherit; }
   background: #1a1a2e;
   border-radius: 12px;
   padding: 16px;
-  min-height: 220px;
-  max-height: 400px;
+  height: 50vh; /* Fixed height relative to viewport */
+  min-height: 300px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
   font-family: var(--font-mono);
   font-size: .72rem;
+}
+
+/* Stabilize buttons at the bottom of the center panel */
+.panel--controls {
+  height: 100%;
 }
 
 .log-line {
