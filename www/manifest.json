@@ -10,9 +10,9 @@
   "categories": ["utilities", "music", "productivity"],
   "icons": [
     {
-      "src": "images/logo.png",
+      "src": "images/logo.svg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]
