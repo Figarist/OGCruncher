@@ -31,7 +31,7 @@ const state = {
 let activeBlobUrls = []; // IMPROVEMENT 4: Track active object URLs for cleanup
 
 function saveState() {
-  const { files, processing, ...persistentState } = state;
+  const { files, processing, nextId, ...persistentState } = state;
   localStorage.setItem('ogcruncher_last_state', JSON.stringify(persistentState));
   updateHash(); // IMPROVEMENT 5: Update URL hash on every param change
 }
@@ -408,11 +408,22 @@ function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
     }
   }
 
+  // REAL BASH FIX: Detect clipping before tanh (saturation)
+  let clipped = false;
+  for (let i = 0; i < N; i++) {
+    if (buf[i] > 1.0 || buf[i] < -1.0) {
+      clipped = true;
+      break;
+    }
+  }
+
   // ── 7. Saturation + Soft Clip (tanh) ───────────────────────────
   // Matches: samples * grit → tanh → scale
   for (let i = 0; i < N; i++) {
     buf[i] = Math.tanh(buf[i] * grit);
   }
+
+  return clipped;
 }
 
 // IMPROVEMENT 2: Peak Normalization helper
@@ -428,13 +439,8 @@ function normalizeBuffer(buf) {
   }
 }
 
-// IMPROVEMENT 3: Clipping Detection helper
-function detectClipping(buf) {
-  for (let i = 0; i < buf.length; i++) {
-    if (buf[i] > 1.0 || buf[i] < -1.0) return true;
-  }
-  return false;
-}
+// Removed detectClipping helper as it is now integrated into processDSP
+// and was mathematically impossible to trigger after tanh.
 
 /* ════════════════════════════════════════════════════════════════════
    OGG VORBIS ENCODER
@@ -584,6 +590,20 @@ function buildFilterChain(offCtx, sourceNode, params) {
   return lastNode;
 }
 
+/**
+ * Fast-render a buffer through the filter chain.
+ * Used for A/B testing and Live Update to keep the original track clean.
+ */
+async function renderFilteredBuffer(buffer, params) {
+  const offCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  const src = offCtx.createBufferSource();
+  src.buffer = buffer;
+  const lastNode = buildFilterChain(offCtx, src, params);
+  lastNode.connect(offCtx.destination);
+  src.start(0);
+  return await offCtx.startRendering();
+}
+
 // IMPROVEMENT 6: safeOfflineCtx helper
 function safeOfflineCtx(numChannels, length, sampleRate) {
   try {
@@ -643,16 +663,14 @@ async function processFile(file, id) {
     for (let ch = 0; ch < numChannels; ch++) {
       const buf = resampled.getChannelData(ch);
       const samples = new Float32Array(buf);
-      processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+      const clipped = processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
 
       // IMPROVEMENT 2: Apply normalization
       if (state.normalize) {
         normalizeBuffer(samples);
-      } else {
+      } else if (clipped) {
         // IMPROVEMENT 3: Clipping Detection (skip if normalize is ON)
-        if (detectClipping(samples)) {
-          hasClipping = true;
-        }
+        hasClipping = true;
       }
 
       channels.push(samples);
@@ -927,9 +945,13 @@ btnNormalizeToggle.addEventListener('click', () => {
 });
 
 // IMPROVEMENT 5: Copy Link
-btnCopyLink.addEventListener('click', () => {
-  navigator.clipboard.writeText(window.location.href);
-  showToast('🔗 Link copied to clipboard', 'ok');
+btnCopyLink.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    showToast('🔗 Link copied to clipboard', 'ok');
+  } catch (err) {
+    showToast('⚠ Copy manually from address bar', 'error');
+  }
 });
 
 // ── ZIP Export ───────────────────────────────────────────────────
@@ -1159,13 +1181,20 @@ async function togglePreview() {
 
     const src = offCtx.createBufferSource();
     src.buffer = decoded;
-
-    const lastNode = buildFilterChain(offCtx, src, { hpf: state.hpf, lpf: state.lpf, bass: state.bass });
-    lastNode.connect(offCtx.destination);
+    // Main render is now DRY (no filters) so bufOriginal stays clean
+    src.connect(offCtx.destination);
     src.start(0);
 
-    const resampled = await offCtx.startRendering();
-    previewResampled = resampled;
+    const resampledDry = await offCtx.startRendering();
+    previewResampled = resampledDry;
+
+    // Apply filters to a separate buffer for the crunched path
+    const resampledWet = await renderFilteredBuffer(resampledDry, {
+      hpf: state.hpf,
+      lpf: state.lpf,
+      bass: state.bass
+    });
+
     lastRenderParams = {
       sampleRate: state.sampleRate,
       hpf: state.hpf,
@@ -1174,13 +1203,16 @@ async function togglePreview() {
       stereo: state.stereo
     };
 
-    const bufCrunched = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
-    const bufOriginal = previewCtx.createBuffer(numChannels, resampled.length, targetRate);
+    const bufCrunched = previewCtx.createBuffer(numChannels, resampledDry.length, targetRate);
+    const bufOriginal = previewCtx.createBuffer(numChannels, resampledDry.length, targetRate);
 
     for (let ch = 0; ch < numChannels; ch++) {
-      const data = resampled.getChannelData(ch);
-      const samples = new Float32Array(data);
-      bufOriginal.getChannelData(ch).set(samples);
+      // Original track gets DRY samples
+      bufOriginal.getChannelData(ch).set(resampledDry.getChannelData(ch));
+
+      // Crunched track gets WET samples + processDSP
+      const wetData = resampledWet.getChannelData(ch);
+      const samples = new Float32Array(wetData);
       processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
 
       // IMPROVEMENT 2: Normalization
@@ -1318,49 +1350,66 @@ function requestPreviewUpdate() {
       const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
       const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
 
-      const needsReRender = !previewResampled ||
+      const needsDryRender = !previewResampled ||
         lastRenderParams.sampleRate !== state.sampleRate ||
-        lastRenderParams.hpf !== state.hpf ||
-        lastRenderParams.lpf !== state.lpf ||
-        lastRenderParams.bass !== state.bass ||
         lastRenderParams.stereo !== state.stereo;
 
-      let resampled;
-      if (needsReRender) {
-        // IMPROVEMENT 6: safeOfflineCtx
+      const needsWetRender = needsDryRender ||
+        lastRenderParams.hpf !== state.hpf ||
+        lastRenderParams.lpf !== state.lpf ||
+        lastRenderParams.bass !== state.bass;
+
+      if (needsDryRender) {
         const offCtx = safeOfflineCtx(
           numChannels,
           Math.ceil(decoded.duration * targetRate),
           targetRate
         );
-
         const src = offCtx.createBufferSource();
         src.buffer = decoded;
-
-        const lastNode = buildFilterChain(offCtx, src, { hpf: state.hpf, lpf: state.lpf, bass: state.bass });
-        lastNode.connect(offCtx.destination);
+        src.connect(offCtx.destination); // Dry
         src.start(0);
-        resampled = await offCtx.startRendering();
-
-        previewResampled = resampled;
-        lastRenderParams = {
-          sampleRate: state.sampleRate,
-          hpf: state.hpf,
-          lpf: state.lpf,
-          bass: state.bass,
-          stereo: state.stereo
-        };
-      } else {
-        resampled = previewResampled;
+        previewResampled = await offCtx.startRendering();
       }
 
-      const bufCrunched = previewCtx.createBuffer(numChannels, resampled.length, resampled.sampleRate);
-      const bufOriginal = previewCtx.createBuffer(numChannels, resampled.length, resampled.sampleRate);
+      let resampledWet;
+      if (needsWetRender) {
+        resampledWet = await renderFilteredBuffer(previewResampled, {
+          hpf: state.hpf,
+          lpf: state.lpf,
+          bass: state.bass
+        });
+      } else {
+        // Only DSP params changed, reuse wet buffer
+        // Note: we need a fresh copy for processDSP if we were to cache it,
+        // but since processDSP is in-place, we re-render wet for simplicity
+        // or just copy from previewResampled if filters are OFF.
+        resampledWet = await renderFilteredBuffer(previewResampled, {
+          hpf: state.hpf,
+          lpf: state.lpf,
+          bass: state.bass
+        });
+      }
+
+      lastRenderParams = {
+        sampleRate: state.sampleRate,
+        hpf: state.hpf,
+        lpf: state.lpf,
+        bass: state.bass,
+        stereo: state.stereo
+      };
+
+      const resampledDry = previewResampled;
+      const bufCrunched = previewCtx.createBuffer(numChannels, resampledDry.length, resampledDry.sampleRate);
+      const bufOriginal = previewCtx.createBuffer(numChannels, resampledDry.length, resampledDry.sampleRate);
 
       for (let ch = 0; ch < numChannels; ch++) {
-        const data = resampled.getChannelData(ch);
-        const samples = new Float32Array(data);
-        bufOriginal.getChannelData(ch).set(samples);
+        // Original track gets DRY samples
+        bufOriginal.getChannelData(ch).set(resampledDry.getChannelData(ch));
+
+        // Crunched track gets WET samples + processDSP
+        const wetData = resampledWet.getChannelData(ch);
+        const samples = new Float32Array(wetData);
         processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
 
         // IMPROVEMENT 2: Normalization
