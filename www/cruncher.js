@@ -24,8 +24,9 @@ const state = {
   hpf: 20,
   lpf: 20000,
   bass: 0,
-  liveUpdate: false,
-  normalize: true,    // IMPROVEMENT 2: peak normalization toggle
+  liveUpdate: true,    // IMPROVEMENT: enabled by default
+  normalize: true,     // IMPROVEMENT 2: peak normalization toggle
+  dualView: false,     // NEW: show both spectra simultaneously
 };
 
 let activeBlobUrls = []; // IMPROVEMENT 4: Track active object URLs for cleanup
@@ -63,6 +64,7 @@ function applyParamsToUI(p) {
   if (p.stereo !== undefined && p.stereo !== state.stereo) btnStereoToggle.click();
   if (p.normalize !== undefined && p.normalize !== state.normalize) btnNormalizeToggle.click();
   if (p.liveUpdate !== undefined && p.liveUpdate !== state.liveUpdate) btnLiveUpdate.click();
+  if (p.dualView !== undefined && p.dualView !== state.dualView) btnDualView.click();
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -120,6 +122,7 @@ const toast = $('toast');
 const dropContent = $('drop-content');
 const visualizer = $('visualizer');
 const btnLiveUpdate = $('btn-live-update');
+const btnDualView = $('btn-dual-view');
 const headerProgressFill = $('header-progress-fill');
 
 let analyserCrunched = null;
@@ -598,8 +601,9 @@ function buildFilterChain(offCtx, sourceNode, params) {
  * Fast-render a buffer through the filter chain.
  * Used for A/B testing and Live Update to keep the original track clean.
  */
-async function renderFilteredBuffer(buffer, params) {
-  const offCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+async function renderFilteredBuffer(buffer, params, targetChannels) {
+  const numChannels = targetChannels || buffer.numberOfChannels;
+  const offCtx = new OfflineAudioContext(numChannels, buffer.length, buffer.sampleRate);
   const src = offCtx.createBufferSource();
   src.buffer = buffer;
   const lastNode = buildFilterChain(offCtx, src, params);
@@ -948,6 +952,14 @@ btnNormalizeToggle.addEventListener('click', () => {
   log(`Normalization: ${state.normalize ? 'ENABLED' : 'DISABLED'}`, 'sys');
 });
 
+btnDualView.addEventListener('click', () => {
+  state.dualView = !state.dualView;
+  btnDualView.classList.toggle('active', state.dualView);
+  btnDualView.textContent = `DUAL VIEW: ${state.dualView ? 'ON' : 'OFF'}`;
+  saveState();
+  log(`Dual View mode: ${state.dualView ? 'ENABLED' : 'DISABLED'}`, 'sys');
+});
+
 // IMPROVEMENT 5: Copy Link
 btnCopyLink.addEventListener('click', async () => {
   try {
@@ -1113,10 +1125,10 @@ function drawVisualizer() {
 
   const barWidth = (width / bufferLength) * 2.2;
   const alphaActive = 0.85;
-  const alphaGhost = 0.25;
+  const alphaGhost = state.dualView ? 0.7 : 0.25;
 
-  const colorOrig = isComparingOriginal ? `rgba(178, 245, 234, ${alphaActive})` : `rgba(178, 245, 234, ${alphaGhost})`;
-  const colorCr = isComparingOriginal ? `rgba(124, 105, 227, ${alphaGhost})` : `rgba(124, 105, 227, ${alphaActive})`;
+  const colorOrig = (isComparingOriginal || state.dualView) ? `rgba(178, 245, 234, ${alphaActive})` : `rgba(178, 245, 234, ${alphaGhost})`;
+  const colorCr = (!isComparingOriginal || state.dualView) ? `rgba(124, 105, 227, ${alphaActive})` : `rgba(124, 105, 227, ${alphaGhost})`;
 
   ctx.fillStyle = colorOrig;
   let x = 0;
@@ -1177,11 +1189,12 @@ async function togglePreview() {
     }
 
     const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
-    const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
+    const numChannelsOriginal = Math.min(decoded.numberOfChannels, 2);
+    const numChannelsProcess = state.stereo ? numChannelsOriginal : 1;
 
     // IMPROVEMENT 6: safeOfflineCtx
     const offCtx = safeOfflineCtx(
-      numChannels,
+      numChannelsOriginal,
       Math.ceil(decoded.duration * targetRate),
       targetRate
     );
@@ -1196,11 +1209,12 @@ async function togglePreview() {
     previewResampled = resampledDry;
 
     // Apply filters to a separate buffer for the crunched path
+    // Pass numChannelsProcess to handle downmixing if needed
     const resampledWet = await renderFilteredBuffer(resampledDry, {
       hpf: state.hpf,
       lpf: state.lpf,
       bass: state.bass
-    });
+    }, numChannelsProcess);
 
     lastRenderParams = {
       sampleRate: state.sampleRate,
@@ -1210,14 +1224,16 @@ async function togglePreview() {
       stereo: state.stereo
     };
 
-    const bufCrunched = previewCtx.createBuffer(numChannels, resampledDry.length, targetRate);
-    const bufOriginal = previewCtx.createBuffer(numChannels, resampledDry.length, targetRate);
+    const bufCrunched = previewCtx.createBuffer(numChannelsProcess, resampledDry.length, targetRate);
+    const bufOriginal = previewCtx.createBuffer(numChannelsOriginal, resampledDry.length, targetRate);
 
-    for (let ch = 0; ch < numChannels; ch++) {
-      // Original track gets DRY samples
+    // 1. Fill Original track with DRY samples (keeps original channel count)
+    for (let ch = 0; ch < numChannelsOriginal; ch++) {
       bufOriginal.getChannelData(ch).set(resampledDry.getChannelData(ch));
+    }
 
-      // Crunched track gets WET samples + processDSP
+    // 2. Fill Crunched track with WET samples + processDSP (might be mono)
+    for (let ch = 0; ch < numChannelsProcess; ch++) {
       const wetData = resampledWet.getChannelData(ch);
       const samples = new Float32Array(wetData);
       processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
@@ -1356,20 +1372,22 @@ function requestPreviewUpdate() {
     try {
       const decoded = previewDecoded;
       const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
-      const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
+      const numChannelsOriginal = Math.min(decoded.numberOfChannels, 2);
+      const numChannelsProcess = state.stereo ? numChannelsOriginal : 1;
 
       const needsDryRender = !previewResampled ||
         lastRenderParams.sampleRate !== state.sampleRate ||
-        lastRenderParams.stereo !== state.stereo;
+        lastRenderParams.numChannelsOriginal !== numChannelsOriginal; // Use original channels for reference
 
       const needsWetRender = needsDryRender ||
         lastRenderParams.hpf !== state.hpf ||
         lastRenderParams.lpf !== state.lpf ||
-        lastRenderParams.bass !== state.bass;
+        lastRenderParams.bass !== state.bass ||
+        lastRenderParams.stereo !== state.stereo; // Stereo toggle affects wet render (downmixing)
 
       if (needsDryRender) {
         const offCtx = safeOfflineCtx(
-          numChannels,
+          numChannelsOriginal,
           Math.ceil(decoded.duration * targetRate),
           targetRate
         );
@@ -1386,17 +1404,16 @@ function requestPreviewUpdate() {
           hpf: state.hpf,
           lpf: state.lpf,
           bass: state.bass
-        });
+        }, numChannelsProcess);
       } else {
         // Only DSP params changed, reuse wet buffer
         // Note: we need a fresh copy for processDSP if we were to cache it,
         // but since processDSP is in-place, we re-render wet for simplicity
-        // or just copy from previewResampled if filters are OFF.
         resampledWet = await renderFilteredBuffer(previewResampled, {
           hpf: state.hpf,
           lpf: state.lpf,
           bass: state.bass
-        });
+        }, numChannelsProcess);
       }
 
       lastRenderParams = {
@@ -1404,18 +1421,21 @@ function requestPreviewUpdate() {
         hpf: state.hpf,
         lpf: state.lpf,
         bass: state.bass,
-        stereo: state.stereo
+        stereo: state.stereo,
+        numChannelsOriginal: numChannelsOriginal
       };
 
       const resampledDry = previewResampled;
-      const bufCrunched = previewCtx.createBuffer(numChannels, resampledDry.length, resampledDry.sampleRate);
-      const bufOriginal = previewCtx.createBuffer(numChannels, resampledDry.length, resampledDry.sampleRate);
+      const bufCrunched = previewCtx.createBuffer(numChannelsProcess, resampledDry.length, resampledDry.sampleRate);
+      const bufOriginal = previewCtx.createBuffer(numChannelsOriginal, resampledDry.length, resampledDry.sampleRate);
 
-      for (let ch = 0; ch < numChannels; ch++) {
-        // Original track gets DRY samples
+      // 1. Fill Original track with DRY samples
+      for (let ch = 0; ch < numChannelsOriginal; ch++) {
         bufOriginal.getChannelData(ch).set(resampledDry.getChannelData(ch));
+      }
 
-        // Crunched track gets WET samples + processDSP
+      // 2. Fill Crunched track with WET samples + processDSP
+      for (let ch = 0; ch < numChannelsProcess; ch++) {
         const wetData = resampledWet.getChannelData(ch);
         const samples = new Float32Array(wetData);
         processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
@@ -1489,6 +1509,7 @@ function updateHash() {
   params.set('l', state.lpf);
   params.set('bs', state.bass);
   params.set('norm', state.normalize ? 1 : 0);
+  params.set('dv', state.dualView ? 1 : 0);
   
   // Use replaceState to avoid polluting back button
   history.replaceState(null, '', '#' + params.toString());
@@ -1511,6 +1532,7 @@ function parseHash() {
     if (params.has('l')) p.lpf = Math.max(500, Math.min(20000, +params.get('l')));
     if (params.has('bs')) p.bass = Math.max(0, Math.min(15, +params.get('bs')));
     if (params.has('norm')) p.normalize = params.get('norm') === '1';
+    if (params.has('dv')) p.dualView = params.get('dv') === '1';
     
     applyParamsToUI(p);
   } catch (e) {
@@ -1532,6 +1554,13 @@ function parseHash() {
   if (btnNormalizeToggle) {
     btnNormalizeToggle.setAttribute('aria-checked', true);
     btnNormalizeToggle.classList.add('active');
+  }
+  
+  // Default Live Update UI
+  if (btnLiveUpdate) {
+    btnLiveUpdate.classList.add('active');
+    const statusEl = $('live-status');
+    if (statusEl) statusEl.textContent = 'ON';
   }
 
   const saved = localStorage.getItem('ogcruncher_preset');
