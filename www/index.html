@@ -64,7 +64,7 @@
   <main class="app-main" role="main">
 
     <!-- ── LEFT PANEL: DROP ZONE ── -->
-    <section class="panel panel--drop" aria-label="File input panel">
+    <section id="panel-left" class="panel panel--drop" aria-label="File input panel">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <div class="panel-label" aria-hidden="true">[ INPUT ]</div>
         <button id="btn-dual-view" class="btn btn--ghost btn--xs" title="Show both spectra simultaneously">DUAL VIEW: OFF</button>
@@ -108,8 +108,13 @@
       <ul class="file-queue" id="file-queue" aria-live="polite" aria-label="Processing queue"></ul>
     </section>
 
+    <!-- LEFT RESIZER -->
+    <div class="resizer" id="resizer-left" data-resizer="left">
+      <div class="resizer-line"></div>
+    </div>
+
     <!-- ── CENTER PANEL: CONTROLS ── -->
-    <section class="panel panel--controls" aria-label="Processing controls">
+    <section id="panel-center" class="panel panel--controls" aria-label="Processing controls">
       <div class="panel-label" aria-hidden="true">[ PARAMETERS ]</div>
 
       <!-- Presets -->
@@ -355,8 +360,13 @@
       </div>
     </section>
 
+    <!-- RIGHT RESIZER -->
+    <div class="resizer" id="resizer-right" data-resizer="right">
+      <div class="resizer-line"></div>
+    </div>
+
     <!-- ── RIGHT PANEL: LOG / OUTPUT ── -->
-    <section class="panel panel--log" aria-label="Processing log">
+    <section id="panel-right" class="panel panel--log" aria-label="Processing log">
       <div class="panel-label" aria-hidden="true">[ LOG ]</div>
       <div class="log-window" id="log-window" role="log" aria-live="polite" aria-label="Processing log output">
         <p class="log-line log-line--sys">OGCruncher initialized</p>
@@ -366,8 +376,6 @@
 
       <!-- Download results -->
       <div id="results-area" class="results-area" hidden aria-label="Download results" aria-live="polite"></div>
-    </section>
-
   </main>
 
   <!-- ══════════════ FOOTER ══════════════ -->
