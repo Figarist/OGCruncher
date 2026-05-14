@@ -1558,6 +1558,86 @@ function parseHash() {
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   RESIZERS (Windows-style Layout Customization)
+   ════════════════════════════════════════════════════════════════════ */
+function initResizers() {
+  const main = document.querySelector('.app-main');
+  const resizerLeft = $('resizer-left');
+  const resizerRight = $('resizer-right');
+  if (!main || !resizerLeft || !resizerRight) return;
+
+  // Load saved widths
+  const savedLeft = localStorage.getItem('og_col_left');
+  const savedCenter = localStorage.getItem('og_col_center');
+  const savedRight = localStorage.getItem('og_col_right');
+  if (savedLeft) main.style.setProperty('--col-left', savedLeft);
+  if (savedCenter) main.style.setProperty('--col-center', savedCenter);
+  if (savedRight) main.style.setProperty('--col-right', savedRight);
+
+  let activeResizer = null;
+
+  const onMouseDown = (e) => {
+    activeResizer = e.currentTarget.dataset.resizer;
+    document.body.style.cursor = 'col-resize';
+    e.currentTarget.classList.add('dragging');
+    // Disable transitions during drag for smoothness
+    main.style.transition = 'none';
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const onMouseMove = (e) => {
+    if (!activeResizer) return;
+
+    const rect = main.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const totalWidth = rect.width;
+    
+    // Get current grid columns in pixels
+    const style = getComputedStyle(main);
+    const cols = style.gridTemplateColumns.split(' ');
+    const leftPx = parseFloat(cols[0]);
+
+    if (activeResizer === 'left') {
+      // Constraint: Left panel [240px ... Total - 600px]
+      const newLeft = Math.max(240, Math.min(x, totalWidth - 600));
+      main.style.setProperty('--col-left', `${newLeft}px`);
+      main.style.setProperty('--col-right', `1fr`); // Let right be flexible
+    } else {
+      // activeResizer === 'right'
+      // x is the absolute position of the right resizer handle
+      // Center width = x - (leftWidth + 6)
+      const centerStart = leftPx + 6;
+      const newCenter = Math.max(320, Math.min(x - centerStart, totalWidth - centerStart - 240));
+      main.style.setProperty('--col-center', `${newCenter}px`);
+      main.style.setProperty('--col-right', `1fr`); // Let right be flexible
+    }
+  };
+
+  const onMouseUp = () => {
+    if (activeResizer) {
+      resizerLeft.classList.remove('dragging');
+      resizerRight.classList.remove('dragging');
+      main.style.transition = '';
+
+      // Save to localStorage
+      const style = getComputedStyle(main);
+      const cols = style.gridTemplateColumns.split(' ');
+      localStorage.setItem('og_col_left', cols[0]);
+      localStorage.setItem('og_col_center', cols[2]);
+      localStorage.setItem('og_col_right', cols[4]);
+    }
+    activeResizer = null;
+    document.body.style.cursor = '';
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  };
+
+  resizerLeft.addEventListener('mousedown', onMouseDown);
+  resizerRight.addEventListener('mousedown', onMouseDown);
+}
+
 (function init() {
   syncBitDepth(8);
   syncSampleRate(22050);
@@ -1594,6 +1674,7 @@ function parseHash() {
 
   loadState();
   parseHash(); // Hash takes priority
+  initResizers(); // Initialize layout customization
   
   log('ready. drop files or click browse.', 'ok');
   setBadge('IDLE', 'badge--amber');
