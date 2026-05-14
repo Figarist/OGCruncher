@@ -99,10 +99,12 @@ a { text-decoration: none; color: inherit; }
 
 .logo-block { display: flex; align-items: center; gap: 12px; }
 
-.logo-icon {
-  font-size: 26px;
-  color: var(--accent-primary);
-  line-height: 1;
+.logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(124, 105, 227, 0.2);
 }
 
 .logo-text { display: flex; flex-direction: column; gap: 1px; }
