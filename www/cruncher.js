@@ -25,11 +25,15 @@ const state = {
   lpf: 20000,
   bass: 0,
   liveUpdate: false,
+  normalize: true,    // IMPROVEMENT 2: peak normalization toggle
 };
+
+let activeBlobUrls = []; // IMPROVEMENT 4: Track active object URLs for cleanup
 
 function saveState() {
   const { files, processing, ...persistentState } = state;
   localStorage.setItem('ogcruncher_last_state', JSON.stringify(persistentState));
+  updateHash(); // IMPROVEMENT 5: Update URL hash on every param change
 }
 
 function loadState() {
@@ -37,19 +41,28 @@ function loadState() {
   if (!saved) return;
   try {
     const p = JSON.parse(saved);
-    if (p.bitDepth !== undefined) syncBitDepth(p.bitDepth);
-    if (p.sampleRate !== undefined) syncSampleRate(p.sampleRate);
-    if (p.grit !== undefined) syncGrit(p.grit);
-    if (p.noise !== undefined) syncNoise(p.noise);
-    if (p.hpf !== undefined) syncHpf(p.hpf);
-    if (p.lpf !== undefined) syncLpf(p.lpf);
-    if (p.bass !== undefined) syncBass(p.bass);
-    if (p.crushMode !== undefined && p.crushMode !== state.crushMode) btnMarioToggle.click();
-    if (p.stereo !== undefined && p.stereo !== state.stereo) btnStereoToggle.click();
-    if (p.liveUpdate !== undefined && p.liveUpdate !== state.liveUpdate) btnLiveUpdate.click();
+    applyParamsToUI(p);
   } catch (e) {
     console.error('Failed to load state', e);
   }
+}
+
+/**
+ * Apply a parameters object to the UI and state.
+ * Used by loadState and parseHash.
+ */
+function applyParamsToUI(p) {
+  if (p.bitDepth !== undefined) syncBitDepth(p.bitDepth);
+  if (p.sampleRate !== undefined) syncSampleRate(p.sampleRate);
+  if (p.grit !== undefined) syncGrit(p.grit);
+  if (p.noise !== undefined) syncNoise(p.noise);
+  if (p.hpf !== undefined) syncHpf(p.hpf);
+  if (p.lpf !== undefined) syncLpf(p.lpf);
+  if (p.bass !== undefined) syncBass(p.bass);
+  if (p.crushMode !== undefined && p.crushMode !== state.crushMode) btnMarioToggle.click();
+  if (p.stereo !== undefined && p.stereo !== state.stereo) btnStereoToggle.click();
+  if (p.normalize !== undefined && p.normalize !== state.normalize) btnNormalizeToggle.click();
+  if (p.liveUpdate !== undefined && p.liveUpdate !== state.liveUpdate) btnLiveUpdate.click();
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -76,6 +89,8 @@ const btnSaveCustom = $('btn-save-custom');
 const userPresetMeta = $('preset-user-meta');
 const btnMarioToggle = $('toggle-mariomode');
 const btnStereoToggle = $('toggle-stereo');
+const btnNormalizeToggle = $('toggle-normalize');
+const btnCopyLink = $('btn-copy-link');
 const sliderBit = $('slider-bitdepth');
 const sliderSr = $('slider-samplerate');
 const sliderGrit = $('slider-grit');
@@ -86,6 +101,7 @@ const outGrit = $('out-grit');
 const outNoise = $('out-noise');
 const outMario = $('out-mariomode');
 const outStereo = $('out-stereo');
+const outNormalize = $('out-normalize');
 const abContainer = $('ab-container');
 const sliderHpf = $('slider-hpf');
 const sliderLpf = $('slider-lpf');
@@ -114,6 +130,7 @@ let previewDecoded = null;
 let previewResampled = null; 
 let lastRenderParams = {};   
 let isUpdatingPreview = false;
+let clippingBatchCount = 0; // IMPROVEMENT 3: Track clipping across batch
 
 /* ════════════════════════════════════════════════════════════════════
    LOGGING
@@ -165,12 +182,23 @@ function syncBitDepth(val) {
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
+// IMPROVEMENT 1: Snap-to-Standard helper
+function updateSrButtons(val) {
+  const btns = document.querySelectorAll('.btn-sr-snap');
+  btns.forEach(btn => {
+    const active = +btn.dataset.value === +val;
+    btn.classList.toggle('active', active);
+    btn.classList.toggle('btn--sr', active);
+  });
+}
+
 function syncSampleRate(val) {
   state.sampleRate = +val;
   sliderSr.value = val;
   outSr.innerHTML = `${(+val).toLocaleString()} <span class="unit">Hz</span>`;
   sliderSr.setAttribute('aria-valuenow', val);
   updateSliderTrack(sliderSr);
+  updateSrButtons(val); // Update active state of standard rate buttons
   saveState();
   if (state.liveUpdate) requestPreviewUpdate();
 }
@@ -269,6 +297,10 @@ window.removeFile = function (id) {
 };
 
 function clearQueue() {
+  // IMPROVEMENT 4: Revoke all object URLs
+  activeBlobUrls.forEach(url => URL.revokeObjectURL(url));
+  activeBlobUrls = [];
+
   state.files.clear();
   state.nextId = 0;
   fileQueue.innerHTML = '';
@@ -381,6 +413,27 @@ function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
   for (let i = 0; i < N; i++) {
     buf[i] = Math.tanh(buf[i] * grit);
   }
+}
+
+// IMPROVEMENT 2: Peak Normalization helper
+function normalizeBuffer(buf) {
+  let peak = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const a = buf[i] < 0 ? -buf[i] : buf[i];
+    if (a > peak) peak = a;
+  }
+  if (peak > 1e-6) {
+    const inv = 1 / peak;
+    for (let i = 0; i < buf.length; i++) buf[i] *= inv;
+  }
+}
+
+// IMPROVEMENT 3: Clipping Detection helper
+function detectClipping(buf) {
+  for (let i = 0; i < buf.length; i++) {
+    if (buf[i] > 1.0 || buf[i] < -1.0) return true;
+  }
+  return false;
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -531,6 +584,19 @@ function buildFilterChain(offCtx, sourceNode, params) {
   return lastNode;
 }
 
+// IMPROVEMENT 6: safeOfflineCtx helper
+function safeOfflineCtx(numChannels, length, sampleRate) {
+  try {
+    return new OfflineAudioContext(numChannels, length, sampleRate);
+  } catch (e) {
+    // Browser rejected sampleRate — step up to nearest supported standard
+    const fallback = [8000, 11025, 16000, 22050, 32000, 44100, 48000]
+      .find(r => r >= sampleRate) || 44100;
+    log(`⚠ Browser rejected ${sampleRate} Hz — falling back to ${fallback} Hz`, 'error');
+    return new OfflineAudioContext(numChannels, Math.ceil(length * (fallback / sampleRate)), fallback);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════════
    PROCESS ONE FILE
    Uses OfflineAudioContext to decode → resample, then runs DSP in-place
@@ -555,7 +621,8 @@ async function processFile(file, id) {
     const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
     const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
 
-    const offCtx = new OfflineAudioContext(
+    // IMPROVEMENT 6: Use safeOfflineCtx
+    const offCtx = safeOfflineCtx(
       numChannels,
       Math.ceil(decoded.duration * targetRate),
       targetRate
@@ -571,11 +638,29 @@ async function processFile(file, id) {
     const resampled = await offCtx.startRendering();
 
     const channels = [];
+    let hasClipping = false;
+
     for (let ch = 0; ch < numChannels; ch++) {
       const buf = resampled.getChannelData(ch);
       const samples = new Float32Array(buf);
       processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+
+      // IMPROVEMENT 2: Apply normalization
+      if (state.normalize) {
+        normalizeBuffer(samples);
+      } else {
+        // IMPROVEMENT 3: Clipping Detection (skip if normalize is ON)
+        if (detectClipping(samples)) {
+          hasClipping = true;
+        }
+      }
+
       channels.push(samples);
+    }
+
+    if (hasClipping) {
+      log(`⚠ clipping detected in "${file.name}" — reduce Grit or enable Normalize`, 'error');
+      clippingBatchCount++;
     }
 
     log(`  Decoded: ${decoded.numberOfChannels}ch → ${numChannels}ch | ${decoded.sampleRate}Hz → ${targetRate}Hz`, 'sys');
@@ -626,13 +711,14 @@ async function startProcessing() {
   resultsArea.hidden = true;
   setBadge('PROCESSING', 'badge--amber');
   log(`processing ${state.files.size} file(s)...`, 'accent');
-  log(`${state.bitDepth}-bit · ${state.sampleRate} Hz · crush=${state.crushMode}`, 'sys');
+  log(`${state.bitDepth}-bit · ${state.sampleRate} Hz · crush=${state.crushMode} · normalize=${state.normalize}`, 'sys');
 
   const results = [];
   const validFiles = [...state.files.values()];
   let processedCount = 0;
+  clippingBatchCount = 0; // Reset clipping count
 
-  const canShare = !!navigator.share; // Fixed Error: hoisting canShare to block scope
+  const canShare = !!navigator.share; 
 
   for (const [id, file] of state.files.entries()) {
     const pct = (processedCount / validFiles.length) * 100;
@@ -682,30 +768,51 @@ async function startProcessing() {
       div.innerHTML = `
         <span class="result-item__name" title="${r.name}" style="flex:1; width:100%; margin-bottom:8px;">${r.name}</span>
         <div style="display:flex; gap:8px; width:100%; flex-wrap: wrap;">
-          ${r.formats.map(f => `
-            <div class="download-group" style="flex: 1; display: flex; gap: 2px;">
-              <a href="${f.url}" 
-                 download="${r.name}.${f.ext}" 
-                 draggable="true"
-                 ondragstart="handleDragStart(event, '${f.blob.type}', '${r.name}.${f.ext}', '${f.url}')"
-                 class="btn-download" 
-                 aria-label="Download ${f.ext}" 
-                 title="Drag me to DAW or Unity! (${f.size})" 
-                 style="flex:1; text-align:center;">
-                ${f.ext.toUpperCase()} <small style="opacity:0.7; font-size:10px;">${f.size}</small>
-              </a>
-              ${canShare ? `
-                <button class="btn-share" onclick="shareFile('${r.name}', '${f.ext}', '${f.url}')" title="Share ${f.ext}">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                </button>
-              ` : ''}
-            </div>
-          `).join('')}
+          ${r.formats.map(f => {
+            // IMPROVEMENT 4: Keep track of object URLs
+            activeBlobUrls.push(f.url);
+            
+            return `
+              <div class="download-group" style="flex: 1; display: flex; gap: 2px;">
+                <a href="${f.url}" 
+                   download="${r.name}.${f.ext}" 
+                   draggable="true"
+                   ondragstart="handleDragStart(event, '${f.blob.type}', '${r.name}.${f.ext}', '${f.url}')"
+                   class="btn-download" 
+                   aria-label="Download ${f.ext}" 
+                   title="Drag me to DAW or Unity! (${f.size})" 
+                   style="flex:1; text-align:center;">
+                  ${f.ext.toUpperCase()} <small style="opacity:0.7; font-size:10px;">${f.size}</small>
+                </a>
+                ${canShare ? `
+                  <button class="btn-share" onclick="shareFile('${r.name}', '${f.ext}', '${f.url}')" title="Share ${f.ext}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                  </button>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
         </div>`;
       resultsArea.appendChild(div);
+
+      // IMPROVEMENT 4: Revoke on click
+      r.formats.forEach(f => {
+        const a = resultsArea.querySelector(`a[download="${r.name}.${f.ext}"]`);
+        if (a) {
+          a.addEventListener('click', () => {
+            setTimeout(() => URL.revokeObjectURL(f.url), 10000); // 10s grace
+          }, { once: true });
+        }
+      });
     }
     log(`done: ${results.length}/${state.files.size} file(s) ready`, 'ok');
     showToast(`✅ ${results.length} file(s) ready`, 'ok');
+    
+    // IMPROVEMENT 3: Clipping batch report
+    if (clippingBatchCount > 0) {
+      showToast(`⚠ clipping in ${clippingBatchCount} file(s)`, 'error', 5000);
+    }
+    
     setBadge('DONE', 'badge--green');
   } else {
     log('error: 0 files processed', 'error');
@@ -747,7 +854,7 @@ async function handleItems(items) {
       }
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
-      const entries = await readAllEntries(reader); // Fixed Bug 4: Chromium 100-file limit
+      const entries = await readAllEntries(reader); 
       for (const e of entries) await traverseEntry(e);
     }
   }
@@ -808,6 +915,23 @@ btnStereoToggle.addEventListener('click', () => {
   log(`Output mode: ${state.stereo ? 'STEREO' : 'MONO'}`, 'sys');
 });
 
+// IMPROVEMENT 2: Normalize Toggle
+btnNormalizeToggle.addEventListener('click', () => {
+  state.normalize = !state.normalize;
+  btnNormalizeToggle.setAttribute('aria-checked', state.normalize);
+  btnNormalizeToggle.classList.toggle('active', state.normalize);
+  saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
+  outNormalize.textContent = state.normalize ? 'ON' : 'OFF';
+  log(`Normalization: ${state.normalize ? 'ENABLED' : 'DISABLED'}`, 'sys');
+});
+
+// IMPROVEMENT 5: Copy Link
+btnCopyLink.addEventListener('click', () => {
+  navigator.clipboard.writeText(window.location.href);
+  showToast('🔗 Link copied to clipboard', 'ok');
+});
+
 // ── ZIP Export ───────────────────────────────────────────────────
 async function downloadResultsAsZip(results, isShare = false) {
   const zip = new JSZip();
@@ -840,7 +964,10 @@ async function downloadResultsAsZip(results, isShare = false) {
       a.href = url;
       a.download = filename;
       a.click();
-      URL.revokeObjectURL(url);
+      
+      // IMPROVEMENT 4: Revoke after ZIP download completes
+      setTimeout(() => URL.revokeObjectURL(url), 15000); 
+      
       showToast('📦 ZIP archive ready', 'ok');
     }
   } catch (err) {
@@ -1023,7 +1150,8 @@ async function togglePreview() {
     const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
     const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
 
-    const offCtx = new OfflineAudioContext(
+    // IMPROVEMENT 6: safeOfflineCtx
+    const offCtx = safeOfflineCtx(
       numChannels,
       Math.ceil(decoded.duration * targetRate),
       targetRate
@@ -1054,6 +1182,12 @@ async function togglePreview() {
       const samples = new Float32Array(data);
       bufOriginal.getChannelData(ch).set(samples);
       processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+
+      // IMPROVEMENT 2: Normalization
+      if (state.normalize) {
+        normalizeBuffer(samples);
+      }
+
       bufCrunched.getChannelData(ch).set(samples);
     }
 
@@ -1125,6 +1259,7 @@ btnPresetAuthor.addEventListener('click', () => {
   syncBass(0);
   if (!state.crushMode) btnMarioToggle.click();
   if (state.stereo) btnStereoToggle.click();
+  if (!state.normalize) btnNormalizeToggle.click(); // Default author is normalized
   updatePresetUI('author');
   log('preset: LO-Q (author default)', 'accent');
   showToast('◉ author preset loaded', 'info');
@@ -1135,15 +1270,7 @@ btnPresetUser.addEventListener('click', () => {
   const saved = localStorage.getItem('ogcruncher_preset');
   if (!saved) return;
   const p = JSON.parse(saved);
-  syncBitDepth(p.bitDepth);
-  syncSampleRate(p.sampleRate);
-  if (p.grit !== undefined) syncGrit(p.grit);
-  if (p.noise !== undefined) syncNoise(p.noise);
-  if (p.hpf !== undefined) syncHpf(p.hpf);
-  if (p.lpf !== undefined) syncLpf(p.lpf);
-  if (p.bass !== undefined) syncBass(p.bass);
-  if (state.crushMode !== p.crushMode) btnMarioToggle.click();
-  if (p.stereo !== undefined && state.stereo !== p.stereo) btnStereoToggle.click();
+  applyParamsToUI(p);
   updatePresetUI('user');
   log('preset: MY PRESET (user custom)', 'accent');
   showToast('👤 custom preset loaded', 'info');
@@ -1160,6 +1287,7 @@ btnSaveCustom.addEventListener('click', () => {
     hpf: state.hpf,
     lpf: state.lpf,
     bass: state.bass,
+    normalize: state.normalize,
     ts: Date.now()
   };
   localStorage.setItem('ogcruncher_preset', JSON.stringify(preset));
@@ -1199,7 +1327,8 @@ function requestPreviewUpdate() {
 
       let resampled;
       if (needsReRender) {
-        const offCtx = new OfflineAudioContext(
+        // IMPROVEMENT 6: safeOfflineCtx
+        const offCtx = safeOfflineCtx(
           numChannels,
           Math.ceil(decoded.duration * targetRate),
           targetRate
@@ -1233,6 +1362,12 @@ function requestPreviewUpdate() {
         const samples = new Float32Array(data);
         bufOriginal.getChannelData(ch).set(samples);
         processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+
+        // IMPROVEMENT 2: Normalization
+        if (state.normalize) {
+          normalizeBuffer(samples);
+        }
+
         bufCrunched.getChannelData(ch).set(samples);
       }
 
@@ -1258,7 +1393,6 @@ function requestPreviewUpdate() {
         try { oldSourceOrig.stop(startTime); } catch (e) { }
       }
 
-      // Fixed Bug 5: Capture position immediately before start
       const freshPos = previewCtx.currentTime - previewStartTime;
       const safeOffset = Math.max(0, freshPos % decoded.duration);
       
@@ -1285,6 +1419,48 @@ btnLiveUpdate.addEventListener('click', () => {
   if (state.liveUpdate) requestPreviewUpdate();
 });
 
+// IMPROVEMENT 5: URL Hash logic
+function updateHash() {
+  const params = new URLSearchParams();
+  params.set('b', state.bitDepth);
+  params.set('r', state.sampleRate);
+  params.set('g', state.grit);
+  params.set('n', state.noise);
+  params.set('c', state.crushMode ? 1 : 0);
+  params.set('s', state.stereo ? 1 : 0);
+  params.set('h', state.hpf);
+  params.set('l', state.lpf);
+  params.set('bs', state.bass);
+  params.set('norm', state.normalize ? 1 : 0);
+  
+  // Use replaceState to avoid polluting back button
+  history.replaceState(null, '', '#' + params.toString());
+}
+
+function parseHash() {
+  const hash = window.location.hash.substring(1);
+  if (!hash) return;
+  
+  try {
+    const params = new URLSearchParams(hash);
+    const p = {};
+    if (params.has('b')) p.bitDepth = Math.max(1, Math.min(16, +params.get('b')));
+    if (params.has('r')) p.sampleRate = Math.max(4000, Math.min(48000, +params.get('r')));
+    if (params.has('g')) p.grit = Math.max(1.0, Math.min(10.0, +params.get('g')));
+    if (params.has('n')) p.noise = Math.max(0, Math.min(0.05, +params.get('n')));
+    if (params.has('c')) p.crushMode = params.get('c') === '1';
+    if (params.has('s')) p.stereo = params.get('s') === '1';
+    if (params.has('h')) p.hpf = Math.max(20, Math.min(1000, +params.get('h')));
+    if (params.has('l')) p.lpf = Math.max(500, Math.min(20000, +params.get('l')));
+    if (params.has('bs')) p.bass = Math.max(0, Math.min(15, +params.get('bs')));
+    if (params.has('norm')) p.normalize = params.get('norm') === '1';
+    
+    applyParamsToUI(p);
+  } catch (e) {
+    console.warn('Failed to parse hash', e);
+  }
+}
+
 (function init() {
   syncBitDepth(8);
   syncSampleRate(22050);
@@ -1293,6 +1469,13 @@ btnLiveUpdate.addEventListener('click', () => {
   syncHpf(20);
   syncLpf(20000);
   syncBass(0);
+  
+  // Default normalize ON
+  state.normalize = true;
+  if (btnNormalizeToggle) {
+    btnNormalizeToggle.setAttribute('aria-checked', true);
+    btnNormalizeToggle.classList.add('active');
+  }
 
   const saved = localStorage.getItem('ogcruncher_preset');
   if (saved) {
@@ -1306,6 +1489,8 @@ btnLiveUpdate.addEventListener('click', () => {
   }
 
   loadState();
+  parseHash(); // Hash takes priority
+  
   log('ready. drop files or click browse.', 'ok');
   setBadge('IDLE', 'badge--amber');
 })();
