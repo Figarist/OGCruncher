@@ -36,7 +36,8 @@ The interface follows a **Flexible Bento Grid** layout, optimized for a left-to-
 - **Background**: `#f2f0eb` (Cloud Dancer) - warm, off-white neutral.
 - **Surface/Cards**: `#ffffff` (Pure White).
 - **Primary Accent**: `#7c69e3` (Soft Purple) - used for primary actions like "CRUNCH".
-- **Secondary Accent**: `#ffc2d1` (Pastel Pink) - used for toggle states and comparisons.
+- **Secondary Accent**: `#ff85a1` (Vibrant Pink) - used for toggle states and comparisons.
+- **Secondary Dark**: `#c9184a` (Deep Cherry) - used for high-contrast labels and "STOP" states.
 - **Functional Accents**: 
   - Cyan (`#b2f5ea`): Active "Live" states, PWA status.
   - Yellow (`#fef3c7`): Idle/Waiting states.
@@ -49,7 +50,8 @@ The interface follows a **Flexible Bento Grid** layout, optimized for a left-to-
 ### 3.3 Layout Constraints
 - **Bento Gap**: `20px` (`--hub-gap`)
 - **Corner Radius**: `20px` (`--card-radius`)
-- **Desktop Grid**: 3-column layout (`1fr 420px 1fr`).
+- **Desktop Grid**: Resizable 3-column layout (`var(--col-left) 6px var(--col-center) 6px var(--col-right)`).
+- **Resizers**: Full-height interactive handles with Windows-style dragging and visual handles.
 - **Mobile Stack**: Transitions into a vertical stack with a sticky header.
 
 ## 4. Motion & Interaction
@@ -57,15 +59,18 @@ The interface follows a **Flexible Bento Grid** layout, optimized for a left-to-
 ### 4.1 Transitions
 - **Panel Entry**: Y-axis slide-up (200-400ms) with staggered delays for each Bento panel.
 - **Log Streaming**: New entries slide in from the bottom with a brief brightness highlight.
+- **Resizer Handles**: Subtle expansion and glow on hover for intuitive layout customization.
 
 ### 4.2 Feedback Systems
 - **Header Progress**: A linear, glowing progress bar integrated into the very top of the header.
 - **Waveform Glow**: The spectral visualizer pulses with a purple glow animation when audio is processing or playing.
 - **A/B Comparison**: Instantaneous toggle between raw and processed signals with synchronized playback.
+- **Stabilized Console**: The log window has a fixed relative height (`50vh`) to prevent layout jumping during processing.
 
 ## 5. Professional Workflow Features
 - **Deep Linking**: All parameters are encodable into the URL hash for preset sharing.
 - **Batch Processing**: Parallel file handling with ZIP export via `JSZip`.
+- **Layout Persistence**: Custom panel widths are saved to `localStorage`.
 - **PWA & Offline**: Full Service Worker integration for offline reliability.
 - **Cross-Platform**: Optimized for both high-resolution desktops and touch-friendly mobile devices.
 
