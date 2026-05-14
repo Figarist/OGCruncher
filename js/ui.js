@@ -6,7 +6,7 @@
 'use strict';
 
 import { state, saveState, loadState, updateHash, parseHash } from './state.js';
-import { initUtils, log, showToast, updateSliderTrack } from './utils.js';
+import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
 import { initQueue, addFiles, clearQueue, startProcessing, loadDemoTrack, handleItems } from './queue.js';
 import { initPreview, togglePreview, toggleAB, requestPreviewUpdate } from './preview.js';
 
@@ -469,9 +469,6 @@ window.addEventListener('keydown', (e) => {
     userPresetMeta.textContent = `${p.bitDepth}-bit / ${p.sampleRate}Hz`;
   }
 
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => { });
-  }
 
   loadState(applyParamsToUI);
   parseHash(applyParamsToUI);
