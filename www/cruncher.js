@@ -18,7 +18,7 @@ const state = {
   bitDepth: 8,
   sampleRate: 22050,
   crushMode: true,    // expander + dither + anti-alias pipeline
-  grit: 1.5,
+  grit: 1.0,
   noise: 0.0,
   stereo: false,
   hpf: 20,
@@ -1130,19 +1130,33 @@ function drawVisualizer() {
   const colorOrig = (isComparingOriginal || state.dualView) ? `rgba(178, 245, 234, ${alphaActive})` : `rgba(178, 245, 234, ${alphaGhost})`;
   const colorCr = (!isComparingOriginal || state.dualView) ? `rgba(124, 105, 227, ${alphaActive})` : `rgba(124, 105, 227, ${alphaGhost})`;
 
-  ctx.fillStyle = colorOrig;
   let x = 0;
-  for (let i = 0; i < bufferLength; i++) {
-    const bh = dataOrig[i] / 255 * height;
-    ctx.fillRect(x, height - bh, barWidth, bh);
-    x += barWidth + 1;
-  }
+  const subWidth = state.dualView ? (barWidth * 0.5) : barWidth;
 
-  ctx.fillStyle = colorCr;
-  x = 0;
   for (let i = 0; i < bufferLength; i++) {
-    const bh = dataCr[i] / 255 * height;
-    ctx.fillRect(x, height - bh, barWidth, bh);
+    const bhOrig = dataOrig[i] / 255 * height;
+    const bhCr = dataCr[i] / 255 * height;
+
+    if (state.dualView) {
+      // Side-by-side mode
+      ctx.fillStyle = colorOrig;
+      ctx.fillRect(x, height - bhOrig, subWidth, bhOrig);
+      ctx.fillStyle = colorCr;
+      ctx.fillRect(x + subWidth, height - bhCr, subWidth, bhCr);
+    } else {
+      // Overlay mode: draw ghost first, active second
+      if (isComparingOriginal) {
+        ctx.fillStyle = colorCr;
+        ctx.fillRect(x, height - bhCr, barWidth, bhCr);
+        ctx.fillStyle = colorOrig;
+        ctx.fillRect(x, height - bhOrig, barWidth, bhOrig);
+      } else {
+        ctx.fillStyle = colorOrig;
+        ctx.fillRect(x, height - bhOrig, barWidth, bhOrig);
+        ctx.fillStyle = colorCr;
+        ctx.fillRect(x, height - bhCr, barWidth, bhCr);
+      }
+    }
     x += barWidth + 1;
   }
 
@@ -1255,9 +1269,9 @@ async function togglePreview() {
     analyserOriginal = previewCtx.createAnalyser();
     analyserCrunched.fftSize = 512;
     analyserOriginal.fftSize = 512;
-    gainCrunched.connect(analyserCrunched);
-    gainOriginal.connect(analyserOriginal);
 
+    // Connect analysers pre-gain so they always have data for Dual View
+    // (Regardless of A/B toggle gain)
     gainCrunched.gain.value = 1;
     gainOriginal.gain.value = 0;
 
@@ -1266,10 +1280,12 @@ async function togglePreview() {
     previewSource = previewCtx.createBufferSource();
     previewSource.buffer = bufCrunched;
     previewSource.connect(gainCrunched);
+    previewSource.connect(analyserCrunched); // Pre-gain data
 
     previewSourceOrig = previewCtx.createBufferSource();
     previewSourceOrig.buffer = bufOriginal;
     previewSourceOrig.connect(gainOriginal);
+    previewSourceOrig.connect(analyserOriginal); // Pre-gain data
 
     previewSource.onended = stopPreview;
 
@@ -1308,7 +1324,7 @@ function updatePresetUI(type) {
 btnPresetAuthor.addEventListener('click', () => {
   syncBitDepth(8);
   syncSampleRate(22050);
-  syncGrit(1.5);
+  syncGrit(1.0);
   syncNoise(0);
   syncHpf(20);
   syncLpf(20000);
@@ -1455,10 +1471,12 @@ function requestPreviewUpdate() {
       previewSource = previewCtx.createBufferSource();
       previewSource.buffer = bufCrunched;
       previewSource.connect(gainCrunched);
+      previewSource.connect(analyserCrunched); // Pre-gain data
 
       previewSourceOrig = previewCtx.createBufferSource();
       previewSourceOrig.buffer = bufOriginal;
       previewSourceOrig.connect(gainOriginal);
+      previewSourceOrig.connect(analyserOriginal); // Pre-gain data
 
       previewSource.onended = stopPreview;
 
@@ -1543,7 +1561,7 @@ function parseHash() {
 (function init() {
   syncBitDepth(8);
   syncSampleRate(22050);
-  syncGrit(1.5);
+  syncGrit(1.0);
   syncNoise(0);
   syncHpf(20);
   syncLpf(20000);
