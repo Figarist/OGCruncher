@@ -5,10 +5,10 @@
 
 'use strict';
 
-import { state, saveState, loadState, updateHash, parseHash } from './state.js';
+import { state, saveState, loadState, updateHash, parseHash, pushHistory, undo, redo, pauseHistory } from './state.js';
 import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
 import { initQueue, addFiles, clearQueue, startProcessing, loadDemoTrack, handleItems } from './queue.js';
-import { initPreview, togglePreview, toggleAB, requestPreviewUpdate } from './preview.js';
+import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, updateWorkletParams } from './preview.js';
 
 const SITE_URL = 'https://figarist.github.io/OGCruncher/';
 
@@ -75,17 +75,22 @@ const btnInfo = $('btn-info');
 const modalInfo = $('modal-info');
 const btnInfoOk = $('btn-info-ok');
 
+let _isDragging = false; 
+let _installPrompt = null; 
+
 /* ════════════════════════════════════════════════════════════════════
    SYNC FUNCTIONS
    ════════════════════════════════════════════════════════════════════ */
 
 function syncBitDepth(val) {
+  if (!_isDragging) pushHistory();
   state.bitDepth = +val;
   sliderBit.value = val;
   outBit.textContent = val;
   sliderBit.setAttribute('aria-valuenow', val);
   updateSliderTrack(sliderBit);
   saveState();
+  updateWorkletParams();
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
@@ -99,6 +104,7 @@ function updateSrButtons(val) {
 }
 
 function syncSampleRate(val) {
+  if (!_isDragging) pushHistory();
   state.sampleRate = +val;
   sliderSr.value = val;
   outSr.innerHTML = `${(+val).toLocaleString()} <span class="unit">Hz</span>`;
@@ -111,24 +117,29 @@ function syncSampleRate(val) {
 window.syncSampleRate = syncSampleRate;
 
 function syncGrit(val) {
+  if (!_isDragging) pushHistory();
   state.grit = +val;
   sliderGrit.value = val;
   outGrit.textContent = val;
   updateSliderTrack(sliderGrit);
   saveState();
+  updateWorkletParams();
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
 function syncNoise(val) {
+  if (!_isDragging) pushHistory();
   state.noise = +val;
   sliderNoise.value = val;
   outNoise.textContent = val;
   updateSliderTrack(sliderNoise);
   saveState();
+  updateWorkletParams();
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
 function syncSpeed(val) {
+  if (!_isDragging) pushHistory();
   state.playbackRate = parseFloat(val);
   sliderSpeed.value = state.playbackRate;
   outSpeed.textContent = Math.round(state.playbackRate * 100) + '%';
@@ -138,6 +149,7 @@ function syncSpeed(val) {
 }
 
 function syncHpf(val) {
+  if (!_isDragging) pushHistory();
   state.hpf = +val;
   sliderHpf.value = val;
   outHpf.textContent = val > 20 ? `${val} Hz` : '20 Hz';
@@ -147,6 +159,7 @@ function syncHpf(val) {
 }
 
 function syncLpf(val) {
+  if (!_isDragging) pushHistory();
   state.lpf = +val;
   sliderLpf.value = val;
   outLpf.textContent = val < 20000 ? `${val} Hz` : 'OFF';
@@ -156,6 +169,7 @@ function syncLpf(val) {
 }
 
 function syncBass(val) {
+  if (!_isDragging) pushHistory();
   state.bass = +val;
   sliderBass.value = val;
   outBass.textContent = val > 0 ? `+${val} dB` : '0 dB';
@@ -165,19 +179,94 @@ function syncBass(val) {
 }
 
 function applyParamsToUI(p) {
-  if (p.bitDepth !== undefined) syncBitDepth(p.bitDepth);
-  if (p.sampleRate !== undefined) syncSampleRate(p.sampleRate);
-  if (p.grit !== undefined) syncGrit(p.grit);
-  if (p.noise !== undefined) syncNoise(p.noise);
-  if (p.playbackRate !== undefined) syncSpeed(p.playbackRate);
-  if (p.hpf !== undefined) syncHpf(p.hpf);
-  if (p.lpf !== undefined) syncLpf(p.lpf);
-  if (p.bass !== undefined) syncBass(p.bass);
-  if (p.crushMode !== undefined && p.crushMode !== state.crushMode) btnMarioToggle.click();
-  if (p.stereo !== undefined && p.stereo !== state.stereo) btnStereoToggle.click();
-  if (p.normalize !== undefined && p.normalize !== state.normalize) btnNormalizeToggle.click();
-  if (p.liveUpdate !== undefined && p.liveUpdate !== state.liveUpdate) btnLiveUpdate.click();
-  if (p.dualView !== undefined && p.dualView !== state.dualView) btnDualView.click();
+  pauseHistory(true); 
+  
+  if (p.bitDepth !== undefined) {
+    state.bitDepth = +p.bitDepth;
+    sliderBit.value = p.bitDepth;
+    outBit.textContent = p.bitDepth;
+    sliderBit.setAttribute('aria-valuenow', p.bitDepth);
+    updateSliderTrack(sliderBit);
+  }
+  if (p.sampleRate !== undefined) {
+    state.sampleRate = +p.sampleRate;
+    sliderSr.value = p.sampleRate;
+    outSr.innerHTML = `${(+p.sampleRate).toLocaleString()} <span class="unit">Hz</span>`;
+    sliderSr.setAttribute('aria-valuenow', p.sampleRate);
+    updateSliderTrack(sliderSr);
+    updateSrButtons(p.sampleRate);
+  }
+  if (p.grit !== undefined) {
+    state.grit = +p.grit;
+    sliderGrit.value = p.grit;
+    outGrit.textContent = p.grit;
+    updateSliderTrack(sliderGrit);
+  }
+  if (p.noise !== undefined) {
+    state.noise = +p.noise;
+    sliderNoise.value = p.noise;
+    outNoise.textContent = p.noise;
+    updateSliderTrack(sliderNoise);
+  }
+  if (p.playbackRate !== undefined) {
+    state.playbackRate = parseFloat(p.playbackRate);
+    sliderSpeed.value = state.playbackRate;
+    outSpeed.textContent = Math.round(state.playbackRate * 100) + '%';
+    updateSliderTrack(sliderSpeed);
+  }
+  if (p.hpf !== undefined) {
+    state.hpf = +p.hpf;
+    sliderHpf.value = p.hpf;
+    outHpf.textContent = p.hpf > 20 ? `${p.hpf} Hz` : '20 Hz';
+    updateSliderTrack(sliderHpf);
+  }
+  if (p.lpf !== undefined) {
+    state.lpf = +p.lpf;
+    sliderLpf.value = p.lpf;
+    outLpf.textContent = p.lpf < 20000 ? `${p.lpf} Hz` : 'OFF';
+    updateSliderTrack(sliderLpf);
+  }
+  if (p.bass !== undefined) {
+    state.bass = +p.bass;
+    sliderBass.value = p.bass;
+    outBass.textContent = p.bass > 0 ? `+${p.bass} dB` : '0 dB';
+    updateSliderTrack(sliderBass);
+  }
+  
+  if (p.crushMode !== undefined) {
+    state.crushMode = p.crushMode;
+    btnMarioToggle.setAttribute('aria-checked', state.crushMode);
+    btnMarioToggle.classList.toggle('active', state.crushMode);
+    outMario.textContent = state.crushMode ? 'ON' : 'OFF';
+  }
+  if (p.stereo !== undefined) {
+    state.stereo = p.stereo;
+    const isForceMono = !state.stereo;
+    btnStereoToggle.setAttribute('aria-checked', isForceMono);
+    btnStereoToggle.classList.toggle('active', isForceMono);
+    outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
+  }
+  if (p.normalize !== undefined) {
+    state.normalize = p.normalize;
+    btnNormalizeToggle.setAttribute('aria-checked', state.normalize);
+    btnNormalizeToggle.classList.toggle('active', state.normalize);
+    outNormalize.textContent = state.normalize ? 'ON' : 'OFF';
+  }
+  if (p.liveUpdate !== undefined) {
+    state.liveUpdate = p.liveUpdate;
+    btnLiveUpdate.classList.toggle('active', state.liveUpdate);
+    const statusEl = $('live-status');
+    if (statusEl) statusEl.textContent = state.liveUpdate ? 'ON' : 'OFF';
+  }
+  if (p.dualView !== undefined) {
+    state.dualView = p.dualView;
+    btnDualView.classList.toggle('active', state.dualView);
+    btnDualView.textContent = `DUAL VIEW: ${state.dualView ? 'ON' : 'OFF'}`;
+  }
+  
+  pauseHistory(false);
+  updateWorkletParams();
+  if (state.liveUpdate) requestPreviewUpdate();
 }
 
 function updatePresetUI(type) {
@@ -290,26 +379,40 @@ dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fileInput.click(); } });
 fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
 
-sliderBit.addEventListener('input', () => syncBitDepth(sliderBit.value));
-sliderSr.addEventListener('input', () => syncSampleRate(sliderSr.value));
-sliderGrit.addEventListener('input', () => syncGrit(sliderGrit.value));
-sliderNoise.addEventListener('input', () => syncNoise(sliderNoise.value));
-sliderSpeed.addEventListener('input', () => syncSpeed(sliderSpeed.value));
-sliderHpf.addEventListener('input', () => syncHpf(sliderHpf.value));
-sliderLpf.addEventListener('input', () => syncLpf(sliderLpf.value));
-sliderBass.addEventListener('input', () => syncBass(sliderBass.value));
+const wrapSlider = (slider, syncFn) => {
+  slider.addEventListener('pointerdown', () => {
+    _isDragging = true;
+    pushHistory();
+  });
+  slider.addEventListener('pointerup', () => {
+    _isDragging = false;
+  });
+  slider.addEventListener('input', () => syncFn(slider.value));
+};
+
+wrapSlider(sliderBit, syncBitDepth);
+wrapSlider(sliderSr, syncSampleRate);
+wrapSlider(sliderGrit, syncGrit);
+wrapSlider(sliderNoise, syncNoise);
+wrapSlider(sliderSpeed, syncSpeed);
+wrapSlider(sliderHpf, syncHpf);
+wrapSlider(sliderLpf, syncLpf);
+wrapSlider(sliderBass, syncBass);
 
 btnMarioToggle.addEventListener('click', () => {
+  pushHistory();
   state.crushMode = !state.crushMode;
   btnMarioToggle.setAttribute('aria-checked', state.crushMode);
   btnMarioToggle.classList.toggle('active', state.crushMode);
   saveState();
+  updateWorkletParams();
   if (state.liveUpdate) requestPreviewUpdate();
   outMario.textContent = state.crushMode ? 'ON' : 'OFF';
   log(`Crush mode: ${state.crushMode ? 'ENABLED' : 'DISABLED'}`, 'sys');
 });
 
 btnStereoToggle.addEventListener('click', () => {
+  pushHistory();
   state.stereo = !state.stereo;
   const isForceMono = !state.stereo;
   btnStereoToggle.setAttribute('aria-checked', isForceMono);
@@ -321,16 +424,19 @@ btnStereoToggle.addEventListener('click', () => {
 });
 
 btnNormalizeToggle.addEventListener('click', () => {
+  pushHistory();
   state.normalize = !state.normalize;
   btnNormalizeToggle.setAttribute('aria-checked', state.normalize);
   btnNormalizeToggle.classList.toggle('active', state.normalize);
   saveState();
+  updateWorkletParams();
   if (state.liveUpdate) requestPreviewUpdate();
   outNormalize.textContent = state.normalize ? 'ON' : 'OFF';
   log(`Normalization: ${state.normalize ? 'ENABLED' : 'DISABLED'}`, 'sys');
 });
 
 btnDualView.addEventListener('click', () => {
+  pushHistory();
   state.dualView = !state.dualView;
   btnDualView.classList.toggle('active', state.dualView);
   btnDualView.textContent = `DUAL VIEW: ${state.dualView ? 'ON' : 'OFF'}`;
@@ -349,6 +455,8 @@ btnCopyLink.addEventListener('click', async () => {
 });
 
 btnPresetAuthor.addEventListener('click', () => {
+  pushHistory();
+  pauseHistory(true);
   syncBitDepth(8);
   syncSampleRate(22050);
   syncGrit(1.0);
@@ -363,12 +471,15 @@ btnPresetAuthor.addEventListener('click', () => {
   log('preset: LO-Q (author default)', 'accent');
   showToast('◉ author preset loaded', 'info');
   saveState();
+  pauseHistory(false);
+  updateWorkletParams();
 });
 
 btnPresetUser.addEventListener('click', () => {
   const saved = localStorage.getItem('ogcruncher_preset');
   if (!saved) return;
   const p = JSON.parse(saved);
+  pushHistory();
   applyParamsToUI(p);
   updatePresetUI('user');
   log('preset: MY PRESET (user custom)', 'accent');
@@ -403,6 +514,7 @@ btnAB.addEventListener('click', toggleAB);
 btnClearQueue.addEventListener('click', clearQueue);
 
 btnLiveUpdate.addEventListener('click', () => {
+  pushHistory();
   state.liveUpdate = !state.liveUpdate;
   btnLiveUpdate.classList.toggle('active', state.liveUpdate);
   const statusEl = $('live-status');
@@ -431,6 +543,20 @@ modalInfo.addEventListener('click', (e) => {
 
 window.addEventListener('keydown', (e) => {
   if ((e.target.tagName === 'INPUT' && e.target.type !== 'range') || e.target.tagName === 'TEXTAREA') return;
+
+  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !e.shiftKey) {
+    e.preventDefault();
+    const ok = undo(applyParamsToUI);
+    if (ok) showToast('↩ undo', 'sys');
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey))) {
+    e.preventDefault();
+    const ok = redo(applyParamsToUI);
+    if (ok) showToast('↪ redo', 'sys');
+    return;
+  }
+
   if (e.code === 'Space') {
     e.preventDefault();
     if (!btnPreview.disabled) btnPreview.click();
@@ -456,8 +582,17 @@ window.addEventListener('keydown', (e) => {
   });
   initPreview({ 
     btnPreview, btnPreviewLbl, previewIcon, abContainer, 
-    abStatus, btnAB, visualizer, dropContent 
+    abStatus, btnAB, visualizer, dropContent,
+    metricsPanel:      document.getElementById('metrics-panel'),
+    metricRmsOrig:     document.getElementById('metric-rms-orig'),
+    metricRmsCrunch:   document.getElementById('metric-rms-crunch'),
+    metricPeakOrig:    document.getElementById('metric-peak-orig'),
+    metricPeakCrunch:  document.getElementById('metric-peak-crunch'),
+    metricDurOrig:     document.getElementById('metric-dur-orig'),
+    metricDurCrunch:   document.getElementById('metric-dur-crunch'),
   });
+
+  pauseHistory(true); 
 
   syncBitDepth(8);
   syncSampleRate(22050);
@@ -498,6 +633,65 @@ window.addEventListener('keydown', (e) => {
     localStorage.setItem('og_seen_info', 'true');
   }
 
+  // ── PWA Install Prompt ────────────────────────────────────────────────
+  const badgePwa = $('badge-pwa');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); 
+    _installPrompt = e;
+
+    if (badgePwa) {
+      badgePwa.textContent = '⬇ INSTALL APP';
+      badgePwa.classList.remove('badge--green');
+      badgePwa.classList.add('badge--install', 'badge--pulse');
+      badgePwa.style.cursor = 'pointer';
+      badgePwa.title = 'Install OGCruncher as a standalone app';
+      badgePwa.setAttribute('role', 'button');
+      badgePwa.setAttribute('tabindex', '0');
+
+      const doInstall = async () => {
+        if (!_installPrompt) return;
+        _installPrompt.prompt();
+        const { outcome } = await _installPrompt.userChoice;
+        _installPrompt = null;
+
+        if (outcome === 'accepted') {
+          badgePwa.textContent = 'PWA READY';
+          badgePwa.classList.add('badge--green');
+          badgePwa.classList.remove('badge--install', 'badge--pulse');
+          badgePwa.style.cursor = '';
+          badgePwa.removeAttribute('role');
+          badgePwa.removeAttribute('tabindex');
+          badgePwa.removeEventListener('click', doInstall);
+          badgePwa.removeEventListener('keydown', onKeydown);
+          log('OGCruncher installed as standalone app.', 'ok');
+          showToast('✅ App installed!', 'ok');
+        } else {
+          log('Install dismissed.', 'sys');
+        }
+      };
+
+      const onKeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') doInstall(); };
+
+      badgePwa.addEventListener('click', doInstall);
+      badgePwa.addEventListener('keydown', onKeydown);
+      log('Install prompt available — click "INSTALL APP" in the header.', 'sys');
+    }
+  });
+
+  window.addEventListener('appinstalled', () => {
+    _installPrompt = null;
+    if (badgePwa) {
+      badgePwa.textContent = 'PWA READY';
+      badgePwa.classList.add('badge--green');
+      badgePwa.classList.remove('badge--install', 'badge--pulse');
+      badgePwa.style.cursor = '';
+    }
+    log('App installed via browser UI.', 'ok');
+  });
+
+  pauseHistory(false);
+  pushHistory(); 
   log('ready. drop files or click browse.', 'ok');
   setBadge('IDLE', 'badge--amber');
 })();

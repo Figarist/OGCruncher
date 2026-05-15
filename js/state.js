@@ -86,3 +86,84 @@ export function parseHash(applyParamsCallback) {
     console.warn('Failed to parse hash', e);
   }
 }
+
+// ══ HISTORY ══════════════════════════════════════════════════════════
+const MAX_HISTORY = 50;
+let _history = [];   // array of snapshot objects
+let _historyIndex = -1;
+let _pauseHistory = false; // flag to suppress pushHistory during restore
+
+/**
+ * Control whether history pushes are ignored.
+ */
+export function pauseHistory(paused) {
+  _pauseHistory = !!paused;
+}
+
+/**
+ * Capture the current persistable state as a snapshot.
+ */
+export function pushHistory() {
+  if (_pauseHistory) return;
+  const snap = _captureSnapshot();
+  
+  // If index is not at the end, discard the forward branch
+  if (_historyIndex < _history.length - 1) {
+    _history = _history.slice(0, _historyIndex + 1);
+  }
+
+  // Deduplicate: skip if identical to last entry
+  if (_history.length > 0 && JSON.stringify(_history[_historyIndex]) === JSON.stringify(snap)) return;
+  
+  _history.push(snap);
+  if (_history.length > MAX_HISTORY) {
+    _history.shift();
+    _historyIndex = Math.max(0, _historyIndex - 1);
+  }
+  _historyIndex = _history.length - 1;
+}
+
+/**
+ * Revert to previous state.
+ */
+export function undo(applyParamsCallback) {
+  // If we are at the tail, capture the "present" state before moving back
+  const currentSnap = _captureSnapshot();
+  if (_historyIndex === _history.length - 1) {
+    if (JSON.stringify(_history[_historyIndex]) !== JSON.stringify(currentSnap)) {
+      _history.push(currentSnap);
+      _historyIndex++; // Move index to the newly pushed present state
+    }
+  }
+
+  if (_historyIndex <= 0) return false;
+  
+  _historyIndex--;
+  _restore(_history[_historyIndex], applyParamsCallback);
+  return true;
+}
+
+/**
+ * Re-apply a previously undone state.
+ */
+export function redo(applyParamsCallback) {
+  if (_historyIndex >= _history.length - 1) return false;
+  _historyIndex++;
+  _restore(_history[_historyIndex], applyParamsCallback);
+  return true;
+}
+
+function _captureSnapshot() {
+  const { files, processing, nextId, ...snap } = state;
+  return { ...snap };
+}
+
+function _restore(snap, applyParamsCallback) {
+  _pauseHistory = true;
+  applyParamsCallback(snap);
+  _pauseHistory = false;
+  // Sync localStorage and hash without pushing a new history entry
+  const { files, processing, nextId, ...persistentState } = state;
+  localStorage.setItem('ogcruncher_last_state', JSON.stringify(persistentState));
+  updateHash();
+}
