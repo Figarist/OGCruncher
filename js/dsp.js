@@ -156,9 +156,10 @@ export function buildFilterChain(offCtx, sourceNode, params) {
 export async function renderFilteredBuffer(buffer, params, targetChannels) {
   const numChannels = targetChannels || buffer.numberOfChannels;
   const pRate = params.playbackRate || 1.0;
-  const targetLength = Math.ceil(buffer.length / pRate);
+  const targetRate = params.sampleRate || buffer.sampleRate;
+  const targetLength = Math.ceil((buffer.duration / pRate) * targetRate);
   
-  const offCtx = new OfflineAudioContext(numChannels, targetLength, buffer.sampleRate);
+  const offCtx = new OfflineAudioContext(numChannels, targetLength, targetRate);
   const src = offCtx.createBufferSource();
   src.buffer = buffer;
   src.playbackRate.value = pRate;
