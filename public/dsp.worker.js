@@ -5,8 +5,8 @@
 
 'use strict';
 
-// Load encoder globals (paths relative to worker file in js/ directory)
-importScripts('../OggVorbisEncoder.min.js', '../lame.min.js');
+// Load encoder globals (paths relative to worker file in root)
+importScripts('OggVorbisEncoder.min.js', 'lame.min.js');
 
 // ── DSP FUNCTIONS ────────────────────────────────────────────────────────────
 

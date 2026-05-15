@@ -53,7 +53,7 @@ async function ensureWorklet() {
   if (workletReady) return;
   if (!previewCtx) previewCtx = new (window.AudioContext || window.webkitAudioContext)();
   try {
-    await previewCtx.audioWorklet.addModule('./js/dsp-processor.js');
+    await previewCtx.audioWorklet.addModule('./dsp-processor.js');
     workletReady = true;
     log('AudioWorklet engine ready.', 'sys');
   } catch (err) {

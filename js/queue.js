@@ -22,7 +22,7 @@ let _worker = null;
 
 function getWorker() {
   if (!_worker) {
-    _worker = new Worker('./js/dsp.worker.js'); // classic worker, no { type: 'module' }
+    _worker = new Worker('./dsp.worker.js'); // classic worker, no { type: 'module' }
   }
   return _worker;
 }
@@ -346,10 +346,10 @@ export async function loadDemoTrack() {
   _dom.btnLoadDemo.textContent = 'LOADING...';
   
   try {
-    const response = await fetch('loksii_demo_track.mp3');
+    const response = await fetch('demo.mp3');
     if (!response.ok) throw new Error('Demo track not found');
     const blob = await response.blob();
-    const file = new File([blob], 'loksii_demo_track.mp3', { type: 'audio/mpeg' });
+    const file = new File([blob], 'demo.mp3', { type: 'audio/mpeg' });
     
     addFiles([file]);
     log('Demo track loaded successfully.', 'ok');
