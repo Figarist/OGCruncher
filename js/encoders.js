@@ -1,5 +1,10 @@
 /**
- * OGCruncher — Encoders
+ * OGCruncher — Encoders (DEPRECATED)
+ *
+ * ⚠ This module is NO LONGER IMPORTED.
+ * All encoding runs inside js/dsp.worker.js via importScripts.
+ * Kept for reference only. Safe to delete.
+ *
  * by figarist · https://figarist.github.io
  */
 

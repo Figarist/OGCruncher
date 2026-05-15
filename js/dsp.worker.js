@@ -39,28 +39,24 @@ function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
   for (let i = 0; i < N; i++) buf[i] *= invPeak;
 
   if (crushMode) {
-    // 1. Soft expander
+    // Step 1: Soft expander (nonlinear shaping)
     for (let i = 0; i < N; i++) {
       const x = buf[i];
       buf[i] = (x < 0 ? -1 : x > 0 ? 1 : 0) * Math.pow(x < 0 ? -x : x, 1.15);
     }
 
-    // 2. Triangular dither
-    const errRange = 1 / (1 << bitDepth);
-    for (let i = 0; i < N; i++) {
-      const r1 = Math.random();
-      const r2 = Math.random();
-      buf[i] += (r1 - r2) * errRange;
-    }
-
-    // 3. Quantize
+    // Step 2: Quantize with True TPDF dither
+    // Dither is added HERE — after all nonlinear processing, immediately before rounding.
+    // Amplitude = 1 LSB = 1/halfLev in the normalized [-1, 1] scale.
     const levels = 1 << bitDepth;
     const halfLev = levels >> 1;
+    const lsb = 1 / halfLev; // ← correct 1 LSB amplitude (was errRange = 1/(1<<bitDepth) = 0.5 LSB)
     for (let i = 0; i < N; i++) {
+      buf[i] += (Math.random() - Math.random()) * lsb; // TPDF: triangular, zero mean, ±1 LSB
       buf[i] = Math.round(buf[i] * halfLev) / halfLev;
     }
 
-    // 4. Anti-alias (adjacent-sample average)
+    // Step 3: Anti-alias (adjacent-sample average)
     for (let i = 1; i < N; i++) {
       buf[i] = (buf[i] + buf[i - 1]) * 0.5;
     }

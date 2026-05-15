@@ -7,7 +7,7 @@
 
 import { state } from './state.js';
 import { log, showToast } from './utils.js';
-import { computeAudioMetrics, buildFilterChain, renderFilteredBuffer } from './dsp.js';
+import { computeAudioMetrics, buildFilterChain, renderFilteredBuffer, processDSP, normalizeBuffer } from './dsp.js';
 
 /* ════════════════════════════════════════════════════════════════════
    STATE & NODES
@@ -28,6 +28,11 @@ let previewResampledWet = null; // Filtered buffer at target SR
 let isComparingOriginal = false;
 let liveUpdateTimer = null;
 let lastRenderParams = {};
+let metricsDrySample = null;
+let metricsProcessedSample = null;
+let metricsLastDSPParams = "";
+let metricsCachedCrunch = null;
+let metricsLastDecoded = null;
 
 // AudioWorklet state
 let dspWorkletNode = null;        // DSPProcessor node
@@ -158,16 +163,28 @@ export async function togglePreview() {
     } else {
       // ── Fallback Path (OfflineAudioContext hot-swap) ────────────────────
       previewResampled = await renderFilteredBuffer(previewDecoded, { playbackRate: pRate }, numChannels);
-      previewResampledWet = await renderFilteredBuffer(previewResampled, {
-        bitDepth: state.bitDepth,
-        crushMode: state.crushMode,
-        grit: state.grit,
-        noise: state.noise,
+      
+      const filteredBuf = await renderFilteredBuffer(previewResampled, {
         hpf: state.hpf,
         lpf: state.lpf,
         bass: state.bass,
-        normalize: state.normalize
-      });
+        playbackRate: 1.0
+      }, numChannels);
+
+      const processedBuf = previewCtx.createBuffer(
+        filteredBuf.numberOfChannels,
+        filteredBuf.length,
+        filteredBuf.sampleRate
+      );
+
+      for (let ch = 0; ch < filteredBuf.numberOfChannels; ch++) {
+        const samples = new Float32Array(filteredBuf.getChannelData(ch));
+        processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+        if (state.normalize) normalizeBuffer(samples);
+        processedBuf.getChannelData(ch).set(samples);
+      }
+
+      previewResampledWet = processedBuf;
 
       previewSource = previewCtx.createBufferSource();
       previewSource.buffer = previewResampledWet;
@@ -210,6 +227,9 @@ export async function togglePreview() {
 }
 
 export function stopPreview() {
+  clearTimeout(liveUpdateTimer);
+  liveUpdateTimer = null;
+
   if (previewSource) {
     try { previewSource.stop(); } catch (e) {}
     previewSource = null;
@@ -223,6 +243,14 @@ export function stopPreview() {
     dspWorkletNode = null;
   }
   hpfNode = lpfNode = bassNode = null;
+  previewDecoded = null;
+  previewResampled = null;
+  previewResampledWet = null;
+  metricsDrySample = null;
+  metricsProcessedSample = null;
+  metricsLastDSPParams = "";
+  metricsCachedCrunch = null;
+  metricsLastDecoded = null;
 
   _dom.btnPreview.classList.remove('playing');
   _dom.btnPreviewLbl.textContent = 'PREVIEW';
@@ -280,7 +308,6 @@ export function requestPreviewUpdate() {
       lastRenderParams.playbackRate  !== state.playbackRate;
 
     if (needsFullRestart) {
-      const currentTime = previewSource.context.currentTime - previewSource.startTime; // Conceptual
       await stopPreview();
       await togglePreview();
       return;
@@ -312,16 +339,27 @@ async function _requestPreviewUpdateFallback() {
     previewResampled = await renderFilteredBuffer(previewDecoded, { playbackRate: pRate }, numChannels);
   }
 
-  previewResampledWet = await renderFilteredBuffer(previewResampled, {
-    bitDepth: state.bitDepth,
-    crushMode: state.crushMode,
-    grit: state.grit,
-    noise: state.noise,
+  const filteredBuf = await renderFilteredBuffer(previewResampled, {
     hpf: state.hpf,
     lpf: state.lpf,
     bass: state.bass,
-    normalize: state.normalize
-  });
+    playbackRate: 1.0
+  }, numChannels);
+
+  const processedBuf = previewCtx.createBuffer(
+    filteredBuf.numberOfChannels,
+    filteredBuf.length,
+    filteredBuf.sampleRate
+  );
+
+  for (let ch = 0; ch < filteredBuf.numberOfChannels; ch++) {
+    const samples = new Float32Array(filteredBuf.getChannelData(ch));
+    processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+    if (state.normalize) normalizeBuffer(samples);
+    processedBuf.getChannelData(ch).set(samples);
+  }
+
+  previewResampledWet = processedBuf;
 
   const oldSrc = previewSource;
   const oldSrcOrig = previewSourceOrig;
@@ -364,8 +402,45 @@ function updateMetricsPanel() {
   
   if (workletReady) {
     metricsOrig = computeAudioMetrics(previewDecoded);
-    // Approximation for crunch metrics since it's real-time
-    metricsCrunch = { rmsDb: metricsOrig.rmsDb + (state.grit - 1) * 2, peakDb: state.normalize ? 0 : metricsOrig.peakDb + (state.grit - 1) * 2 };
+    
+    // Check if we need to re-run DSP estimation
+    const currentDSPParams = `${state.bitDepth}-${state.crushMode}-${state.grit}-${state.noise}-${state.normalize}`;
+    
+    if (metricsLastDecoded !== previewDecoded) {
+      metricsDrySample = null;
+      metricsCachedCrunch = null;
+      metricsLastDecoded = previewDecoded;
+    }
+
+    if (!metricsDrySample) {
+      const sampleRate = previewDecoded.sampleRate;
+      const sampleLen = Math.min(sampleRate, previewDecoded.length);
+      const startSample = Math.floor((previewDecoded.length - sampleLen) / 2);
+      metricsDrySample = previewDecoded.getChannelData(0).slice(startSample, startSample + sampleLen);
+      metricsProcessedSample = new Float32Array(metricsDrySample.length);
+    }
+
+    if (metricsLastDSPParams !== currentDSPParams || !metricsCachedCrunch) {
+      metricsProcessedSample.set(metricsDrySample);
+      processDSP(metricsProcessedSample, state.bitDepth, state.crushMode, state.grit, state.noise);
+      if (state.normalize) normalizeBuffer(metricsProcessedSample);
+
+      let sumSq = 0, peak = 0;
+      for (let i = 0; i < metricsProcessedSample.length; i++) {
+        const s = metricsProcessedSample[i];
+        sumSq += s * s;
+        const a = s < 0 ? -s : s;
+        if (a > peak) peak = a;
+      }
+      const rms = Math.sqrt(sumSq / metricsProcessedSample.length);
+      metricsCachedCrunch = {
+        rmsDb: rms > 1e-9 ? 20 * Math.log10(rms) : -96,
+        peakDb: peak > 1e-9 ? 20 * Math.log10(peak) : -96,
+      };
+      metricsLastDSPParams = currentDSPParams;
+    }
+    
+    metricsCrunch = metricsCachedCrunch;
   } else {
     metricsOrig = computeAudioMetrics(previewResampled);
     metricsCrunch = computeAudioMetrics(previewResampledWet);
