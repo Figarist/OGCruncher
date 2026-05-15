@@ -39,4 +39,4 @@ Example: `{name}_[8bit]_[22kHz].wav`. This automates library organization for po
 Expand the comparison tool to include a second "Wet" slot. Users could compare the **Original** signal against **Preset A** and **Preset B** simultaneously, making it much easier to fine-tune subtle parameter differences.
 
 ### 10. Enhanced PWA Offline Support (Reliability)
-Audit and update `sw.js` to ensure all external assets (Google Fonts, `lame.js`, `OggVorbisEncoder.js`) are aggressively cached. This ensures OGCruncher remains a robust, reliable tool in environments without internet access, such as airplanes or basement studios.
+Audit and update the `vite-plugin-pwa` configuration to ensure all external assets (Google Fonts, `lame.js`, `OggVorbisEncoder.js`) are aggressively cached. This ensures OGCruncher remains a robust, reliable tool in environments without internet access, such as airplanes or basement studios.
