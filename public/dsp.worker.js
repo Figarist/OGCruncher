@@ -249,6 +249,15 @@ self.onmessage = function(e) {
     const mp3 = encodeMP3(channels, sampleRate);
 
     // 5. Finalize
+    const transferList = [];
+    [ogg, wav, mp3].forEach(buf => {
+      if (buf instanceof ArrayBuffer) {
+        transferList.push(buf);
+      } else if (buf && buf.buffer instanceof ArrayBuffer) {
+        transferList.push(buf.buffer);
+      }
+    });
+
     self.postMessage({
       type: 'done',
       ogg,
@@ -256,7 +265,7 @@ self.onmessage = function(e) {
       mp3,
       hasClipping,
       fileName
-    }, [ogg, wav, mp3]);
+    }, transferList);
 
   } catch (err) {
     self.postMessage({ type: 'error', message: err.message, fileName: msg.fileName });
