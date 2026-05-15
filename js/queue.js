@@ -8,6 +8,7 @@
 import { state } from './state.js';
 import { log, showToast, formatBytes, setBadge } from './utils.js';
 import { buildFilterChain, safeOfflineCtx } from './dsp.js';
+import { stopPreview } from './preview.js';
 
 /* ════════════════════════════════════════════════════════════════════
    DOM REFS (Initialized via initQueue)
@@ -50,20 +51,33 @@ function revokeAllBlobs() {
 export function addFiles(files) {
   if (state.processing) return;
   
-  files.forEach(file => {
+  const existingNames = new Set(
+    [...state.files.values()].map(f => `${f.name}::${f.size}`)
+  );
+
+  let added = 0;
+  for (const file of files) {
+    const key = `${file.name}::${file.size}`;
+    if (existingNames.has(key)) continue; // skip duplicate
+    existingNames.add(key);
     const id = state.nextId++;
     state.files.set(id, file);
     renderQueueItem(id, file);
-  });
-  
-  updateQueueUI();
-  log(`${files.length} file(s) in queue.`, 'sys');
+    added++;
+  }
+
+  if (added > 0) {
+    updateQueueUI();
+    log(`${added} file(s) added. Queue: ${state.files.size} total.`, 'sys');
+  }
 }
 
 export function clearQueue() {
   if (state.processing) return;
   if (_worker) { _worker.terminate(); _worker = null; }
-  
+
+  stopPreview();
+
   state.files.clear();
   _dom.fileQueue.innerHTML = '';
   _dom.resultsArea.innerHTML = '';
@@ -95,6 +109,7 @@ function renderQueueItem(id, file) {
   li.querySelector('.btn-remove').addEventListener('click', () => {
     state.files.delete(id);
     li.remove();
+    stopPreview();
     updateQueueUI();
   });
   
@@ -349,15 +364,44 @@ export async function loadDemoTrack() {
   }
 }
 
+async function readAllEntries(reader) {
+  const all = [];
+  while (true) {
+    const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+    if (!batch.length) break;
+    all.push(...batch);
+  }
+  return all;
+}
+
+async function traverseEntry(entry, out) {
+  if (entry.isFile) {
+    const file = await new Promise(res => entry.file(res));
+    if (file.type.startsWith('audio/') || /\.(wav|mp3|flac|ogg|aiff?|m4a)$/i.test(file.name)) {
+      out.push(file);
+    }
+  } else if (entry.isDirectory) {
+    const reader = entry.createReader();
+    const entries = await readAllEntries(reader);
+    for (const e of entries) await traverseEntry(e, out);
+  }
+}
+
 export async function handleItems(items) {
-  const files = [];
+  const allFiles = [];
   for (const item of items) {
     if (item.kind === 'file') {
-      const file = item.getAsFile();
-      if (file && (file.type.startsWith('audio/') || /\.(wav|mp3|flac|ogg|aiff?|m4a)$/i.test(file.name))) {
-        files.push(file);
+      const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+      if (entry) {
+        await traverseEntry(entry, allFiles);
+      } else {
+        // Fallback for browsers without FileSystem API
+        const file = item.getAsFile();
+        if (file && (file.type.startsWith('audio/') || /\.(wav|mp3|flac|ogg|aiff?|m4a)$/i.test(file.name))) {
+          allFiles.push(file);
+        }
       }
     }
   }
-  if (files.length > 0) addFiles(files);
+  if (allFiles.length > 0) addFiles(allFiles);
 }

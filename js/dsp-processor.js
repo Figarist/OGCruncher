@@ -36,7 +36,7 @@ class DSPProcessor extends AudioWorkletProcessor {
 
     const levels  = 1 << this._bitDepth;
     const halfLev = levels >> 1;
-    const errRange = 1 / levels;
+    const lsb = 1 / halfLev; // 1 LSB = 2/(2^bitDepth)
 
     for (let ch = 0; ch < output.length; ch++) {
       const inp = input[ch];
@@ -57,7 +57,7 @@ class DSPProcessor extends AudioWorkletProcessor {
           // 2. Soft expander
           s = (s < 0 ? -1 : s > 0 ? 1 : 0) * Math.pow(s < 0 ? -s : s, 1.15);
           // 3. Triangular dither
-          s += (Math.random() - Math.random()) * errRange;
+          s += (Math.random() - Math.random()) * lsb;
           // 4. Quantize
           s = Math.round(s * halfLev) / halfLev;
           // 5. Anti-alias (adjacent-sample average with stateful prev)
