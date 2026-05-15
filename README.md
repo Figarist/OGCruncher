@@ -2,7 +2,9 @@
 
 **OGCruncher** is a professional-grade, in-browser audio workstation for bit-crushing and lo-fi DSP processing. Built for sound designers and game developers, it enables high-speed batch conversion of audio assets with a focus on efficiency, precision, and aesthetic feedback.
 
-![OGCruncher UI](https://raw.githubusercontent.com/Figarist/OGCruncher/master/www/icons/icon-512.png)
+### 🌐 [Live Demo: figarist.github.io/OGCruncher](https://figarist.github.io/OGCruncher/)
+
+![OGCruncher UI](./public/images/logo.svg)
 
 ## 🚀 Key Features
 
@@ -22,30 +24,32 @@
   - **Intelligent Queue**: Individual file management and batch ZIP exports.
 - **English Documentation**: Beginner-friendly professional tooltips for every parameter.
 
-## 🛠️ Technology Stack
-
-- **Frontend**: Vanilla HTML5, CSS3 (Custom Bento-grid UI), and ES6+ JavaScript.
+- **Frontend**: Vanilla HTML5, CSS3 (Custom Bento-grid UI), and modular **ES6+ JavaScript**.
+- **Build System**: **Vite** for optimized bundling, HMR, and cache busting.
 - **Audio Engine**: Web Audio API (Offline processing). No external DSP frameworks.
-- **Format Support**: Direct encoding to high-compression **Ogg Vorbis** (Quality 0) for optimized game assets.
-- **Environment**: Progressive Web App (PWA) with offline support and Desktop packaging via **Neutralinojs**.
+- **Format Support**: Direct encoding to high-compression **Ogg Vorbis** (Quality 0), MP3, and WAV.
+- **Environment**: Progressive Web App (PWA) via `vite-plugin-pwa` and Desktop packaging via **Neutralinojs**.
 
 ## 💻 Development
 
 ### Running Locally
-You can serve the application using any static file server:
+1. Install dependencies:
 ```bash
-# Python
-python -m http.server 8000
-
-# Node.js
-npx serve www
+npm install
+```
+2. Start the development server:
+```bash
+npm run dev
 ```
 
 ### Desktop Build (Neutralinojs)
 To generate standalone binaries for Windows, macOS, and Linux:
+1. Build the frontend assets:
 ```bash
-npm install -g @neutralinojs/neu
-neu update
+npm run build
+```
+2. Build the desktop app:
+```bash
 neu build
 ```
 
