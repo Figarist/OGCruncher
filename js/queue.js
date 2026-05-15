@@ -189,7 +189,7 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal) {
       await decodeCtx.close();
     }
 
-    const targetRate = Math.min(Math.max(state.sampleRate, 3000), 48000);
+    const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
     const numChannels = state.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
     const targetPlaybackRate = state.playbackRate || 1.0;
 
