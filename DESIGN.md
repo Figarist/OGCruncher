@@ -5,7 +5,17 @@
 
 ## 2. Technical Architecture
 
-### 2.1 Engine Philosophy: "Zero-Allocation"
+### 2.1 Build System & Modularization
+The project uses **Vite** for modern development and optimized production builds. The codebase is fully modularized using **ES Modules (ESM)**, with logic split into specialized files in the `js/` directory:
+- `main.js`: Entry point.
+- `state.js`: Global state management and synchronization.
+- `dsp.js`: Core audio processing logic.
+- `ui.js`: DOM manipulation and layout handling.
+- `preview.js`: Audio playback and A/B comparison.
+- `encoders.js`: OGG/MP3/WAV export wrappers.
+- `utils.js`: Helper functions.
+
+### 2.2 Engine Philosophy: "Zero-Allocation"
 The core DSP engine follows a **zero-allocation** style, performing buffer mutations in-place on `Float32Array` objects. This minimizes Garbage Collection (GC) overhead during heavy batch processing.
 
 ### 2.2 Audio Pipeline
@@ -75,7 +85,7 @@ The interface follows a **Flexible Bento Grid** layout, optimized for a left-to-
 - **Deep Linking**: All parameters are encodable into the URL hash for preset sharing.
 - **Batch Processing**: Parallel file handling with ZIP export via `JSZip`.
 - **Layout Persistence**: Custom panel widths are saved to `localStorage`.
-- **PWA & Offline**: Full Service Worker integration for offline reliability.
+- **PWA & Offline**: Managed via `vite-plugin-pwa`. It automatically generates a service worker that caches all critical assets, including heavy encoder libraries (`.js` and `.mem` files), ensuring reliability in zero-connectivity environments.
 - **Cross-Platform**: Optimized for both high-resolution desktops and touch-friendly mobile devices.
 
 ## 6. Technical Constraints
