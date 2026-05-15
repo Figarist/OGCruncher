@@ -92,6 +92,37 @@ export function normalizeBuffer(buf) {
   }
 }
 
+/**
+ * Compute RMS and peak from an AudioBuffer (all channels averaged).
+ * @param {AudioBuffer} audioBuffer
+ * @returns {{ rmsDb: number, peakDb: number }}
+ */
+export function computeAudioMetrics(audioBuffer) {
+  let sumSq = 0;
+  let peak = 0;
+  let totalSamples = 0;
+
+  for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+    const data = audioBuffer.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) {
+      const s = data[i];
+      sumSq += s * s;
+      const a = s < 0 ? -s : s;
+      if (a > peak) peak = a;
+    }
+    totalSamples += data.length;
+  }
+
+  const rms = Math.sqrt(sumSq / (totalSamples || 1));
+  const rmsDb = rms > 1e-9 ? 20 * Math.log10(rms) : -Infinity;
+  const peakDb = peak > 1e-9 ? 20 * Math.log10(peak) : -Infinity;
+
+  return {
+    rmsDb: isFinite(rmsDb) ? rmsDb : -96,
+    peakDb: isFinite(peakDb) ? peakDb : -96,
+  };
+}
+
 export function buildFilterChain(offCtx, sourceNode, params) {
   let lastNode = sourceNode;
 
