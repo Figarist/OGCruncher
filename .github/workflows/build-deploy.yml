@@ -3,6 +3,7 @@ name: Build & Deploy
 on:
   push:
     branches: [ "master", "main" ]
+    tags: [ "v*" ]
   workflow_dispatch:
 
 permissions:
@@ -47,10 +48,11 @@ jobs:
         run: cd dist && zip -r ../OGCruncher-Desktop.zip ./*
 
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Auto-Build Release ${{ github.run_number }}
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           files: OGCruncher-Desktop.zip
           draft: false
           prerelease: false
