@@ -59,7 +59,7 @@ async function ensureWorklet() {
   if (workletReady) return;
   if (!previewCtx) previewCtx = new (window.AudioContext || window.webkitAudioContext)();
   try {
-    await previewCtx.audioWorklet.addModule('./dsp-processor.js');
+    await previewCtx.audioWorklet.addModule('./js/dsp-processor.js');
     workletReady = true;
     log('AudioWorklet engine ready.', 'sys');
   } catch (err) {
@@ -185,74 +185,81 @@ export async function togglePreview() {
       previewDecoded = await previewCtx.decodeAudioData(arrayBuf);
     }
 
-    const targetRate = state.sampleRate;
     const numChannels = state.stereo ? Math.min(previewDecoded.numberOfChannels, 2) : 1;
     const pRate = state.playbackRate || 1.0;
 
-    // 2. Setup Nodes
-    gainCrunched = previewCtx.createGain();
-    gainOriginal = previewCtx.createGain();
-    analyserCrunched = previewCtx.createAnalyser();
-    analyserOriginal = previewCtx.createAnalyser();
-    
-    gainCrunched.gain.value = isComparingOriginal ? 0 : 1;
-    gainOriginal.gain.value = isComparingOriginal ? 1 : 0;
-
     if (workletReady) {
-      // ── AudioWorklet Path ──────────────────────────────────────────────
-      hpfNode  = previewCtx.createBiquadFilter();
-      hpfNode.type = 'highpass';
-      hpfNode.frequency.value = state.hpf;
+      // ── Step 1: Resample to targetRate (this IS the lo-fi sample rate effect) ──
+      const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
+      
+      previewResampled = await renderFilteredBuffer(previewDecoded, {
+        sampleRate: targetRate,
+        playbackRate: pRate,
+        hpf: state.hpf,
+        lpf: state.lpf,
+        bass: state.bass,
+      }, numChannels);
+      // previewResampled is now at targetRate with filters already applied
 
-      lpfNode  = previewCtx.createBiquadFilter();
-      lpfNode.type = 'lowpass';
-      lpfNode.frequency.value = state.lpf;
+      // ── Step 2: Create a live AudioContext at targetRate for correct playback ──
+      // Close existing context if sample rate changed
+      if (previewCtx && previewCtx.sampleRate !== targetRate) {
+        previewCtx.close();
+        previewCtx = null;
+        workletReady = false;
+      }
+      if (!previewCtx) {
+        previewCtx = new AudioContext({ sampleRate: targetRate });
+        await previewCtx.audioWorklet.addModule('./js/dsp-processor.js');
+        workletReady = true;
+      }
+      if (previewCtx.state === 'suspended') await previewCtx.resume();
 
-      bassNode = previewCtx.createBiquadFilter();
-      bassNode.type = 'peaking';
-      bassNode.frequency.value = 80;
-      bassNode.Q.value = 0.7;
-      bassNode.gain.value = state.bass;
+      // Recreate gain/analyser nodes on the new context
+      gainCrunched = previewCtx.createGain();
+      gainOriginal = previewCtx.createGain();
+      analyserCrunched = previewCtx.createAnalyser();
+      analyserOriginal = previewCtx.createAnalyser();
+      gainCrunched.gain.value = isComparingOriginal ? 0 : 1;
+      gainOriginal.gain.value = isComparingOriginal ? 1 : 0;
 
+      // ── Step 3: Worklet for DSP (filters already applied in previewResampled) ──
       dspWorkletNode = new AudioWorkletNode(previewCtx, 'dsp-processor', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
         outputChannelCount: [numChannels],
       });
-
-      await updateDSPPreParams();
       updateWorkletParams();
 
-      // Chain: source → filters → worklet → gain → analyser → destination
-      previewResampled = await renderFilteredBuffer(previewDecoded, { 
-        playbackRate: 1.0, 
-        sampleRate: targetRate 
-      }, numChannels);
-
+      // ── Step 4: Build sources ────────────────────────────────────────────────
       previewSource = previewCtx.createBufferSource();
-      previewSource.buffer = previewResampled;
-      previewSource.playbackRate.value = pRate;
+      previewSource.buffer = previewResampled; // ← resampled + filtered, correct rate
       previewSource.loop = true;
 
-      // Chain: source → filters → worklet → gain → analyser → destination
-      previewSource.connect(hpfNode);
-      hpfNode.connect(lpfNode);
-      lpfNode.connect(bassNode);
-      bassNode.connect(dspWorkletNode);
+      // Crunched path: source → worklet → gainCrunched → destination
+      previewSource.connect(dspWorkletNode);
       dspWorkletNode.connect(gainCrunched);
       dspWorkletNode.connect(analyserCrunched);
       gainCrunched.connect(previewCtx.destination);
 
-      // Original path (raw, no processing)
+      // Original path: source → gainOriginal → destination (no DSP — but same sample rate)
       previewSource.connect(gainOriginal);
-      previewSource.connect(analyserOriginal);
+      previewSource.connect(analyserOriginal); // ← tap BEFORE gain (fix for dual view)
       gainOriginal.connect(previewCtx.destination);
 
-      lastRenderParams = { sampleRate: targetRate, stereo: state.stereo, playbackRate: pRate };
+      lastRenderParams = {
+        sampleRate: targetRate,
+        stereo: state.stereo,
+        playbackRate: pRate,
+        hpf: state.hpf,
+        lpf: state.lpf,
+        bass: state.bass,
+      };
       log('Preview started (AudioWorklet mode)', 'ok');
 
     } else {
       // ── Fallback Path (OfflineAudioContext hot-swap) ────────────────────
+      const targetRate = state.sampleRate;
       previewResampled = await renderFilteredBuffer(previewDecoded, { 
         playbackRate: pRate, 
         sampleRate: targetRate 
@@ -280,6 +287,14 @@ export async function togglePreview() {
       }
 
       previewResampledWet = processedBuf;
+
+      // Recreate gain/analyser nodes on the new context
+      gainCrunched = previewCtx.createGain();
+      gainOriginal = previewCtx.createGain();
+      analyserCrunched = previewCtx.createAnalyser();
+      analyserOriginal = previewCtx.createAnalyser();
+      gainCrunched.gain.value = isComparingOriginal ? 0 : 1;
+      gainOriginal.gain.value = isComparingOriginal ? 1 : 0;
 
       previewSource = previewCtx.createBufferSource();
       previewSource.buffer = previewResampledWet;
@@ -337,26 +352,25 @@ export function stopPreview() {
     try { dspWorkletNode.disconnect(); } catch (_) {}
     dspWorkletNode = null;
   }
-  hpfNode = lpfNode = bassNode = null;
+  if (gainCrunched) { try { gainCrunched.disconnect(); } catch(_) {} gainCrunched = null; }
+  if (gainOriginal) { try { gainOriginal.disconnect(); } catch(_) {} gainOriginal = null; }
+  if (analyserCrunched) { analyserCrunched = null; }
+  if (analyserOriginal) { analyserOriginal = null; }
+
   previewDecoded = null;
   previewResampled = null;
   previewResampledWet = null;
-  metricsDrySample = null;
-  metricsProcessedSample = null;
-  metricsLastDSPParams = "";
-  metricsCachedCrunch = null;
-  metricsLastDecoded = null;
-  lastPreParams = "";
 
-  _dom.btnPreview.classList.remove('playing');
-  _dom.btnPreviewLbl.textContent = 'PREVIEW';
-  _dom.previewIcon.textContent = '▶';
-  _dom.abContainer.style.display = 'none';
-  _dom.dropContent.style.display = 'flex';
-  _dom.visualizer.style.display = 'none';
+  // Reset UI
+  if (_dom.btnPreview) _dom.btnPreview.classList.remove('playing');
+  if (_dom.btnPreviewLbl) _dom.btnPreviewLbl.textContent = 'PREVIEW';
+  if (_dom.previewIcon) _dom.previewIcon.textContent = '▶';
+  if (_dom.abContainer) _dom.abContainer.style.display = 'none';
+  if (_dom.dropContent) _dom.dropContent.style.display = 'flex';
+  if (_dom.visualizer) _dom.visualizer.style.display = 'none';
   if (_dom.metricsPanel) _dom.metricsPanel.style.display = 'none';
-  
-  log('Preview stopped.', 'sys');
+
+  isComparingOriginal = false;
 }
 
 export function toggleAB() {
@@ -400,9 +414,12 @@ export function requestPreviewUpdate() {
     if (bassNode) bassNode.gain.setTargetAtTime(state.bass, previewCtx.currentTime, 0.01);
 
     const needsFullRestart =
-      lastRenderParams.sampleRate    !== state.sampleRate    ||
-      lastRenderParams.stereo        !== state.stereo        ||
-      lastRenderParams.playbackRate  !== state.playbackRate;
+      lastRenderParams.sampleRate   !== state.sampleRate   ||
+      lastRenderParams.stereo       !== state.stereo        ||
+      lastRenderParams.playbackRate !== state.playbackRate  ||
+      lastRenderParams.hpf          !== state.hpf           ||
+      lastRenderParams.lpf          !== state.lpf           ||
+      lastRenderParams.bass         !== state.bass;
 
     if (needsFullRestart) {
       await stopPreview();
@@ -416,7 +433,10 @@ export function requestPreviewUpdate() {
     lastRenderParams = {
       sampleRate: state.sampleRate,
       stereo: state.stereo,
-      playbackRate: state.playbackRate
+      playbackRate: state.playbackRate,
+      hpf: state.hpf,
+      lpf: state.lpf,
+      bass: state.bass
     };
 
   }, 50);

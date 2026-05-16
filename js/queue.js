@@ -22,7 +22,7 @@ let _worker = null;
 
 function getWorker() {
   if (!_worker) {
-    _worker = new Worker('./dsp.worker.js'); // classic worker, no { type: 'module' }
+    _worker = new Worker('./js/dsp.worker.js'); // classic worker, no { type: 'module' }
   }
   return _worker;
 }
