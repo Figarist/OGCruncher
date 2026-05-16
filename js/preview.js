@@ -41,11 +41,6 @@ let lpfNode = null;
 let bassNode = null;
 let workletReady = false;         // true after addModule() resolves
 
-// Batch consistency parameters
-let preGain = 1.0;
-let dcOffset = 0.0;
-let postGain = 1.0;
-let lastPreParams = "";
 
 /* ════════════════════════════════════════════════════════════════════
    INIT
@@ -76,86 +71,9 @@ export function updateWorkletParams() {
     noise:     state.noise,
     crush:     state.crushMode,
     normalize: state.normalize,
-    sampleRate: state.sampleRate,
-    preGain,
-    dcOffset,
-    postGain,
   });
 }
 
-/**
- * Analyze a representative slice of the audio (after filters) 
- * to find global DC and Peak values. This ensures the Worklet's
- * non-linear stages (expander) behave exactly like the Batch Export.
- */
-async function updateDSPPreParams() {
-  if (!previewDecoded) return;
-  
-  const currentParams = `${state.hpf}-${state.lpf}-${state.bass}-${state.sampleRate}`;
-  if (currentParams === lastPreParams && preGain !== 1.0) return;
-  lastPreParams = currentParams;
-
-  // Render a small representative slice (2s from middle)
-  const sampleLen = Math.min(previewDecoded.sampleRate * 2, previewDecoded.length);
-  const startSample = Math.floor((previewDecoded.length - sampleLen) / 2);
-  
-  const sliceBuf = previewCtx.createBuffer(
-    previewDecoded.numberOfChannels,
-    sampleLen,
-    previewDecoded.sampleRate
-  );
-  for (let ch = 0; ch < previewDecoded.numberOfChannels; ch++) {
-    sliceBuf.getChannelData(ch).set(previewDecoded.getChannelData(ch).subarray(startSample, startSample + sampleLen));
-  }
-
-  const filtered = await renderFilteredBuffer(sliceBuf, {
-    hpf: state.hpf,
-    lpf: state.lpf,
-    bass: state.bass,
-    playbackRate: 1.0,
-    sampleRate: state.sampleRate
-  }, state.stereo ? 2 : 1);
-
-  // 1. Calculate DC & Pre-Gain (1/Peak)
-  let sum = 0, total = 0;
-  for (let ch = 0; ch < filtered.numberOfChannels; ch++) {
-    const data = filtered.getChannelData(ch);
-    for (let i = 0; i < data.length; i++) sum += data[i];
-    total += data.length;
-  }
-  dcOffset = sum / (total || 1);
-
-  let peakAfterDC = 0;
-  for (let ch = 0; ch < filtered.numberOfChannels; ch++) {
-    const data = filtered.getChannelData(ch);
-    for (let i = 0; i < data.length; i++) {
-      const a = Math.abs(data[i] - dcOffset);
-      if (a > peakAfterDC) peakAfterDC = a;
-    }
-  }
-  preGain = 1.0 / (peakAfterDC + 1e-9);
-
-  // 2. Calculate Post-Gain (matches batch Post-Normalize)
-  if (state.normalize) {
-    const testSize = Math.min(16000, filtered.length);
-    const testBuf = new Float32Array(testSize);
-    testBuf.set(filtered.getChannelData(0).subarray(0, testSize));
-    
-    // Simulate processDSP (without internal normalization to get raw output peak)
-    // Actually dsp.js processDSP ALWAYS normalizes internally. 
-    // We want the peak AFTER crunch but BEFORE post-normalize.
-    processDSP(testBuf, state.bitDepth, state.crushMode, state.grit, state.noise);
-    
-    let outPeak = 0;
-    for (let i = 0; i < testSize; i++) {
-      const a = Math.abs(testBuf[i]);
-      if (a > outPeak) outPeak = a;
-    }
-    postGain = 1.0 / (outPeak + 1e-9);
-  } else {
-    postGain = 1.0;
-  }
-}
 
 /* ════════════════════════════════════════════════════════════════════
    PREVIEW CONTROLS
@@ -199,10 +117,8 @@ export async function togglePreview() {
         lpf: state.lpf,
         bass: state.bass,
       }, numChannels);
-      // previewResampled is now at targetRate with filters already applied
 
       // ── Step 2: Create a live AudioContext at targetRate for correct playback ──
-      // Close existing context if sample rate changed
       if (previewCtx && previewCtx.sampleRate !== targetRate) {
         previewCtx.close();
         previewCtx = null;
@@ -233,18 +149,16 @@ export async function togglePreview() {
 
       // ── Step 4: Build sources ────────────────────────────────────────────────
       previewSource = previewCtx.createBufferSource();
-      previewSource.buffer = previewResampled; // ← resampled + filtered, correct rate
+      previewSource.buffer = previewResampled;
       previewSource.loop = true;
 
-      // Crunched path: source → worklet → gainCrunched → destination
       previewSource.connect(dspWorkletNode);
       dspWorkletNode.connect(gainCrunched);
       dspWorkletNode.connect(analyserCrunched);
       gainCrunched.connect(previewCtx.destination);
 
-      // Original path: source → gainOriginal → destination (no DSP — but same sample rate)
       previewSource.connect(gainOriginal);
-      previewSource.connect(analyserOriginal); // ← tap BEFORE gain (fix for dual view)
+      previewSource.connect(analyserOriginal);
       gainOriginal.connect(previewCtx.destination);
 
       lastRenderParams = {
@@ -256,6 +170,7 @@ export async function togglePreview() {
         bass: state.bass,
       };
       log('Preview started (AudioWorklet mode)', 'ok');
+
 
     } else {
       // ── Fallback Path (OfflineAudioContext hot-swap) ────────────────────
@@ -406,15 +321,11 @@ export function requestPreviewUpdate() {
     }
 
     // ── AudioWorklet Path ────────────────────────────────────────────────
-    await updateDSPPreParams();
     updateWorkletParams();
-
-    if (hpfNode) hpfNode.frequency.setTargetAtTime(state.hpf, previewCtx.currentTime, 0.01);
-    if (lpfNode) lpfNode.frequency.setTargetAtTime(state.lpf, previewCtx.currentTime, 0.01);
-    if (bassNode) bassNode.gain.setTargetAtTime(state.bass, previewCtx.currentTime, 0.01);
 
     const needsFullRestart =
       lastRenderParams.sampleRate   !== state.sampleRate   ||
+
       lastRenderParams.stereo       !== state.stereo        ||
       lastRenderParams.playbackRate !== state.playbackRate  ||
       lastRenderParams.hpf          !== state.hpf           ||
