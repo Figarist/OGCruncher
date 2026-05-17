@@ -5,7 +5,7 @@
 
 'use strict';
 
-// Load encoder globals (paths relative to worker file in root)
+// Load encoder globals (paths relative to root)
 importScripts('OggVorbisEncoder.min.js', 'lame.min.js');
 
 // ── DSP FUNCTIONS ────────────────────────────────────────────────────────────
@@ -60,6 +60,7 @@ function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
     for (let i = 1; i < N; i++) {
       buf[i] = (buf[i] + buf[i - 1]) * 0.5;
     }
+
   }
 
   // Check for clipping BEFORE final saturation
