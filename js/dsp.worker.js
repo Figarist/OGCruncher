@@ -8,8 +8,11 @@
 // Increase Wasm memory limit for OggVorbisEncoder (default 16MB is too small for long files)
 self.OggVorbisEncoderConfig = { TOTAL_MEMORY: 134217728 }; // 128 MB
 
-// Load encoder globals (paths relative to root)
-importScripts('OggVorbisEncoder.min.js', 'lame.min.js');
+// Dynamically resolve unhashed static library URLs using Web API URL constructor
+importScripts(
+  new URL('../OggVorbisEncoder.min.js', self.location.href).href,
+  new URL('../lame.min.js', self.location.href).href
+);
 
 // ── DSP FUNCTIONS ────────────────────────────────────────────────────────────
 

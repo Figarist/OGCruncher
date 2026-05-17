@@ -9,6 +9,7 @@ import { state } from './state.js';
 import { log, showToast, formatBytes, setBadge } from './utils.js';
 import { buildFilterChain, safeOfflineCtx } from './dsp.js';
 import { stopPreview } from './preview.js';
+import DSPWorker from './dsp.worker.js?worker&type=classic';
 
 /* ════════════════════════════════════════════════════════════════════
    DOM REFS (Initialized via initQueue)
@@ -22,7 +23,7 @@ let _worker = null;
 
 function getWorker() {
   if (!_worker) {
-    _worker = new Worker('./dsp.worker.js'); // classic worker — served from /public (root in dist)
+    _worker = new DSPWorker();
   }
   return _worker;
 }
