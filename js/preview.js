@@ -24,6 +24,7 @@ let analyserOriginal = null;
 let previewDecoded = null;    // Raw dry buffer
 let previewResampled = null;  // Dry buffer at target SR
 let previewResampledWet = null; // Filtered buffer at target SR
+let currentPreGain = 1.0; // Global pre-gain for worklet
 
 let isComparingOriginal = false;
 let liveUpdateTimer = null;
@@ -54,7 +55,7 @@ async function ensureWorklet() {
   if (workletReady) return;
   if (!previewCtx) previewCtx = new (window.AudioContext || window.webkitAudioContext)();
   try {
-    await previewCtx.audioWorklet.addModule('./js/dsp-processor.js');
+    await previewCtx.audioWorklet.addModule('./dsp-processor.js');
     workletReady = true;
     log('AudioWorklet engine ready.', 'sys');
   } catch (err) {
@@ -71,6 +72,7 @@ export function updateWorkletParams() {
     noise:     state.noise,
     crush:     state.crushMode,
     normalize: state.normalize,
+    preGain:   currentPreGain,
   });
 }
 
@@ -118,6 +120,16 @@ export async function togglePreview() {
         bass: state.bass,
       }, numChannels);
 
+      let globalPeak = 0;
+      for (let ch = 0; ch < previewResampled.numberOfChannels; ch++) {
+        const data = previewResampled.getChannelData(ch);
+        for (let i = 0; i < data.length; i++) {
+          const a = data[i] < 0 ? -data[i] : data[i];
+          if (a > globalPeak) globalPeak = a;
+        }
+      }
+      currentPreGain = 1.0 / (globalPeak + 1e-9);
+
       // ── Step 2: Create a live AudioContext at targetRate for correct playback ──
       if (previewCtx && previewCtx.sampleRate !== targetRate) {
         previewCtx.close();
@@ -126,7 +138,7 @@ export async function togglePreview() {
       }
       if (!previewCtx) {
         previewCtx = new AudioContext({ sampleRate: targetRate });
-        await previewCtx.audioWorklet.addModule('./js/dsp-processor.js');
+    await previewCtx.audioWorklet.addModule('./dsp-processor.js');
         workletReady = true;
       }
       if (previewCtx.state === 'suspended') await previewCtx.resume();

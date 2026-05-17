@@ -8,7 +8,7 @@
 
 ## 🚀 Key Features
 
-- **Professional DSP Engine**: Zero-allocation processing using `OfflineAudioContext` and `Float32Array` for glitch-free, high-performance buffer manipulation.
+- **Professional DSP Engine**: True asynchronous processing using **AudioWorklet** for real-time zero-latency preview and **Web Worker** for high-speed multi-format batch encoding (Ogg, MP3, WAV) to keep the main thread fluid.
 - **Dual Spectrum Analysis**: Real-time frequency visualization comparing **Original** (pre-FX) vs. **Crunched** (post-FX) signals simultaneously. Includes frequency grid markers (1k–20k).
 - **A/B Comparison Workflow**: Instant seamless switching between processed and raw audio during preview with zero latency.
 - **Advanced Parameter Control**:
