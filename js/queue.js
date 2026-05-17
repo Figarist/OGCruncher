@@ -237,7 +237,10 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal) {
         }
       };
 
-      worker.onerror = (err) => reject(new Error(err.message));
+      worker.onerror = (err) => {
+        console.error('Worker global error:', err);
+        reject(new Error(err.message || 'Worker global error (network/syntax)'));
+      };
 
       worker.postMessage({
         type: 'process',
@@ -282,7 +285,9 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal) {
     };
 
   } catch (err) {
-    log(`  ❌ Error: ${file.name}: ${err.message}`, 'error');
+    console.error('Process error:', err);
+    const msg = err.message || err.name || String(err);
+    log(`  ❌ Error: ${file.name}: ${msg}`, 'error');
     setItemState(id, 'error', '✗');
     return null;
   }

@@ -269,6 +269,7 @@ self.onmessage = function(e) {
     }, transferList);
 
   } catch (err) {
-    self.postMessage({ type: 'error', message: err.message, fileName: msg.fileName });
+    const errorString = err.message || err.name || String(err);
+    self.postMessage({ type: 'error', message: errorString, fileName: msg.fileName });
   }
 };
