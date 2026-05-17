@@ -21,12 +21,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: [
         'favicon.ico', 
-        'robots.txt', 
-        'images/*.svg', 
-        'images/*.png',
-        '*.js',
-        '*.mem',
-        'demo.mp3'
+        'robots.txt'
       ],
       manifest: {
         name: 'OGCruncher',
