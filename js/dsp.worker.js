@@ -6,7 +6,16 @@
 'use strict';
 
 // Increase Wasm memory limit for OggVorbisEncoder (default 16MB is too small for long files)
-self.OggVorbisEncoderConfig = { TOTAL_MEMORY: 536870912 }; // 512 MB
+// Also provide locateFile to resolve the relative path of the .mem file from the root directory
+self.OggVorbisEncoderConfig = {
+  TOTAL_MEMORY: 536870912, // 512 MB
+  locateFile: function(path) {
+    if (path.endsWith('.mem')) {
+      return new URL('../' + path, self.location.href).href;
+    }
+    return path;
+  }
+};
 
 // Dynamically resolve unhashed static library URLs using Web API URL constructor
 importScripts(
