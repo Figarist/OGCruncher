@@ -5,6 +5,9 @@
 
 'use strict';
 
+// Increase Wasm memory limit for OggVorbisEncoder (default 16MB is too small for long files)
+self.Module = { TOTAL_MEMORY: 134217728 }; // 128 MB
+
 // Load encoder globals (paths relative to root)
 importScripts('OggVorbisEncoder.min.js', 'lame.min.js');
 
