@@ -109,14 +109,7 @@ function encodeOGG(channels, sampleRate) {
   // @ts-ignore
   const encoder = new OggVorbisEncoder(sampleRate, numChannels, 0.0);
 
-  const CHUNK_SIZE = 65536; 
-  const totalSamples = channels[0].length;
-
-  for (let i = 0; i < totalSamples; i += CHUNK_SIZE) {
-    const chunkEnd = Math.min(i + CHUNK_SIZE, totalSamples);
-    const chunks = channels.map(ch => ch.subarray(i, chunkEnd));
-    encoder.encode(chunks);
-  }
+  encoder.encode(channels);
 
   return encoder.finish(); // Returns ArrayBuffer
 }
