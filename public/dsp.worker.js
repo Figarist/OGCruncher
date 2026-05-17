@@ -6,7 +6,7 @@
 'use strict';
 
 // Increase Wasm memory limit for OggVorbisEncoder (default 16MB is too small for long files)
-self.Module = { TOTAL_MEMORY: 134217728 }; // 128 MB
+self.OggVorbisEncoderConfig = { TOTAL_MEMORY: 134217728 }; // 128 MB
 
 // Load encoder globals (paths relative to root)
 importScripts('OggVorbisEncoder.min.js', 'lame.min.js');
@@ -109,7 +109,14 @@ function encodeOGG(channels, sampleRate) {
   // @ts-ignore
   const encoder = new OggVorbisEncoder(sampleRate, numChannels, 0.0);
 
-  encoder.encode(channels);
+  const CHUNK_SIZE = 65536; 
+  const totalSamples = channels[0].length;
+
+  for (let i = 0; i < totalSamples; i += CHUNK_SIZE) {
+    const chunkEnd = Math.min(i + CHUNK_SIZE, totalSamples);
+    const chunks = channels.map(ch => ch.subarray(i, chunkEnd));
+    encoder.encode(chunks);
+  }
 
   return encoder.finish(); // Returns ArrayBuffer
 }
