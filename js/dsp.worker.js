@@ -116,7 +116,7 @@ function detectClipping(buf) {
 
 // ── ENCODERS (Returning ArrayBuffers for transferability) ────────────────────
 
-function encodeOGG(channels, sampleRate) {
+async function encodeOGG(channels, sampleRate) {
   const numChannels = channels.length;
   // @ts-ignore
   const encoder = new OggVorbisEncoder(sampleRate, numChannels, 0.0);
@@ -130,7 +130,10 @@ function encodeOGG(channels, sampleRate) {
     encoder.encode(chunks);
   }
 
-  return encoder.finish(); // Returns ArrayBuffer
+  // OggVorbisEncoder.finish() returns a Blob, not an ArrayBuffer.
+  // Convert to ArrayBuffer for transferable postMessage.
+  const blob = encoder.finish();
+  return await blob.arrayBuffer();
 }
 
 function encodeWAV(channels, sampleRate, bitDepth) {
@@ -224,7 +227,7 @@ function encodeMP3(channels, sampleRate) {
 
 // ── MESSAGE HANDLER ──────────────────────────────────────────────────────────
 
-self.onmessage = function(e) {
+self.onmessage = async function(e) {
   const msg = e.data;
   if (msg.type !== 'process') return;
 
@@ -252,9 +255,9 @@ self.onmessage = function(e) {
       });
     }
 
-    // 2. Encoding OGG
+    // 2. Encoding OGG (async — finish() returns Blob → ArrayBuffer)
     self.postMessage({ type: 'progress', pct: 40, label: 'Encoding OGG…' });
-    const ogg = encodeOGG(channels, sampleRate);
+    const ogg = await encodeOGG(channels, sampleRate);
 
     // 3. Encoding WAV
     self.postMessage({ type: 'progress', pct: 65, label: 'Encoding WAV…' });

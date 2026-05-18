@@ -487,14 +487,7 @@
   <div id="toast" class="toast" role="status" aria-live="assertive" aria-atomic="true"></div>
 
   <!-- ══════════════ SCRIPTS ══════════════ -->
-  <script>
-    var OggVorbisEncoderConfig = {
-      memoryInitializerPrefixURL: "./"
-    };
-  </script>
-  <script src="OggVorbisEncoder.min.js"></script>
-  <script src="lame.min.js"></script>
-  <script src="jszip.min.js"></script>
+  <!-- Encoders loaded only in Web Worker (dsp.worker.js) via importScripts -->
   <!-- ══════════════ INFO MODAL ══════════════ -->
   <div id="modal-info" class="modal-overlay" hidden>
     <div class="modal-content bento-card">
