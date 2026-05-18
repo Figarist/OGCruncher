@@ -163,8 +163,9 @@ body.is-dragging * {
 .header-progress-fill {
   height: 100%;
   width: 0%;
+  opacity: 0;
   background: linear-gradient(90deg, var(--accent-primary), var(--accent-cyan), var(--accent-secondary));
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
   box-shadow: 0 0 8px var(--accent-primary);
 }
 
@@ -1071,37 +1072,55 @@ body.is-dragging * {
 
 .result-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 14px 16px;
   background: #f3fce8;
   border: 1px solid #c3f0d0;
-  border-radius: 10px;
+  border-radius: 12px;
   animation: item-in .25s ease;
 }
 
-.result-item__name {
-  flex: 1;
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.result-name {
   font-family: var(--font-mono);
-  font-size: .72rem;
+  font-size: .75rem;
+  font-weight: 600;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-all;
+  flex: 1;
+  min-width: 180px;
+}
+
+.daw-hint {
+  font-family: var(--font-sans);
+  font-size: .65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
   white-space: nowrap;
 }
 
-.result-item__size {
-  font-family: var(--font-mono);
-  font-size: .65rem;
-  color: var(--accent-green-d);
+.result-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px; /* Beautiful gap between download buttons */
+  align-items: center;
 }
 
 .btn-download {
   font-family: var(--font-mono);
-  font-size: .68rem;
+  font-size: .65rem;
   font-weight: 600;
-  padding: 6px 14px;
+  padding: 4px 10px; /* Sleeker, less fat padding */
   background: var(--accent-green-d);
   color: #fff;
   border: none;
@@ -1112,8 +1131,9 @@ body.is-dragging * {
   align-items: center;
   gap: 6px;
   transition: all var(--t-fast);
-  box-shadow: 0 2px 8px rgba(122,184,36,.25);
+  box-shadow: 0 2px 6px rgba(122,184,36,.15);
   position: relative;
+  white-space: nowrap; /* Avoid wrapping the file size text inside the button */
 }
 
 .btn-download:active { cursor: grabbing; }

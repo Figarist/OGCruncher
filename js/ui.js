@@ -277,7 +277,25 @@ function updatePresetUI(type) {
 function setProgress(pct, text) {
   const p = pct + '%';
   progressFill.style.width = p;
-  headerProgressFill.style.width = p;
+  
+  if (pct <= 0) {
+    headerProgressFill.style.opacity = '0';
+    setTimeout(() => {
+      headerProgressFill.style.width = '0%';
+    }, 300);
+  } else {
+    headerProgressFill.style.opacity = '1';
+    headerProgressFill.style.width = p;
+  }
+  
+  if (pct >= 100) {
+    setTimeout(() => {
+      headerProgressFill.style.opacity = '0';
+      setTimeout(() => {
+        headerProgressFill.style.width = '0%';
+      }, 300);
+    }, 1000); // Stay full for 1 second, then fade out
+  }
   
   progressText.textContent = text;
   progressPct.textContent = Math.round(pct) + '%';
