@@ -5,6 +5,12 @@
 
 'use strict';
 
+// Wait for Emscripten's async .mem file loading to complete
+let resolveEncoderReady;
+const encoderReadyPromise = new Promise(resolve => {
+  resolveEncoderReady = resolve;
+});
+
 // Increase Wasm memory limit for OggVorbisEncoder (default 16MB is too small for long files)
 // Also provide locateFile to resolve the relative path of the .mem file from the root directory
 self.OggVorbisEncoderConfig = {
@@ -14,15 +20,7 @@ self.OggVorbisEncoderConfig = {
       return new URL('../' + path, self.location.href).href;
     }
     return path;
-  }
-};
-
-// Wait for Emscripten's async .mem file loading to complete
-let resolveEncoderReady;
-const encoderReadyPromise = new Promise(resolve => {
-  resolveEncoderReady = resolve;
-});
-self.Module = {
+  },
   onRuntimeInitialized: function() {
     resolveEncoderReady();
   }
