@@ -161,6 +161,7 @@ export async function startProcessing(setProgress) {
     if (_worker) { _worker.terminate(); _worker = null; }
     
     if (processedCount > 0) {
+      setProgress(100, 'Complete!');
       log(`Batch complete. ${processedCount} files processed.`, 'ok');
       showToast(`✅ ${processedCount} files crunched!`, 'ok');
       setBadge('DONE', 'badge--green');
@@ -168,6 +169,7 @@ export async function startProcessing(setProgress) {
         showToast(`⚠ Clipping in ${clippingBatchCount} files!`, 'error');
       }
     } else {
+      setProgress(0, '');
       setBadge('IDLE', 'badge--amber');
     }
   }
