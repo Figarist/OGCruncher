@@ -17,6 +17,17 @@ self.OggVorbisEncoderConfig = {
   }
 };
 
+// Wait for Emscripten's async .mem file loading to complete
+let resolveEncoderReady;
+const encoderReadyPromise = new Promise(resolve => {
+  resolveEncoderReady = resolve;
+});
+self.Module = {
+  onRuntimeInitialized: function() {
+    resolveEncoderReady();
+  }
+};
+
 // Dynamically resolve unhashed static library URLs using Web API URL constructor
 importScripts(
   new URL('../OggVorbisEncoder.min.js', self.location.href).href,
@@ -118,6 +129,10 @@ function detectClipping(buf) {
 
 async function encodeOGG(channels, sampleRate) {
   const numChannels = channels.length;
+  
+  // Wait for the .mem file to be loaded and the heap to be initialized
+  await encoderReadyPromise;
+
   // @ts-ignore
   const encoder = new OggVorbisEncoder(sampleRate, numChannels, 0.0);
 
