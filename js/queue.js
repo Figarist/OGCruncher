@@ -217,7 +217,7 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal) {
       channels.push(new Float32Array(resampled.getChannelData(ch)));
     }
 
-    log(`  Decoded: ${decoded.numberOfChannels}ch → ${numChannels}ch | ${decoded.sampleRate}Hz → ${targetRate}Hz`, 'sys');
+    log(`  Decoded: ${decoded.numberOfChannels}ch → ${numChannels}ch | ${decoded.sampleRate}Hz → ${resampled.sampleRate}Hz`, 'sys');
     setProgress(
       (fileIndex / fileTotal) * 100 + (1 / fileTotal) * 5,
       `File ${fileIndex + 1}/${fileTotal} — Sending to worker…`
@@ -248,7 +248,7 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal) {
       worker.postMessage({
         type: 'process',
         channels,
-        sampleRate: targetRate,
+        sampleRate: resampled.sampleRate,
         bitDepth: state.bitDepth,
         crushMode: state.crushMode,
         grit: state.grit,
@@ -270,7 +270,7 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal) {
     }
 
     const stem = file.name.replace(/\.[^.]+$/, '');
-    const outNameBase = `${stem}_crunched_${state.bitDepth}bit_${targetRate}hz`;
+    const outNameBase = `${stem}_crunched_${state.bitDepth}bit_${resampled.sampleRate}hz`;
     const sizeOGG = formatBytes(blobOGG.size);
     const sizeWAV = formatBytes(blobWAV.size);
     const sizeMP3 = formatBytes(blobMP3.size);

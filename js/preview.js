@@ -107,6 +107,39 @@ export async function togglePreview() {
     await ensureWorklet();
     if (mySessionId !== _previewSessionId) return;
 
+    let useWorklet = workletReady;
+    const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
+
+    if (useWorklet) {
+      try {
+        if (previewCtx && previewCtx.sampleRate !== targetRate) {
+          await previewCtx.close();
+          if (mySessionId !== _previewSessionId) return;
+          previewCtx = null;
+        }
+        if (!previewCtx) {
+          previewCtx = new AudioContext({ sampleRate: targetRate });
+          await previewCtx.audioWorklet.addModule('./dsp-processor.js');
+          if (mySessionId !== _previewSessionId) return;
+        }
+      } catch (e) {
+        console.warn('Could not create live AudioContext at target rate. Switching to offline fallback path.', e);
+        useWorklet = false;
+        if (previewCtx) {
+          try { await previewCtx.close(); } catch (_) {}
+          previewCtx = null;
+        }
+      }
+    }
+
+    if (!previewCtx) {
+      previewCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (previewCtx.state === 'suspended') {
+        await previewCtx.resume();
+        if (mySessionId !== _previewSessionId) return;
+      }
+    }
+
     // 1. Decode first file if needed
     if (!previewDecoded) {
       const arrayBuf = await files[0].arrayBuffer();
@@ -118,10 +151,8 @@ export async function togglePreview() {
     const numChannels = state.stereo ? Math.min(previewDecoded.numberOfChannels, 2) : 1;
     const pRate = state.playbackRate || 1.0;
 
-    if (workletReady) {
+    if (useWorklet) {
       // ── Step 1: Resample to targetRate (this IS the lo-fi sample rate effect) ──
-      const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
-      
       previewResampled = await renderFilteredBuffer(previewDecoded, {
         sampleRate: targetRate,
         playbackRate: pRate,
@@ -146,24 +177,6 @@ export async function togglePreview() {
         }
       }
       currentPreGain = 1.0 / (globalPeak + 1e-9);
-
-      // ── Step 2: Create a live AudioContext at targetRate for correct playback ──
-      if (previewCtx && previewCtx.sampleRate !== targetRate) {
-        await previewCtx.close();
-        if (mySessionId !== _previewSessionId) return;
-        previewCtx = null;
-        workletReady = false;
-      }
-      if (!previewCtx) {
-        previewCtx = new AudioContext({ sampleRate: targetRate });
-        await previewCtx.audioWorklet.addModule('./dsp-processor.js');
-        if (mySessionId !== _previewSessionId) return;
-        workletReady = true;
-      }
-      if (previewCtx.state === 'suspended') {
-        await previewCtx.resume();
-        if (mySessionId !== _previewSessionId) return;
-      }
 
       // Recreate gain/analyser nodes on the new context
       gainCrunched = previewCtx.createGain();
