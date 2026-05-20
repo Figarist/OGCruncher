@@ -30,6 +30,8 @@ const abStatus = $('ab-status');
 const previewIcon = $('preview-icon');
 const btnClearQueue = $('btn-clear-queue');
 const btnPresetAuthor = $('btn-preset-author');
+const btnPresetNes = $('btn-preset-nes');
+const btnPresetAmiga = $('btn-preset-amiga');
 const btnPresetUser = $('btn-preset-user');
 const btnSaveCustom = $('btn-save-custom');
 const userPresetMeta = $('preset-user-meta');
@@ -283,6 +285,8 @@ function applyParamsToUI(p) {
 
 function updatePresetUI(type) {
   btnPresetAuthor.classList.toggle('active', type === 'author');
+  if (btnPresetNes) btnPresetNes.classList.toggle('active', type === 'nes');
+  if (btnPresetAmiga) btnPresetAmiga.classList.toggle('active', type === 'amiga');
   btnPresetUser.classList.toggle('active', type === 'user');
 }
 
@@ -499,24 +503,76 @@ btnCopyLink.addEventListener('click', async () => {
 
 btnPresetAuthor.addEventListener('click', () => {
   pushHistory();
-  pauseHistory(true);
-  syncBitDepth(8);
-  syncSampleRate(22050);
-  syncGrit(1.0);
-  syncNoise(0);
-  syncHpf(20);
-  syncLpf(20000);
-  syncBass(0);
-  if (!state.crushMode) btnMarioToggle.click();
-  if (state.stereo) btnStereoToggle.click();
-  if (!state.normalize) btnNormalizeToggle.click();
+  applyParamsToUI({
+    bitDepth: 8,
+    sampleRate: 22050,
+    grit: 1.0,
+    noise: 0,
+    playbackRate: 1.0,
+    hpf: 20,
+    lpf: 20000,
+    bass: 0,
+    crushMode: true,
+    stereo: false,
+    normalize: true
+  });
   updatePresetUI('author');
   log('preset: LO-Q (author default)', 'accent');
   showToast('◉ author preset loaded', 'info');
   saveState();
-  pauseHistory(false);
   updateWorkletParams();
+  if (state.liveUpdate) requestPreviewUpdate();
 });
+
+if (btnPresetNes) {
+  btnPresetNes.addEventListener('click', () => {
+    pushHistory();
+    applyParamsToUI({
+      bitDepth: 4,
+      sampleRate: 12000,
+      grit: 1.2,
+      noise: 0,
+      playbackRate: 1.0,
+      hpf: 80,
+      lpf: 6000,
+      bass: 2,
+      crushMode: true,
+      stereo: false,
+      normalize: true
+    });
+    updatePresetUI('nes');
+    log('preset: NES 8-BIT (retro gaming classic)', 'accent');
+    showToast('🎮 NES 8-bit preset loaded', 'info');
+    saveState();
+    updateWorkletParams();
+    if (state.liveUpdate) requestPreviewUpdate();
+  });
+}
+
+if (btnPresetAmiga) {
+  btnPresetAmiga.addEventListener('click', () => {
+    pushHistory();
+    applyParamsToUI({
+      bitDepth: 8,
+      sampleRate: 28000,
+      grit: 1.5,
+      noise: 0.005,
+      playbackRate: 1.0,
+      hpf: 20,
+      lpf: 10000,
+      bass: 0,
+      crushMode: false,
+      stereo: true,
+      normalize: true
+    });
+    updatePresetUI('amiga');
+    log('preset: AMIGA 500 (vintage sampler)', 'accent');
+    showToast('💾 Amiga 500 preset loaded', 'info');
+    saveState();
+    updateWorkletParams();
+    if (state.liveUpdate) requestPreviewUpdate();
+  });
+}
 
 btnPresetUser.addEventListener('click', () => {
   const saved = localStorage.getItem('ogcruncher_preset');
@@ -527,6 +583,9 @@ btnPresetUser.addEventListener('click', () => {
   updatePresetUI('user');
   log('preset: MY PRESET (user custom)', 'accent');
   showToast('👤 custom preset loaded', 'info');
+  saveState();
+  updateWorkletParams();
+  if (state.liveUpdate) requestPreviewUpdate();
 });
 
 btnSaveCustom.addEventListener('click', () => {
@@ -556,7 +615,7 @@ function setControlsEnabled(enabled) {
     sliderBit, sliderSr, sliderGrit, sliderNoise, sliderSpeed,
     sliderHpf, sliderLpf, sliderBass,
     btnMarioToggle, btnStereoToggle, btnNormalizeToggle,
-    btnLiveUpdate, btnDualView, btnPresetAuthor, btnPresetUser,
+    btnLiveUpdate, btnDualView, btnPresetAuthor, btnPresetNes, btnPresetAmiga, btnPresetUser,
     btnSaveCustom, btnClearQueue, btnLoadDemo, fileInput, sliderPreviewVolume
   ];
   inputs.forEach(el => {
