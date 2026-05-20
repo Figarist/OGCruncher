@@ -572,6 +572,10 @@ function startVisualizer() {
   const bufferLength = analyserCrunched.frequencyBinCount;
   const dataCrunched = new Uint8Array(bufferLength);
   const dataOriginal = new Uint8Array(bufferLength);
+  const timeCrunched = new Uint8Array(bufferLength);
+  const timeOriginal = new Uint8Array(bufferLength);
+
+  let lastPeak = 0;
 
   const draw = () => {
     if (!_dom.btnPreview.classList.contains('playing')) return;
@@ -579,9 +583,12 @@ function startVisualizer() {
 
     analyserCrunched.getByteFrequencyData(dataCrunched);
     analyserOriginal.getByteFrequencyData(dataOriginal);
+    analyserCrunched.getByteTimeDomainData(timeCrunched);
+    analyserOriginal.getByteTimeDomainData(timeOriginal);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    // 1. Draw frequency bars
     const barWidth = (canvas.width / bufferLength) * 2.5;
     let x = 0;
 
@@ -603,6 +610,43 @@ function startVisualizer() {
 
       x += barWidth + 1;
     }
+
+    // 2. Compute peak level (ballistics)
+    let peakC = 0;
+    let peakO = 0;
+    for (let i = 0; i < bufferLength; i++) {
+      const valC = Math.abs(timeCrunched[i] - 128) / 128;
+      if (valC > peakC) peakC = valC;
+      const valO = Math.abs(timeOriginal[i] - 128) / 128;
+      if (valO > peakO) peakO = valO;
+    }
+
+    let currentPeak = isComparingOriginal ? peakO : peakC;
+    if (state.dualView) {
+      currentPeak = Math.max(peakO, peakC);
+    }
+
+    if (currentPeak >= lastPeak) {
+      lastPeak = currentPeak;
+    } else {
+      // Smooth decay at 60fps
+      lastPeak = lastPeak * 0.92 + currentPeak * 0.08;
+    }
+
+    // 3. Draw horizontal VU Level Meter at the top
+    const meterHeight = 4;
+    const meterY = 0;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.fillRect(0, meterY, canvas.width, meterHeight);
+
+    const meterWidth = Math.min(lastPeak * canvas.width, canvas.width);
+    const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    grad.addColorStop(0, '#c6f6d5');     // Safe green
+    grad.addColorStop(0.65, '#fef3c7');  // Warning yellow
+    grad.addColorStop(0.9, '#ff85a1');   // Red/Pink clipping zone
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, meterY, meterWidth, meterHeight);
   };
 
   draw();
