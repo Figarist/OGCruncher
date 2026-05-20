@@ -94,6 +94,106 @@ function updateQueueUI() {
   _dom.btnProcess.disabled = !hasFiles;
   _dom.btnPreview.disabled = !hasFiles;
   _dom.resultsArea.hidden = _dom.resultsArea.innerHTML === '';
+  updateSavingsEstimate();
+}
+
+export function updateSavingsEstimate() {
+  const container = document.getElementById('savings-estimate');
+  const outOriginalSize = document.getElementById('savings-original-size');
+  const outEstimatedWav = document.getElementById('savings-estimated-wav');
+  const outEstimatedOgg = document.getElementById('savings-estimated-ogg');
+  const outPctWav = document.getElementById('savings-pct-wav');
+  const outPctOgg = document.getElementById('savings-pct-ogg');
+  const outPctBadge = document.getElementById('savings-pct-badge');
+
+  if (!container) return;
+
+  if (state.files.size === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  let totalOriginal = 0;
+  let totalEstimatedWav = 0;
+  let totalEstimatedOgg = 0;
+
+  state.files.forEach(file => {
+    totalOriginal += file.size;
+
+    // Estimate duration of file based on extension and size
+    const ext = file.name.split('.').pop().toLowerCase();
+    let assumedBps = 1411200; // standard 16-bit 44.1kHz stereo WAV
+    if (ext === 'mp3') assumedBps = 192000;
+    else if (ext === 'ogg') assumedBps = 128000;
+    else if (ext === 'flac') assumedBps = 800000;
+    else if (ext === 'm4a' || ext === 'aac') assumedBps = 160000;
+
+    const duration = file.size / (assumedBps / 8);
+
+    // Target configuration
+    const targetRate = state.sampleRate;
+    const targetBits = state.bitDepth;
+    const targetChannels = state.stereo ? 2 : 1;
+
+    // Estimated WAV Size: 44 bytes header + PCM data
+    const targetWavSize = 44 + duration * targetRate * targetChannels * (targetBits / 8);
+    totalEstimatedWav += targetWavSize;
+
+    // Estimated OGG/MP3 Size (Compressed target)
+    // Scale target bitrate with samplerate and channels
+    let oggBitrate = 64000; // standard at 44.1kHz stereo
+    if (targetRate < 16000) oggBitrate = 24000;
+    else if (targetRate < 32000) oggBitrate = 48000;
+
+    if (targetChannels === 1) oggBitrate *= 0.6; // lower bitrate for mono
+
+    const targetOggSize = (duration * oggBitrate) / 8;
+    totalEstimatedOgg += targetOggSize;
+  });
+
+  if (totalOriginal <= 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  // Calculate percentage savings
+  const pctWav = Math.max(0, Math.round(((totalOriginal - totalEstimatedWav) / totalOriginal) * 100));
+  const pctOgg = Math.max(0, Math.round(((totalOriginal - totalEstimatedOgg) / totalOriginal) * 100));
+
+  // Determine global badge percentage (max of the savings, usually OGG)
+  const maxPct = Math.max(pctWav, pctOgg);
+
+  outOriginalSize.textContent = formatBytes(totalOriginal);
+  outEstimatedWav.textContent = formatBytes(totalEstimatedWav);
+  outEstimatedOgg.textContent = formatBytes(totalEstimatedOgg);
+
+  // Set detailed labels
+  if (totalEstimatedWav >= totalOriginal) {
+    outPctWav.textContent = '+0%';
+    outPctWav.style.color = 'var(--text-muted)';
+  } else {
+    outPctWav.textContent = `-${pctWav}%`;
+    outPctWav.style.color = 'var(--accent-primary)';
+  }
+
+  if (totalEstimatedOgg >= totalOriginal) {
+    outPctOgg.textContent = '+0%';
+    outPctOgg.style.color = 'var(--text-muted)';
+  } else {
+    outPctOgg.textContent = `-${pctOgg}%`;
+    outPctOgg.style.color = 'var(--accent-plum)';
+  }
+
+  // Set global badge
+  if (maxPct > 0) {
+    outPctBadge.textContent = `-${maxPct}% SPACE`;
+    outPctBadge.className = 'badge badge--green badge--pulse-green';
+  } else {
+    outPctBadge.textContent = 'NO SAVINGS';
+    outPctBadge.className = 'badge badge--amber';
+  }
+
+  container.style.display = 'block';
 }
 
 function renderQueueItem(id, file) {

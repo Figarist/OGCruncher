@@ -141,7 +141,10 @@
           <p class="drop-title">DROP AUDIO FILES HERE</p>
           <p class="drop-sub">or <label for="file-input" class="file-label-btn">BROWSE FILES</label></p>
           <p class="drop-formats">WAV · MP3 · FLAC · OGG · AIFF</p>
-          <button id="btn-load-demo" class="btn btn--demo btn--xs" title="Test OGCruncher with a pre-loaded track">TRY DEMO TRACK</button>
+          <button id="btn-load-demo" class="btn btn--demo btn--xs" title="Test OGCruncher with a pre-loaded track">
+            <span class="demo-pulse-dot"></span>
+            TRY DEMO TRACK 🎵
+          </button>
         </div>
         <canvas id="visualizer" width="300" height="120" style="display:none; width:100%; height:120px; border-radius:8px;"></canvas>
         <div id="metrics-panel" class="metrics-panel" style="display:none;">
@@ -180,6 +183,30 @@
         <button id="btn-clear-queue" class="btn btn--ghost btn--xs" aria-label="Clear queue">CLEAR</button>
       </div>
       <ul class="file-queue" id="file-queue" aria-live="polite" aria-label="Processing queue"></ul>
+
+      <!-- Savings Estimate Card -->
+      <div id="savings-estimate" class="savings-estimate" style="display:none;">
+        <div class="savings-header">
+          <span class="savings-title-text">⚡ ESTIMATED SAVINGS</span>
+          <span id="savings-pct-badge" class="badge badge--green badge--pulse-green">-0%</span>
+        </div>
+        <div class="savings-grid">
+          <div class="savings-col">
+            <span class="savings-label">ORIGINAL</span>
+            <span id="savings-original-size" class="savings-val">0 KB</span>
+          </div>
+          <div class="savings-col highlight-wav">
+            <span class="savings-label">EST. WAV</span>
+            <span id="savings-estimated-wav" class="savings-val">0 KB</span>
+            <span id="savings-pct-wav" class="savings-sub">-0%</span>
+          </div>
+          <div class="savings-col highlight-ogg">
+            <span class="savings-label">EST. COMPRESSED</span>
+            <span id="savings-estimated-ogg" class="savings-val">0 KB</span>
+            <span id="savings-pct-ogg" class="savings-sub">-0%</span>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- LEFT RESIZER -->

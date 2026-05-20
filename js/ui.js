@@ -7,7 +7,7 @@
 
 import { state, saveState, loadState, updateHash, parseHash, pushHistory, undo, redo, pauseHistory, setOnStateChange } from './state.js';
 import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
-import { initQueue, addFiles, clearQueue, startProcessing, loadDemoTrack, handleItems } from './queue.js';
+import { initQueue, addFiles, clearQueue, startProcessing, loadDemoTrack, handleItems, updateSavingsEstimate } from './queue.js';
 import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, updateWorkletParams, setPreviewVolume, updateLiveFilters } from './preview.js';
 
 const SITE_URL = window.location.origin + window.location.pathname;
@@ -99,6 +99,7 @@ function syncBitDepth(val) {
   saveState();
   updateWorkletParams();
   if (state.liveUpdate) requestPreviewUpdate();
+  updateSavingsEstimate();
 }
 
 function updateSrButtons(val) {
@@ -121,6 +122,7 @@ function syncSampleRate(val) {
   updateSrButtons(val);
   saveState();
   if (state.liveUpdate) requestPreviewUpdate();
+  updateSavingsEstimate();
 }
 window.syncSampleRate = syncSampleRate;
 
@@ -402,6 +404,7 @@ function updatePresetUI() {
   if (btnPresetNes) btnPresetNes.classList.toggle('active', matchNes);
   if (btnPresetAmiga) btnPresetAmiga.classList.toggle('active', matchAmiga);
   btnPresetUser.classList.toggle('active', matchUser);
+  updateSavingsEstimate();
 }
 
 function setProgress(pct, text) {
@@ -599,6 +602,7 @@ btnStereoToggle.addEventListener('click', () => {
   if (state.liveUpdate) requestPreviewUpdate();
   outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
   log(`Output mode: ${state.stereo ? 'STEREO' : 'MONO'}`, 'sys');
+  updateSavingsEstimate();
 });
 
 btnNormalizeToggle.addEventListener('click', () => {
