@@ -8,7 +8,7 @@
 import { state, saveState, loadState, updateHash, parseHash, pushHistory, undo, redo, pauseHistory, setOnStateChange } from './state.js';
 import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
 import { initQueue, addFiles, clearQueue, startProcessing, loadDemoTrack, handleItems } from './queue.js';
-import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, updateWorkletParams, setPreviewVolume } from './preview.js';
+import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, updateWorkletParams, setPreviewVolume, updateLiveFilters } from './preview.js';
 
 const SITE_URL = 'https://figarist.github.io/OGCruncher/';
 
@@ -158,6 +158,7 @@ function syncHpf(val) {
   outHpf.textContent = val > 20 ? `${val} Hz` : '20 Hz';
   updateSliderTrack(sliderHpf);
   saveState();
+  updateLiveFilters();
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
@@ -168,6 +169,7 @@ function syncLpf(val) {
   outLpf.textContent = val < 20000 ? `${val} Hz` : 'OFF';
   updateSliderTrack(sliderLpf);
   saveState();
+  updateLiveFilters();
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
@@ -178,6 +180,7 @@ function syncBass(val) {
   outBass.textContent = val > 0 ? `+${val} dB` : '0 dB';
   updateSliderTrack(sliderBass);
   saveState();
+  updateLiveFilters();
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
@@ -270,6 +273,7 @@ function applyParamsToUI(p) {
     if (outPreviewVolume) {
       outPreviewVolume.textContent = Math.round(p.previewVolume * 100) + '%';
     }
+    setPreviewVolume(state.previewVolume);
   }
   
   if (p.dualView !== undefined) {
@@ -638,11 +642,15 @@ if (btnPresetAmiga) {
 btnPresetUser.addEventListener('click', () => {
   const saved = localStorage.getItem('ogcruncher_preset');
   if (!saved) return;
-  const p = JSON.parse(saved);
-  pushHistory();
-  applyParamsToUI(p);
-  log('preset: MY PRESET (user custom)', 'accent');
-  showToast('👤 custom preset loaded', 'info');
+  try {
+    const p = JSON.parse(saved);
+    pushHistory();
+    applyParamsToUI(p);
+    log('preset: MY PRESET (user custom)', 'accent');
+    showToast('👤 custom preset loaded', 'info');
+  } catch (_) {
+    showToast('❌ Failed to load custom preset', 'error');
+  }
 });
 
 btnSaveCustom.addEventListener('click', () => {
@@ -789,7 +797,8 @@ window.addEventListener('keydown', (e) => {
   initUtils({ logWindow, toast, badgeStatus });
   initQueue({ 
     fileQueue, queueHeader, btnProcess, btnProcessLbl, 
-    btnPreview, resultsArea, progressWrap, btnLoadDemo 
+    btnPreview, resultsArea, progressWrap, btnLoadDemo,
+    panelCenter: $('panel-center')
   });
   initPreview({ 
     btnPreview, btnPreviewLbl, previewIcon, abContainer, 
@@ -828,9 +837,11 @@ window.addEventListener('keydown', (e) => {
 
   const saved = localStorage.getItem('ogcruncher_preset');
   if (saved) {
-    const p = JSON.parse(saved);
-    btnPresetUser.disabled = false;
-    userPresetMeta.textContent = `${p.bitDepth}-bit / ${p.sampleRate}Hz`;
+    try {
+      const p = JSON.parse(saved);
+      btnPresetUser.disabled = false;
+      userPresetMeta.textContent = `${p.bitDepth}-bit / ${p.sampleRate}Hz`;
+    } catch (_) {}
   }
 
 

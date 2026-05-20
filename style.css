@@ -332,6 +332,15 @@ body.is-dragging * {
   animation: panel-in 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
+.panel.panel--disabled {
+  opacity: 0.6;
+  pointer-events: none;
+  filter: grayscale(40%);
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
 /* Elevate panel when tooltip is active to stay above resizers */
 .panel:has([data-tooltip]:hover) {
   z-index: 50;

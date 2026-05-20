@@ -132,6 +132,9 @@ export async function startProcessing(setProgress) {
   if (state.processing || state.files.size === 0) return;
   
   state.processing = true;
+  if (_dom.panelCenter) {
+    _dom.panelCenter.classList.add('panel--disabled');
+  }
   _dom.btnProcess.disabled = true;
   _dom.btnProcessLbl.textContent = 'CRUNCHING...';
   _dom.resultsArea.innerHTML = '';
@@ -155,6 +158,9 @@ export async function startProcessing(setProgress) {
     }
   } finally {
     state.processing = false;
+    if (_dom.panelCenter) {
+      _dom.panelCenter.classList.remove('panel--disabled');
+    }
     _dom.btnProcess.disabled = false;
     _dom.btnProcessLbl.textContent = 'CRUNCH';
     _dom.progressWrap.hidden = true;
