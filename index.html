@@ -365,6 +365,26 @@
           </button>
         </div>
 
+        <!-- Dither Toggle -->
+        <div class="control-group" id="group-dither">
+          <div class="control-header">
+            <label for="toggle-dither" class="control-label" data-tooltip="Adds noise to mask quantization distortion. Turn OFF for classic retro crunch/grit.">DITHER</label>
+            <span id="out-dither" class="control-value" aria-live="polite">ON</span>
+          </div>
+          <button
+            role="switch"
+            aria-checked="true"
+            id="toggle-dither"
+            class="toggle-switch active"
+            aria-label="Toggle triangular dither noise"
+          >
+            <span class="toggle-track">
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-label-text">NOISE SHAPING</span>
+          </button>
+        </div>
+
         <!-- Stereo Toggle -->
         <div class="control-group" id="group-stereo">
           <div class="control-header">

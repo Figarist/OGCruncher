@@ -12,6 +12,7 @@ export const state = {
   bitDepth: 8,
   sampleRate: 22050,
   crushMode: true,    // expander + dither + anti-alias pipeline
+  dither: true,       // optional triangular dither noise
   grit: 1.0,
   noise: 0.0,
   stereo: false,
@@ -57,6 +58,7 @@ export function updateHash() {
   params.set('g', state.grit);
   params.set('n', state.noise);
   params.set('c', state.crushMode ? 1 : 0);
+  params.set('di', state.dither ? 1 : 0);
   params.set('s', state.stereo ? 1 : 0);
   params.set('h', state.hpf);
   params.set('l', state.lpf);
@@ -84,6 +86,7 @@ export function parseHash(applyParamsCallback) {
     if (params.has('g')) p.grit = Math.max(1.0, Math.min(10.0, +params.get('g')));
     if (params.has('n')) p.noise = Math.max(0, Math.min(0.05, +params.get('n')));
     if (params.has('c')) p.crushMode = params.get('c') === '1';
+    if (params.has('di')) p.dither = params.get('di') === '1';
     if (params.has('s')) p.stereo = params.get('s') === '1';
     if (params.has('h')) p.hpf = Math.max(20, Math.min(1000, +params.get('h')));
     if (params.has('l')) p.lpf = Math.max(500, Math.min(20000, +params.get('l')));

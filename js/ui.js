@@ -36,6 +36,7 @@ const btnPresetUser = $('btn-preset-user');
 const btnSaveCustom = $('btn-save-custom');
 const userPresetMeta = $('preset-user-meta');
 const btnMarioToggle = $('toggle-mariomode');
+const btnDitherToggle = $('toggle-dither');
 const btnStereoToggle = $('toggle-stereo');
 const btnNormalizeToggle = $('toggle-normalize');
 const btnCopyLink = $('btn-copy-link');
@@ -50,6 +51,7 @@ const outGrit = $('out-grit');
 const outNoise = $('out-noise');
 const outSpeed = $('out-speed');
 const outMario = $('out-mariomode');
+const outDither = $('out-dither');
 const outNormalize = $('out-normalize');
 const outStereo = $('out-stereo');
 const abContainer = $('ab-container');
@@ -254,6 +256,16 @@ function applyParamsToUI(p) {
     btnMarioToggle.classList.toggle('active', state.crushMode);
     outMario.textContent = state.crushMode ? 'ON' : 'OFF';
   }
+  if (p.dither !== undefined) {
+    state.dither = p.dither;
+    if (btnDitherToggle) {
+      btnDitherToggle.setAttribute('aria-checked', state.dither);
+      btnDitherToggle.classList.toggle('active', state.dither);
+    }
+    if (outDither) {
+      outDither.textContent = state.dither ? 'ON' : 'OFF';
+    }
+  }
   if (p.stereo !== undefined) {
     state.stereo = p.stereo;
     const isForceMono = !state.stereo;
@@ -314,6 +326,7 @@ function updatePresetUI() {
       +state.lpf === +preset.lpf &&
       +state.bass === +preset.bass &&
       !!state.crushMode === !!preset.crushMode &&
+      !!state.dither === !!preset.dither &&
       !!state.stereo === !!preset.stereo &&
       !!state.normalize === !!preset.normalize
     );
@@ -329,6 +342,7 @@ function updatePresetUI() {
     lpf: 20000,
     bass: 0,
     crushMode: true,
+    dither: true,
     stereo: false,
     normalize: true
   };
@@ -343,6 +357,7 @@ function updatePresetUI() {
     lpf: 6000,
     bass: 2,
     crushMode: true,
+    dither: false,
     stereo: false,
     normalize: true
   };
@@ -357,6 +372,7 @@ function updatePresetUI() {
     lpf: 10000,
     bass: 0,
     crushMode: false,
+    dither: false,
     stereo: true,
     normalize: true
   };
@@ -557,6 +573,21 @@ btnMarioToggle.addEventListener('click', () => {
   log(`Crush mode: ${state.crushMode ? 'ENABLED' : 'DISABLED'}`, 'sys');
 });
 
+if (btnDitherToggle) {
+  btnDitherToggle.addEventListener('click', () => {
+    pushHistory();
+    state.activePreset = null;
+    state.dither = !state.dither;
+    btnDitherToggle.setAttribute('aria-checked', state.dither);
+    btnDitherToggle.classList.toggle('active', state.dither);
+    saveState();
+    updateWorkletParams();
+    if (state.liveUpdate) requestPreviewUpdate();
+    if (outDither) outDither.textContent = state.dither ? 'ON' : 'OFF';
+    log(`Dither: ${state.dither ? 'ENABLED' : 'DISABLED'}`, 'sys');
+  });
+}
+
 btnStereoToggle.addEventListener('click', () => {
   pushHistory();
   state.activePreset = null;
@@ -615,6 +646,7 @@ btnPresetAuthor.addEventListener('click', () => {
     lpf: 20000,
     bass: 0,
     crushMode: true,
+    dither: true,
     stereo: false,
     normalize: true
   });
@@ -636,6 +668,7 @@ if (btnPresetNes) {
       lpf: 6000,
       bass: 2,
       crushMode: true,
+      dither: false,
       stereo: false,
       normalize: true
     });
@@ -658,6 +691,7 @@ if (btnPresetAmiga) {
       lpf: 10000,
       bass: 0,
       crushMode: false,
+      dither: false,
       stereo: true,
       normalize: true
     });
@@ -686,6 +720,7 @@ btnSaveCustom.addEventListener('click', () => {
     bitDepth: state.bitDepth,
     sampleRate: state.sampleRate,
     crushMode: state.crushMode,
+    dither: state.dither,
     grit: state.grit,
     noise: state.noise,
     stereo: state.stereo,
@@ -708,7 +743,7 @@ function setControlsEnabled(enabled) {
   const inputs = [
     sliderBit, sliderSr, sliderGrit, sliderNoise, sliderSpeed,
     sliderHpf, sliderLpf, sliderBass,
-    btnMarioToggle, btnStereoToggle, btnNormalizeToggle,
+    btnMarioToggle, btnDitherToggle, btnStereoToggle, btnNormalizeToggle,
     btnLiveUpdate, btnDualView, btnPresetAuthor, btnPresetNes, btnPresetAmiga, btnPresetUser,
     btnSaveCustom, btnClearQueue, btnLoadDemo, fileInput, sliderPreviewVolume
   ];
