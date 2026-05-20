@@ -169,7 +169,11 @@ function setSimpleMode(enabled) {
 }
 
 function syncSimpleQuality(val) {
-  state.simpleQuality = +val;
+  val = +val;
+  if (isNaN(val) || val < 0 || val > 3) {
+    val = 3;
+  }
+  state.simpleQuality = val;
   if (sliderSimpleQuality) {
     sliderSimpleQuality.value = val;
     sliderSimpleQuality.setAttribute('aria-valuenow', val);
