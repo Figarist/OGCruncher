@@ -25,6 +25,7 @@ let analyserOriginal = null;
 
 let previewDecoded = null;    // Raw dry buffer
 let previewResampled = null;  // Dry buffer at target SR
+let previewResampledOrig = null; // High-quality dry buffer at native SR (for comparison)
 let previewResampledWet = null; // Filtered buffer at target SR
 let currentPreGain = 1.0; // Global pre-gain for worklet
 let previewStartTime = 0; // Timestamp when preview playback started
@@ -201,6 +202,12 @@ export async function togglePreview() {
       }, numChannels);
       if (mySessionId !== _previewSessionId) return;
 
+      previewResampledOrig = await renderFilteredBuffer(previewDecoded, {
+        sampleRate: previewCtx.sampleRate,
+        playbackRate: pRate,
+      }, numChannels);
+      if (mySessionId !== _previewSessionId) return;
+
       // previewResampledWet is rendered and cached for metrics estimation
       previewResampledWet = await renderFilteredBuffer(previewResampled, {
         hpf: state.hpf,
@@ -255,7 +262,7 @@ export async function togglePreview() {
       gainCrunched.connect(gainMaster);
 
       previewSourceOrig = previewCtx.createBufferSource();
-      previewSourceOrig.buffer = previewResampled;
+      previewSourceOrig.buffer = previewResampledOrig;
       previewSourceOrig.loop = true;
       previewSourceOrig.connect(gainOriginal);
       previewSourceOrig.connect(analyserOriginal);
@@ -287,6 +294,12 @@ export async function togglePreview() {
       }, numChannels);
       if (mySessionId !== _previewSessionId) return;
       
+      previewResampledOrig = await renderFilteredBuffer(previewDecoded, {
+        sampleRate: previewCtx.sampleRate,
+        playbackRate: pRate,
+      }, numChannels);
+      if (mySessionId !== _previewSessionId) return;
+
       previewResampledWet = await renderFilteredBuffer(previewResampled, {
         hpf: state.hpf,
         lpf: state.lpf,
@@ -333,7 +346,7 @@ export async function togglePreview() {
       gainCrunched.connect(gainMaster);
 
       previewSourceOrig = previewCtx.createBufferSource();
-      previewSourceOrig.buffer = previewResampled;
+      previewSourceOrig.buffer = previewResampledOrig;
       previewSourceOrig.loop = true;
       previewSourceOrig.connect(gainOriginal);
       previewSourceOrig.connect(analyserOriginal);
@@ -411,6 +424,7 @@ export function stopPreview() {
 
   previewDecoded = null;
   previewResampled = null;
+  previewResampledOrig = null;
   previewResampledWet = null;
 
   // Reset UI
@@ -543,10 +557,16 @@ export function requestPreviewUpdate() {
 
     if (shouldHotSwap) {
       // 3. Re-render the buffers
-      if (needsResample || !previewResampled || needsContextRecreation) {
+      if (needsResample || !previewResampled || !previewResampledOrig || needsContextRecreation) {
         previewResampled = await renderFilteredBuffer(previewDecoded, { 
           playbackRate: pRate, 
           sampleRate: targetRate 
+        }, numChannels);
+        if (mySessionId !== _previewSessionId) return;
+
+        previewResampledOrig = await renderFilteredBuffer(previewDecoded, {
+          sampleRate: previewCtx.sampleRate,
+          playbackRate: pRate,
         }, numChannels);
         if (mySessionId !== _previewSessionId) return;
       }
@@ -604,7 +624,7 @@ export function requestPreviewUpdate() {
       }
 
       previewSourceOrig = previewCtx.createBufferSource();
-      previewSourceOrig.buffer = previewResampled;
+      previewSourceOrig.buffer = previewResampledOrig;
       previewSourceOrig.loop = true;
       previewSourceOrig.connect(gainOriginal);
       previewSourceOrig.connect(analyserOriginal);
@@ -703,7 +723,7 @@ function updateMetricsPanel() {
   let metricsOrig, metricsCrunch;
   
   if (workletReady) {
-    const dryBuf = previewResampled || previewDecoded;
+    const dryBuf = previewResampledOrig || previewDecoded;
     const wetBuf = previewResampledWet || dryBuf;
     metricsOrig = computeAudioMetrics(dryBuf);
     
@@ -746,7 +766,7 @@ function updateMetricsPanel() {
     
     metricsCrunch = metricsCachedCrunch;
   } else {
-    metricsOrig = computeAudioMetrics(previewResampled);
+    metricsOrig = computeAudioMetrics(previewResampledOrig || previewResampled);
     metricsCrunch = computeAudioMetrics(previewResampledWet);
   }
 
