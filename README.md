@@ -8,6 +8,9 @@
 
 ## 🚀 Key Features
 
+- **Simple & Advanced UI Modes**: Toggle between a novice-friendly interface with a single 4-step **"Size & Quality"** slider (Tiny, Low, Medium, High) and the full technical parameter rack. State snapshots preserve advanced parameters when toggling back and forth.
+- **Estimated Size Savings Widget**: Real-time comparison card showing original size, estimated WAV size, and estimated compressed (OGG/MP3) size alongside a pulsing green savings percentage badge (e.g. `-80% SPACE`).
+- **Interactive Onboarding**: A pulsing demo track call-to-action button in the dropzone to let beginners test the application immediately with zero effort.
 - **Professional DSP Engine**: True asynchronous processing using **AudioWorklet** for real-time zero-latency preview and **Web Worker** for high-speed multi-format batch encoding (Ogg, MP3, WAV) to keep the main thread fluid.
 - **Dual Spectrum Analysis**: Real-time frequency visualization comparing **Original** (pre-FX) vs. **Crunched** (post-FX) signals simultaneously. Includes frequency grid markers (1k–20k).
 - **A/B Comparison Workflow**: Instant seamless switching between processed and raw audio during preview with zero latency.
@@ -22,7 +25,7 @@
   - **Hotkeys**: Global support for `Space` (Preview), `Enter` (Crunch), `C` (A/B Toggle), and `N` (Live Update).
   - **Auto-Save**: State persistence via `localStorage`—your parameters and layout widths are saved automatically.
   - **Intelligent Queue**: Individual file management and batch ZIP exports.
-- **English Documentation**: Beginner-friendly professional tooltips for every parameter.
+- **English & Ukrainian Documentation**: Beginner-friendly professional tooltips for every parameter.
 
 - **Frontend**: Vanilla HTML5, CSS3 (Custom Bento-grid UI), and modular **ES6+ JavaScript**.
 - **Build System**: **Vite** for optimized bundling, HMR, and cache busting.
