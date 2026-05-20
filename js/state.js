@@ -23,6 +23,7 @@ export const state = {
   normalize: true,    // IMPROVEMENT 2: peak normalization toggle
   dualView: false,    // NEW: show both spectra simultaneously
   previewVolume: 0.8, // Default volume for preview
+  activePreset: 'author',
 };
 
 let onStateChange = null;
@@ -63,6 +64,9 @@ export function updateHash() {
   params.set('norm', state.normalize ? 1 : 0);
   params.set('dv', state.dualView ? 1 : 0);
   params.set('sp', state.playbackRate);
+  if (state.activePreset) {
+    params.set('p', state.activePreset);
+  }
   
   // Use replaceState to avoid polluting back button
   history.replaceState(null, '', '#' + params.toString());
@@ -87,6 +91,12 @@ export function parseHash(applyParamsCallback) {
     if (params.has('norm')) p.normalize = params.get('norm') === '1';
     if (params.has('dv')) p.dualView = params.get('dv') === '1';
     if (params.has('sp')) p.playbackRate = Math.max(0.5, Math.min(2.0, +params.get('sp')));
+    if (params.has('p')) {
+      const activeP = params.get('p');
+      if (['author', 'nes', 'amiga', 'user'].includes(activeP)) {
+        p.activePreset = activeP;
+      }
+    }
     
     applyParamsCallback(p);
   } catch (e) {

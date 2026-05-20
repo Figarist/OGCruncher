@@ -10,7 +10,7 @@ import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.
 import { initQueue, addFiles, clearQueue, startProcessing, loadDemoTrack, handleItems } from './queue.js';
 import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, updateWorkletParams, setPreviewVolume, updateLiveFilters } from './preview.js';
 
-const SITE_URL = 'https://figarist.github.io/OGCruncher/';
+const SITE_URL = window.location.origin + window.location.pathname;
 
 /* ════════════════════════════════════════════════════════════════════
    DOM REFS
@@ -88,6 +88,7 @@ let _installPrompt = null;
 
 function syncBitDepth(val) {
   if (!_isDragging) pushHistory();
+  state.activePreset = null;
   state.bitDepth = +val;
   sliderBit.value = val;
   outBit.textContent = val;
@@ -109,6 +110,7 @@ function updateSrButtons(val) {
 
 function syncSampleRate(val) {
   if (!_isDragging) pushHistory();
+  state.activePreset = null;
   state.sampleRate = +val;
   sliderSr.value = val;
   outSr.innerHTML = `${(+val).toLocaleString()} <span class="unit">Hz</span>`;
@@ -122,6 +124,7 @@ window.syncSampleRate = syncSampleRate;
 
 function syncGrit(val) {
   if (!_isDragging) pushHistory();
+  state.activePreset = null;
   state.grit = +val;
   sliderGrit.value = val;
   outGrit.textContent = val;
@@ -133,6 +136,7 @@ function syncGrit(val) {
 
 function syncNoise(val) {
   if (!_isDragging) pushHistory();
+  state.activePreset = null;
   state.noise = +val;
   sliderNoise.value = val;
   outNoise.textContent = val;
@@ -144,6 +148,7 @@ function syncNoise(val) {
 
 function syncSpeed(val) {
   if (!_isDragging) pushHistory();
+  state.activePreset = null;
   state.playbackRate = parseFloat(val);
   sliderSpeed.value = state.playbackRate;
   outSpeed.textContent = Math.round(state.playbackRate * 100) + '%';
@@ -154,6 +159,7 @@ function syncSpeed(val) {
 
 function syncHpf(val) {
   if (!_isDragging) pushHistory();
+  state.activePreset = null;
   state.hpf = +val;
   sliderHpf.value = val;
   outHpf.textContent = val > 20 ? `${val} Hz` : '20 Hz';
@@ -165,6 +171,7 @@ function syncHpf(val) {
 
 function syncLpf(val) {
   if (!_isDragging) pushHistory();
+  state.activePreset = null;
   state.lpf = +val;
   sliderLpf.value = val;
   outLpf.textContent = val < 20000 ? `${val} Hz` : 'OFF';
@@ -176,6 +183,7 @@ function syncLpf(val) {
 
 function syncBass(val) {
   if (!_isDragging) pushHistory();
+  state.activePreset = null;
   state.bass = +val;
   sliderBass.value = val;
   outBass.textContent = val > 0 ? `+${val} dB` : '0 dB';
@@ -282,8 +290,12 @@ function applyParamsToUI(p) {
     btnDualView.classList.toggle('active', state.dualView);
     btnDualView.textContent = `DUAL VIEW: ${state.dualView ? 'ON' : 'OFF'}`;
   }
+  if (p.activePreset !== undefined) {
+    state.activePreset = p.activePreset;
+  }
   
   pauseHistory(false);
+  saveState();
   updatePresetUI();
   updateWorkletParams();
   if (state.liveUpdate) requestPreviewUpdate();
@@ -357,10 +369,18 @@ function updatePresetUI() {
     } catch (_) {}
   }
 
-  const matchAuthor = isMatch(presetAuthor);
-  const matchNes = isMatch(presetNes);
-  const matchAmiga = isMatch(presetAmiga);
-  const matchUser = userPreset ? isMatch(userPreset) : false;
+  // Fallback for initial load or URL load when activePreset isn't explicitly set yet
+  if (state.activePreset === undefined || state.activePreset === null) {
+    if (isMatch(presetAuthor)) state.activePreset = 'author';
+    else if (isMatch(presetNes)) state.activePreset = 'nes';
+    else if (isMatch(presetAmiga)) state.activePreset = 'amiga';
+    else if (userPreset && isMatch(userPreset)) state.activePreset = 'user';
+  }
+
+  const matchAuthor = state.activePreset === 'author' && isMatch(presetAuthor);
+  const matchNes = state.activePreset === 'nes' && isMatch(presetNes);
+  const matchAmiga = state.activePreset === 'amiga' && isMatch(presetAmiga);
+  const matchUser = state.activePreset === 'user' && userPreset && isMatch(userPreset);
 
   btnPresetAuthor.classList.toggle('active', matchAuthor);
   if (btnPresetNes) btnPresetNes.classList.toggle('active', matchNes);
@@ -526,6 +546,7 @@ if (sliderPreviewVolume) {
 
 btnMarioToggle.addEventListener('click', () => {
   pushHistory();
+  state.activePreset = null;
   state.crushMode = !state.crushMode;
   btnMarioToggle.setAttribute('aria-checked', state.crushMode);
   btnMarioToggle.classList.toggle('active', state.crushMode);
@@ -538,6 +559,7 @@ btnMarioToggle.addEventListener('click', () => {
 
 btnStereoToggle.addEventListener('click', () => {
   pushHistory();
+  state.activePreset = null;
   state.stereo = !state.stereo;
   const isForceMono = !state.stereo;
   btnStereoToggle.setAttribute('aria-checked', isForceMono);
@@ -550,6 +572,7 @@ btnStereoToggle.addEventListener('click', () => {
 
 btnNormalizeToggle.addEventListener('click', () => {
   pushHistory();
+  state.activePreset = null;
   state.normalize = !state.normalize;
   btnNormalizeToggle.setAttribute('aria-checked', state.normalize);
   btnNormalizeToggle.classList.toggle('active', state.normalize);
@@ -581,6 +604,7 @@ btnCopyLink.addEventListener('click', async () => {
 
 btnPresetAuthor.addEventListener('click', () => {
   pushHistory();
+  state.activePreset = 'author';
   applyParamsToUI({
     bitDepth: 8,
     sampleRate: 22050,
@@ -601,6 +625,7 @@ btnPresetAuthor.addEventListener('click', () => {
 if (btnPresetNes) {
   btnPresetNes.addEventListener('click', () => {
     pushHistory();
+    state.activePreset = 'nes';
     applyParamsToUI({
       bitDepth: 4,
       sampleRate: 12000,
@@ -622,6 +647,7 @@ if (btnPresetNes) {
 if (btnPresetAmiga) {
   btnPresetAmiga.addEventListener('click', () => {
     pushHistory();
+    state.activePreset = 'amiga';
     applyParamsToUI({
       bitDepth: 8,
       sampleRate: 28000,
@@ -646,6 +672,7 @@ btnPresetUser.addEventListener('click', () => {
   try {
     const p = JSON.parse(saved);
     pushHistory();
+    state.activePreset = 'user';
     applyParamsToUI(p);
     log('preset: MY PRESET (user custom)', 'accent');
     showToast('👤 custom preset loaded', 'info');
@@ -669,6 +696,7 @@ btnSaveCustom.addEventListener('click', () => {
     ts: Date.now()
   };
   localStorage.setItem('ogcruncher_preset', JSON.stringify(preset));
+  state.activePreset = 'user';
   btnPresetUser.disabled = false;
   userPresetMeta.textContent = `${preset.bitDepth}-bit / ${preset.sampleRate}Hz`;
   updatePresetUI();
@@ -848,6 +876,9 @@ window.addEventListener('keydown', (e) => {
 
   loadState(applyParamsToUI);
   parseHash(applyParamsToUI);
+  window.addEventListener('hashchange', () => {
+    parseHash(applyParamsToUI);
+  });
   initResizers();
   
   // Show info modal on first visit
