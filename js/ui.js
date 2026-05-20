@@ -1161,8 +1161,25 @@ window.addEventListener('keydown', (e) => {
   loadState(applyParamsToUI);
   parseHash(applyParamsToUI);
   
+  // Always start in Simple Mode on page load, preserving loaded advanced settings in snapshot
+  const advancedParams = {
+    bitDepth: state.bitDepth,
+    sampleRate: state.sampleRate,
+    grit: state.grit,
+    noise: state.noise,
+    hpf: state.hpf,
+    lpf: state.lpf,
+    bass: state.bass,
+    crushMode: state.crushMode,
+    dither: state.dither,
+    stereo: state.stereo,
+    normalize: state.normalize
+  };
+  localStorage.setItem('ogcruncher_advanced_snapshot', JSON.stringify(advancedParams));
+  state.simpleMode = true;
+  
   // Initialize Simple Mode UI state on startup
-  setSimpleMode(state.simpleMode);
+  setSimpleMode(true);
   syncSimpleQuality(state.simpleQuality);
   window.addEventListener('hashchange', () => {
     parseHash(applyParamsToUI);
