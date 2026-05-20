@@ -13,6 +13,7 @@ class DSPProcessor extends AudioWorkletProcessor {
     this._grit      = 1.0;
     this._noise     = 0.0;
     this._crush     = true;
+    this._dither    = true;
     this._normalize = true;
     this._preGain   = 1.0;
     
@@ -27,6 +28,7 @@ class DSPProcessor extends AudioWorkletProcessor {
       if (p.grit      !== undefined) this._grit      = Math.max(1.0, p.grit);
       if (p.noise     !== undefined) this._noise     = p.noise;
       if (p.crush     !== undefined) this._crush      = p.crush;
+      if (p.dither    !== undefined) this._dither     = p.dither;
       if (p.normalize !== undefined) this._normalize = p.normalize;
       if (p.preGain   !== undefined) this._preGain   = p.preGain;
     };
@@ -70,7 +72,9 @@ class DSPProcessor extends AudioWorkletProcessor {
           s = (s < 0 ? -1 : s > 0 ? 1 : 0) * Math.pow(Math.abs(s), 1.15);
           
           // ── 5. True TPDF dither ──
-          s += (Math.random() - Math.random()) * lsb;
+          if (this._dither) {
+            s += (Math.random() - Math.random()) * lsb;
+          }
           
           // ── 6. Quantize ──
           s = Math.round(s * halfLev) / halfLev;

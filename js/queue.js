@@ -257,6 +257,7 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal) {
         sampleRate: resampled.sampleRate,
         bitDepth: state.bitDepth,
         crushMode: state.crushMode,
+        dither: state.dither,
         grit: state.grit,
         noise: state.noise,
         normalize: state.normalize,

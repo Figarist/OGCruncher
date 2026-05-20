@@ -34,7 +34,7 @@ importScripts(
 
 // ── DSP FUNCTIONS ────────────────────────────────────────────────────────────
 
-function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
+function processDSP(buf, bitDepth, crushMode, dither, grit = 1.5, noise = 0.0) {
   bitDepth = Math.max(1, Math.min(16, bitDepth || 8));
   grit = Math.max(1.0, Math.min(10.0, grit || 1.5));
   noise = Math.max(0.0, Math.min(1.0, noise || 0.0));
@@ -76,7 +76,9 @@ function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
     const halfLev = levels >> 1;
     const lsb = 1 / halfLev; // ← correct 1 LSB amplitude (was errRange = 1/(1<<bitDepth) = 0.5 LSB)
     for (let i = 0; i < N; i++) {
-      buf[i] += (Math.random() - Math.random()) * lsb; // TPDF: triangular, zero mean, ±1 LSB
+      if (dither) {
+        buf[i] += (Math.random() - Math.random()) * lsb; // TPDF: triangular, zero mean, ±1 LSB
+      }
       buf[i] = Math.round(buf[i] * halfLev) / halfLev;
     }
 
@@ -248,7 +250,7 @@ self.onmessage = async function(e) {
   if (msg.type !== 'process') return;
 
   try {
-    const { channels, sampleRate, bitDepth, crushMode, grit, noise, normalize, bitDepthOriginal, fileName } = msg;
+    const { channels, sampleRate, bitDepth, crushMode, dither, grit, noise, normalize, bitDepthOriginal, fileName } = msg;
     const numChannels = channels.length;
 
     self.postMessage({ type: 'progress', pct: 5, label: 'DSP…' });
@@ -257,7 +259,7 @@ self.onmessage = async function(e) {
 
     // 1. DSP Processing
     for (let ch = 0; ch < numChannels; ch++) {
-      const clipped = processDSP(channels[ch], bitDepth, crushMode, grit, noise);
+      const clipped = processDSP(channels[ch], bitDepth, crushMode, dither, grit, noise);
       if (clipped) hasClipping = true;
 
       if (normalize) {

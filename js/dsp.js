@@ -12,10 +12,11 @@ import { log } from './utils.js';
  * @param {Float32Array} buf       — mono channel buffer, values in [-1, 1]
  * @param {number}       bitDepth  — quantization bit depth (1–16)
  * @param {boolean}      crushMode — enable expander + dither + anti-alias
+ * @param {boolean}      dither    — enable TPDF dither
  * @param {number}       grit      — saturation drive amount (1.0-10.0)
  * @param {number}       noise     — white noise floor level (0.0-0.05)
  */
-export function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
+export function processDSP(buf, bitDepth, crushMode, dither, grit = 1.5, noise = 0.0) {
   bitDepth = Math.max(1, Math.min(16, bitDepth || 8));
   grit = Math.max(1.0, Math.min(10.0, grit || 1.5));
   noise = Math.max(0.0, Math.min(1.0, noise || 0.0));
@@ -55,7 +56,9 @@ export function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
     const halfLev = levels >> 1;
     const lsb = 1 / halfLev; // ← correct 1 LSB amplitude (was errRange = 1/(1<<bitDepth) = 0.5 LSB)
     for (let i = 0; i < N; i++) {
-      buf[i] += (Math.random() - Math.random()) * lsb; // TPDF: triangular, zero mean, ±1 LSB
+      if (dither) {
+        buf[i] += (Math.random() - Math.random()) * lsb; // TPDF: triangular, zero mean, ±1 LSB
+      }
       buf[i] = Math.round(buf[i] * halfLev) / halfLev;
     }
 

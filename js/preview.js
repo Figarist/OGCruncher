@@ -110,6 +110,7 @@ export function updateWorkletParams() {
     grit:      state.grit,
     noise:     state.noise,
     crush:     state.crushMode,
+    dither:    state.dither,
     normalize: state.normalize,
     preGain:   currentPreGain,
   });
@@ -303,7 +304,7 @@ export async function togglePreview() {
 
       for (let ch = 0; ch < previewResampled.numberOfChannels; ch++) {
         const samples = new Float32Array(previewResampled.getChannelData(ch));
-        processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+        processDSP(samples, state.bitDepth, state.crushMode, state.dither, state.grit, state.noise);
         if (state.normalize) normalizeBuffer(samples);
         processedBuf.getChannelData(ch).set(samples);
       }
@@ -348,6 +349,7 @@ export async function togglePreview() {
         grit: state.grit,
         noise: state.noise,
         crushMode: state.crushMode,
+        dither: state.dither,
         normalize: state.normalize,
         hpf: state.hpf,
         lpf: state.lpf,
@@ -522,6 +524,7 @@ export function requestPreviewUpdate() {
       lastRenderParams.grit      !== state.grit      ||
       lastRenderParams.noise     !== state.noise     ||
       lastRenderParams.crushMode !== state.crushMode ||
+      lastRenderParams.dither    !== state.dither    ||
       lastRenderParams.normalize !== state.normalize;
 
     const needsFilterUpdate = 
@@ -561,7 +564,7 @@ export function requestPreviewUpdate() {
 
         for (let ch = 0; ch < previewResampled.numberOfChannels; ch++) {
           const samples = new Float32Array(previewResampled.getChannelData(ch));
-          processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+          processDSP(samples, state.bitDepth, state.crushMode, state.dither, state.grit, state.noise);
           if (state.normalize) normalizeBuffer(samples);
           processedBuf.getChannelData(ch).set(samples);
         }
@@ -656,7 +659,7 @@ export function requestPreviewUpdate() {
 
         for (let ch = 0; ch < filteredBuf.numberOfChannels; ch++) {
           const samples = new Float32Array(filteredBuf.getChannelData(ch));
-          processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+          processDSP(samples, state.bitDepth, state.crushMode, state.dither, state.grit, state.noise);
           if (state.normalize) normalizeBuffer(samples);
           processedBuf.getChannelData(ch).set(samples);
         }
@@ -672,6 +675,7 @@ export function requestPreviewUpdate() {
       grit: state.grit,
       noise: state.noise,
       crushMode: state.crushMode,
+      dither: state.dither,
       normalize: state.normalize,
       hpf: state.hpf,
       lpf: state.lpf,
@@ -704,7 +708,7 @@ function updateMetricsPanel() {
     metricsOrig = computeAudioMetrics(dryBuf);
     
     // Check if we need to re-run DSP estimation
-    const currentDSPParams = `${state.bitDepth}-${state.crushMode}-${state.grit}-${state.noise}-${state.normalize}`;
+    const currentDSPParams = `${state.bitDepth}-${state.crushMode}-${state.dither}-${state.grit}-${state.noise}-${state.normalize}`;
     
     if (metricsLastDecoded !== wetBuf) {
       metricsDrySample = null;
@@ -722,7 +726,7 @@ function updateMetricsPanel() {
 
     if (metricsLastDSPParams !== currentDSPParams || !metricsCachedCrunch) {
       metricsProcessedSample.set(metricsDrySample);
-      processDSP(metricsProcessedSample, state.bitDepth, state.crushMode, state.grit, state.noise);
+      processDSP(metricsProcessedSample, state.bitDepth, state.crushMode, state.dither, state.grit, state.noise);
       if (state.normalize) normalizeBuffer(metricsProcessedSample);
 
       let sumSq = 0, peak = 0;
