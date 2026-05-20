@@ -1376,3 +1376,11 @@ button:focus-visible,
   from { opacity: 0; transform: scale(0.9) translateY(10px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
+
+/* Processing / Disabled state for parameters */
+.disabled-state {
+  opacity: 0.45;
+  filter: grayscale(85%) contrast(90%);
+  pointer-events: none;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
