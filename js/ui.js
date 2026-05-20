@@ -386,6 +386,7 @@ dropZone.addEventListener('dragleave', e => { if (!dropZone.contains(e.relatedTa
 dropZone.addEventListener('drop', async e => {
   e.preventDefault();
   dropZone.classList.remove('drag-over');
+  if (state.processing) return;
   if (e.dataTransfer.items) {
     await handleItems(e.dataTransfer.items);
   } else {
@@ -393,9 +394,9 @@ dropZone.addEventListener('drop', async e => {
   }
 });
 
-dropZone.addEventListener('click', () => fileInput.click());
-dropZone.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fileInput.click(); } });
-fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
+dropZone.addEventListener('click', () => { if (!state.processing) fileInput.click(); });
+dropZone.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!state.processing) fileInput.click(); } });
+fileInput.addEventListener('change', () => { if (state.processing) return; addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
 
 const wrapSlider = (slider, syncFn) => {
   slider.addEventListener('pointerdown', () => {
@@ -526,7 +527,39 @@ btnSaveCustom.addEventListener('click', () => {
   showToast('💾 custom preset saved', 'ok');
 });
 
-btnProcess.addEventListener('click', () => startProcessing(setProgress));
+function setControlsEnabled(enabled) {
+  const inputs = [
+    sliderBit, sliderSr, sliderGrit, sliderNoise, sliderSpeed,
+    sliderHpf, sliderLpf, sliderBass,
+    btnMarioToggle, btnStereoToggle, btnNormalizeToggle,
+    btnLiveUpdate, btnDualView, btnPresetAuthor, btnPresetUser,
+    btnSaveCustom, btnClearQueue, btnLoadDemo, fileInput
+  ];
+  inputs.forEach(el => {
+    if (el) el.disabled = !enabled;
+  });
+  
+  // Disable remove buttons in the queue UI
+  const removeBtns = fileQueue.querySelectorAll('.btn-remove');
+  removeBtns.forEach(btn => {
+    btn.disabled = !enabled;
+  });
+
+  // Toggle pointer events for the drop zone to prevent drops/clicks during processing
+  if (dropZone) {
+    dropZone.style.pointerEvents = enabled ? 'auto' : 'none';
+    dropZone.style.opacity = enabled ? '1' : '0.6';
+  }
+}
+
+btnProcess.addEventListener('click', async () => {
+  setControlsEnabled(false);
+  try {
+    await startProcessing(setProgress);
+  } finally {
+    setControlsEnabled(true);
+  }
+});
 btnPreview.addEventListener('click', togglePreview);
 btnAB.addEventListener('click', toggleAB);
 btnClearQueue.addEventListener('click', clearQueue);
@@ -561,6 +594,13 @@ modalInfo.addEventListener('click', (e) => {
 
 window.addEventListener('keydown', (e) => {
   if ((e.target.tagName === 'INPUT' && e.target.type !== 'range') || e.target.tagName === 'TEXTAREA') return;
+
+  if (state.processing) {
+    if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyC' || e.code === 'KeyN' || e.code === 'KeyZ' || e.code === 'KeyY') {
+      e.preventDefault();
+      return;
+    }
+  }
 
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !e.shiftKey) {
     e.preventDefault();

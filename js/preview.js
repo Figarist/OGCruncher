@@ -13,6 +13,7 @@ import { computeAudioMetrics, buildFilterChain, renderFilteredBuffer, processDSP
    STATE & NODES
    ════════════════════════════════════════════════════════════════════ */
 let _dom = {};
+let _previewSessionId = 0;    // Tracking ID for preview session to prevent race conditions
 let previewCtx = null;
 let previewSource = null;     // Crunched source (fallback) or Shared source (worklet)
 let previewSourceOrig = null; // Original source (fallback)
@@ -93,16 +94,24 @@ export async function togglePreview() {
   _dom.btnPreview.disabled = true;
   _dom.btnPreviewLbl.textContent = 'LOADING...';
 
+  const mySessionId = ++_previewSessionId;
+
   try {
     if (!previewCtx) previewCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (previewCtx.state === 'suspended') await previewCtx.resume();
+    if (previewCtx.state === 'suspended') {
+      await previewCtx.resume();
+      if (mySessionId !== _previewSessionId) return;
+    }
 
     await ensureWorklet();
+    if (mySessionId !== _previewSessionId) return;
 
     // 1. Decode first file if needed
     if (!previewDecoded) {
       const arrayBuf = await files[0].arrayBuffer();
+      if (mySessionId !== _previewSessionId) return;
       previewDecoded = await previewCtx.decodeAudioData(arrayBuf);
+      if (mySessionId !== _previewSessionId) return;
     }
 
     const numChannels = state.stereo ? Math.min(previewDecoded.numberOfChannels, 2) : 1;
@@ -115,14 +124,21 @@ export async function togglePreview() {
       previewResampled = await renderFilteredBuffer(previewDecoded, {
         sampleRate: targetRate,
         playbackRate: pRate,
+      }, numChannels);
+      if (mySessionId !== _previewSessionId) return;
+
+      previewResampledWet = await renderFilteredBuffer(previewResampled, {
         hpf: state.hpf,
         lpf: state.lpf,
         bass: state.bass,
+        playbackRate: 1.0,
+        sampleRate: targetRate
       }, numChannels);
+      if (mySessionId !== _previewSessionId) return;
 
       let globalPeak = 0;
-      for (let ch = 0; ch < previewResampled.numberOfChannels; ch++) {
-        const data = previewResampled.getChannelData(ch);
+      for (let ch = 0; ch < previewResampledWet.numberOfChannels; ch++) {
+        const data = previewResampledWet.getChannelData(ch);
         for (let i = 0; i < data.length; i++) {
           const a = data[i] < 0 ? -data[i] : data[i];
           if (a > globalPeak) globalPeak = a;
@@ -132,16 +148,21 @@ export async function togglePreview() {
 
       // ── Step 2: Create a live AudioContext at targetRate for correct playback ──
       if (previewCtx && previewCtx.sampleRate !== targetRate) {
-        previewCtx.close();
+        await previewCtx.close();
+        if (mySessionId !== _previewSessionId) return;
         previewCtx = null;
         workletReady = false;
       }
       if (!previewCtx) {
         previewCtx = new AudioContext({ sampleRate: targetRate });
-    await previewCtx.audioWorklet.addModule('./dsp-processor.js');
+        await previewCtx.audioWorklet.addModule('./dsp-processor.js');
+        if (mySessionId !== _previewSessionId) return;
         workletReady = true;
       }
-      if (previewCtx.state === 'suspended') await previewCtx.resume();
+      if (previewCtx.state === 'suspended') {
+        await previewCtx.resume();
+        if (mySessionId !== _previewSessionId) return;
+      }
 
       // Recreate gain/analyser nodes on the new context
       gainCrunched = previewCtx.createGain();
@@ -151,7 +172,7 @@ export async function togglePreview() {
       gainCrunched.gain.value = isComparingOriginal ? 0 : 1;
       gainOriginal.gain.value = isComparingOriginal ? 1 : 0;
 
-      // ── Step 3: Worklet for DSP (filters already applied in previewResampled) ──
+      // ── Step 3: Worklet for DSP (filters already applied in previewResampledWet) ──
       dspWorkletNode = new AudioWorkletNode(previewCtx, 'dsp-processor', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
@@ -161,7 +182,7 @@ export async function togglePreview() {
 
       // ── Step 4: Build sources ────────────────────────────────────────────────
       previewSource = previewCtx.createBufferSource();
-      previewSource.buffer = previewResampled;
+      previewSource.buffer = previewResampledWet;
       previewSource.loop = true;
 
       previewSource.connect(dspWorkletNode);
@@ -169,8 +190,11 @@ export async function togglePreview() {
       dspWorkletNode.connect(analyserCrunched);
       gainCrunched.connect(previewCtx.destination);
 
-      previewSource.connect(gainOriginal);
-      previewSource.connect(analyserOriginal);
+      previewSourceOrig = previewCtx.createBufferSource();
+      previewSourceOrig.buffer = previewResampled;
+      previewSourceOrig.loop = true;
+      previewSourceOrig.connect(gainOriginal);
+      previewSourceOrig.connect(analyserOriginal);
       gainOriginal.connect(previewCtx.destination);
 
       lastRenderParams = {
@@ -183,7 +207,6 @@ export async function togglePreview() {
       };
       log('Preview started (AudioWorklet mode)', 'ok');
 
-
     } else {
       // ── Fallback Path (OfflineAudioContext hot-swap) ────────────────────
       const targetRate = state.sampleRate;
@@ -191,6 +214,7 @@ export async function togglePreview() {
         playbackRate: pRate, 
         sampleRate: targetRate 
       }, numChannels);
+      if (mySessionId !== _previewSessionId) return;
       
       const filteredBuf = await renderFilteredBuffer(previewResampled, {
         hpf: state.hpf,
@@ -199,6 +223,7 @@ export async function togglePreview() {
         playbackRate: 1.0,
         sampleRate: targetRate
       }, numChannels);
+      if (mySessionId !== _previewSessionId) return;
 
       const processedBuf = previewCtx.createBuffer(
         filteredBuf.numberOfChannels,
@@ -259,11 +284,14 @@ export async function togglePreview() {
     log('Failed to start preview.', 'error');
     stopPreview();
   } finally {
-    _dom.btnPreview.disabled = false;
+    if (mySessionId === _previewSessionId) {
+      _dom.btnPreview.disabled = false;
+    }
   }
 }
 
 export function stopPreview() {
+  _previewSessionId++; // Invalidate any running async operations
   clearTimeout(liveUpdateTimer);
   liveUpdateTimer = null;
 
@@ -327,6 +355,9 @@ export function requestPreviewUpdate() {
 
   clearTimeout(liveUpdateTimer);
   liveUpdateTimer = setTimeout(async () => {
+    const mySessionId = _previewSessionId;
+    if (mySessionId !== _previewSessionId) return;
+
     if (!workletReady) {
       await _requestPreviewUpdateFallback();
       return;
@@ -337,7 +368,6 @@ export function requestPreviewUpdate() {
 
     const needsFullRestart =
       lastRenderParams.sampleRate   !== state.sampleRate   ||
-
       lastRenderParams.stereo       !== state.stereo        ||
       lastRenderParams.playbackRate !== state.playbackRate  ||
       lastRenderParams.hpf          !== state.hpf           ||
@@ -346,6 +376,7 @@ export function requestPreviewUpdate() {
 
     if (needsFullRestart) {
       await stopPreview();
+      if (mySessionId !== _previewSessionId) return;
       await togglePreview();
       return;
     }
@@ -366,6 +397,7 @@ export function requestPreviewUpdate() {
 }
 
 async function _requestPreviewUpdateFallback() {
+  const mySessionId = _previewSessionId;
   const pRate = state.playbackRate || 1.0;
   const targetRate = state.sampleRate;
   const numChannels = state.stereo ? 2 : 1;
@@ -380,6 +412,7 @@ async function _requestPreviewUpdateFallback() {
       playbackRate: pRate, 
       sampleRate: targetRate 
     }, numChannels);
+    if (mySessionId !== _previewSessionId) return;
   }
 
   const filteredBuf = await renderFilteredBuffer(previewResampled, {
@@ -389,6 +422,7 @@ async function _requestPreviewUpdateFallback() {
     playbackRate: 1.0,
     sampleRate: targetRate
   }, numChannels);
+  if (mySessionId !== _previewSessionId) return;
 
   const processedBuf = previewCtx.createBuffer(
     filteredBuf.numberOfChannels,
@@ -447,22 +481,24 @@ function updateMetricsPanel() {
   let metricsOrig, metricsCrunch;
   
   if (workletReady) {
-    metricsOrig = computeAudioMetrics(previewDecoded);
+    const dryBuf = previewResampled || previewDecoded;
+    const wetBuf = previewResampledWet || dryBuf;
+    metricsOrig = computeAudioMetrics(dryBuf);
     
     // Check if we need to re-run DSP estimation
     const currentDSPParams = `${state.bitDepth}-${state.crushMode}-${state.grit}-${state.noise}-${state.normalize}`;
     
-    if (metricsLastDecoded !== previewDecoded) {
+    if (metricsLastDecoded !== wetBuf) {
       metricsDrySample = null;
       metricsCachedCrunch = null;
-      metricsLastDecoded = previewDecoded;
+      metricsLastDecoded = wetBuf;
     }
 
     if (!metricsDrySample) {
-      const sampleRate = previewDecoded.sampleRate;
-      const sampleLen = Math.min(sampleRate, previewDecoded.length);
-      const startSample = Math.floor((previewDecoded.length - sampleLen) / 2);
-      metricsDrySample = previewDecoded.getChannelData(0).slice(startSample, startSample + sampleLen);
+      const sampleRate = wetBuf.sampleRate;
+      const sampleLen = Math.min(sampleRate, wetBuf.length);
+      const startSample = Math.floor((wetBuf.length - sampleLen) / 2);
+      metricsDrySample = wetBuf.getChannelData(0).slice(startSample, startSample + sampleLen);
       metricsProcessedSample = new Float32Array(metricsDrySample.length);
     }
 

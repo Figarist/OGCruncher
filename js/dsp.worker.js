@@ -81,8 +81,11 @@ function processDSP(buf, bitDepth, crushMode, grit = 1.5, noise = 0.0) {
     }
 
     // Step 3: Anti-alias (adjacent-sample average)
-    for (let i = 1; i < N; i++) {
-      buf[i] = (buf[i] + buf[i - 1]) * 0.5;
+    let prev = 0;
+    for (let i = 0; i < N; i++) {
+      const cur = buf[i];
+      buf[i] = (cur + prev) * 0.5;
+      prev = cur;
     }
 
   }
