@@ -8,7 +8,7 @@
 ### 2.1 Build System & Modularization
 The project uses **Vite** for modern development and optimized production builds. The codebase is fully modularized using **ES Modules (ESM)**, with logic split into specialized files in the `js/` directory:
 - `main.js`: Entry point.
-- `state.js`: Global state management and synchronization.
+- `state.js`: Global state management, simple/advanced mode persistence, and synchronization.
 - `dsp.js`: Core audio processing logic.
 - `ui.js`: DOM manipulation and layout handling.
 - `preview.js`: Audio playback and A/B comparison.
@@ -63,6 +63,13 @@ The interface follows a **Flexible Bento Grid** layout, optimized for a left-to-
 - **Desktop Grid**: Resizable 3-column layout (`var(--col-left) 6px var(--col-center) 6px var(--col-right)`).
 - **Resizers**: Full-height interactive handles with Windows-style dragging and visual handles.
 - **Mobile Stack**: Transitions into a vertical stack with a sticky header.
+
+### 3.4 Simple Mode Dashboard & Widgets
+- **Mode Toggle Tabs**: A rounded pill button container (`SIMPLE` / `ADVANCED`) positioned at the top of the parameter controls. Uses transition animations and shadow highlights for the active state.
+- **Bento-style Bento Grid Adaptation**: In Simple Mode, the 11 technical cards are hidden and replaced with a wide, single-card layout (`#group-simple-quality`) that spans both columns.
+- **Pips & Snap Alignment**: Quality slider snaps cleanly to discrete labels (TINY, LOW, MEDIUM, HIGH) representing standard target hardware presets.
+- **Estimated Savings Card**: Displays live original vs estimated file sizes. Employs a pulsing badge style (`.badge--pulse-green`) when savings are significant.
+
 
 ## 4. Motion & Interaction
 
