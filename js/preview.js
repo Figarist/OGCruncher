@@ -27,6 +27,8 @@ let previewDecoded = null;    // Raw dry buffer
 let previewResampled = null;  // Dry buffer at target SR
 let previewResampledWet = null; // Filtered buffer at target SR
 let currentPreGain = 1.0; // Global pre-gain for worklet
+let previewStartTime = 0; // Timestamp when preview playback started
+let useWorklet = false;   // Actual active state of worklet in current session
 
 let isComparingOriginal = false;
 let liveUpdateTimer = null;
@@ -107,7 +109,7 @@ export async function togglePreview() {
     await ensureWorklet();
     if (mySessionId !== _previewSessionId) return;
 
-    let useWorklet = workletReady;
+    useWorklet = workletReady;
     const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
 
     if (useWorklet) {
@@ -290,6 +292,7 @@ export async function togglePreview() {
       log('Preview started (Fallback mode)', 'ok');
     }
 
+    previewStartTime = previewCtx.currentTime;
     previewSource.start(0);
     if (previewSourceOrig) previewSourceOrig.start(0);
 
@@ -383,112 +386,179 @@ export function requestPreviewUpdate() {
     const mySessionId = _previewSessionId;
     if (mySessionId !== _previewSessionId) return;
 
-    if (!workletReady) {
-      await _requestPreviewUpdateFallback();
-      return;
+    const pRate = state.playbackRate || 1.0;
+    const targetRate = Math.min(Math.max(state.sampleRate, 4000), 48000);
+    const numChannels = state.stereo ? Math.min(previewDecoded.numberOfChannels, 2) : 1;
+
+    // Calculate current play offset before rendering
+    const now = previewCtx.currentTime;
+    const oldDuration = previewResampledWet ? previewResampledWet.duration : 1.0;
+    const elapsed = (now - previewStartTime) % oldDuration;
+
+    // Check if we need to recreate the AudioContext (only if targetRate changes in Worklet mode)
+    const needsContextRecreation = useWorklet && (previewCtx && previewCtx.sampleRate !== targetRate);
+
+    if (needsContextRecreation) {
+      // 1. Close current context
+      if (previewCtx) {
+        try { await previewCtx.close(); } catch (_) {}
+      }
+      previewCtx = null;
+
+      // 2. Re-create AudioContext at targetRate
+      try {
+        previewCtx = new AudioContext({ sampleRate: targetRate });
+        await previewCtx.audioWorklet.addModule('./dsp-processor.js');
+        if (mySessionId !== _previewSessionId) return;
+        useWorklet = true;
+      } catch (e) {
+        console.warn('Could not create live AudioContext at target rate during update. Falling back.', e);
+        useWorklet = false;
+        previewCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (mySessionId !== _previewSessionId) return;
+      }
+
+      // Recreate all nodes on the new context
+      gainCrunched = previewCtx.createGain();
+      gainOriginal = previewCtx.createGain();
+      analyserCrunched = previewCtx.createAnalyser();
+      analyserOriginal = previewCtx.createAnalyser();
+      gainCrunched.gain.value = isComparingOriginal ? 0 : 1;
+      gainOriginal.gain.value = isComparingOriginal ? 1 : 0;
+
+      gainMaster = previewCtx.createGain();
+      gainMaster.gain.value = state.previewVolume;
+      gainMaster.connect(previewCtx.destination);
+
+      if (useWorklet) {
+        dspWorkletNode = new AudioWorkletNode(previewCtx, 'dsp-processor', {
+          numberOfInputs: 1,
+          numberOfOutputs: 1,
+          outputChannelCount: [numChannels],
+        });
+        dspWorkletNode.connect(gainCrunched);
+        dspWorkletNode.connect(analyserCrunched);
+        gainCrunched.connect(gainMaster);
+        gainOriginal.connect(gainMaster);
+      } else {
+        gainCrunched.connect(gainMaster);
+        gainOriginal.connect(gainMaster);
+      }
     }
 
-    // ── AudioWorklet Path ────────────────────────────────────────────────
-    updateWorkletParams();
+    // 3. Re-render the buffers
+    const needsResample = 
+      lastRenderParams.sampleRate   !== targetRate         ||
+      lastRenderParams.stereo       !== state.stereo       ||
+      lastRenderParams.playbackRate !== pRate;
 
-    const needsFullRestart =
-      lastRenderParams.sampleRate   !== state.sampleRate   ||
-      lastRenderParams.stereo       !== state.stereo        ||
-      lastRenderParams.playbackRate !== state.playbackRate  ||
-      lastRenderParams.hpf          !== state.hpf           ||
-      lastRenderParams.lpf          !== state.lpf           ||
-      lastRenderParams.bass         !== state.bass;
-
-    if (needsFullRestart) {
-      await stopPreview();
+    if (needsResample || !previewResampled) {
+      previewResampled = await renderFilteredBuffer(previewDecoded, { 
+        playbackRate: pRate, 
+        sampleRate: targetRate 
+      }, numChannels);
       if (mySessionId !== _previewSessionId) return;
-      await togglePreview();
-      return;
     }
 
-    log('live update: params sent to worklet', 'sys');
-    updateMetricsPanel();
+    const needsFilterUpdate = 
+      needsResample ||
+      lastRenderParams.hpf !== state.hpf ||
+      lastRenderParams.lpf !== state.lpf ||
+      lastRenderParams.bass !== state.bass;
+
+    if (needsFilterUpdate || !previewResampledWet) {
+      const filteredBuf = await renderFilteredBuffer(previewResampled, {
+        hpf: state.hpf,
+        lpf: state.lpf,
+        bass: state.bass,
+        playbackRate: 1.0,
+        sampleRate: targetRate
+      }, numChannels);
+      if (mySessionId !== _previewSessionId) return;
+
+      if (useWorklet) {
+        previewResampledWet = filteredBuf;
+        
+        let globalPeak = 0;
+        for (let ch = 0; ch < previewResampledWet.numberOfChannels; ch++) {
+          const data = previewResampledWet.getChannelData(ch);
+          for (let i = 0; i < data.length; i++) {
+            const a = data[i] < 0 ? -data[i] : data[i];
+            if (a > globalPeak) globalPeak = a;
+          }
+        }
+        currentPreGain = 1.0 / (globalPeak + 1e-9);
+        updateWorkletParams();
+      } else {
+        const processedBuf = previewCtx.createBuffer(
+          filteredBuf.numberOfChannels,
+          filteredBuf.length,
+          filteredBuf.sampleRate
+        );
+
+        for (let ch = 0; ch < filteredBuf.numberOfChannels; ch++) {
+          const samples = new Float32Array(filteredBuf.getChannelData(ch));
+          processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
+          if (state.normalize) normalizeBuffer(samples);
+          processedBuf.getChannelData(ch).set(samples);
+        }
+        previewResampledWet = processedBuf;
+      }
+    }
+
+    // 4. Update previewStartTime so we maintain relative position
+    const newDuration = previewResampledWet.duration;
+    const progressFraction = elapsed / oldDuration;
+    const newElapsed = progressFraction * newDuration;
+
+    // Reset base startTime based on new context time or existing time
+    previewStartTime = previewCtx.currentTime - newElapsed;
+
+    // 5. Hot-swap the source nodes at the new elapsed position
+    const oldSrc = previewSource;
+    const oldSrcOrig = previewSourceOrig;
+    const startNow = previewCtx.currentTime;
+
+    previewSource = previewCtx.createBufferSource();
+    previewSource.buffer = previewResampledWet;
+    previewSource.loop = true;
+
+    if (useWorklet && dspWorkletNode) {
+      previewSource.connect(dspWorkletNode);
+    } else {
+      previewSource.connect(gainCrunched);
+      previewSource.connect(analyserCrunched);
+    }
+
+    previewSourceOrig = previewCtx.createBufferSource();
+    previewSourceOrig.buffer = previewResampled;
+    previewSourceOrig.loop = true;
+    previewSourceOrig.connect(gainOriginal);
+    previewSourceOrig.connect(analyserOriginal);
+
+    previewSource.start(startNow, newElapsed);
+    previewSourceOrig.start(startNow, newElapsed);
+
+    if (oldSrc) {
+      try { oldSrc.stop(startNow + 0.1); } catch (_) {}
+    }
+    if (oldSrcOrig) {
+      try { oldSrcOrig.stop(startNow + 0.1); } catch (_) {}
+    }
 
     lastRenderParams = {
-      sampleRate: state.sampleRate,
+      sampleRate: targetRate,
       stereo: state.stereo,
-      playbackRate: state.playbackRate,
+      playbackRate: pRate,
       hpf: state.hpf,
       lpf: state.lpf,
       bass: state.bass
     };
 
-  }, 50);
-}
+    log('live update: preview parameters hot-swapped smoothly', 'sys');
+    updateMetricsPanel();
 
-async function _requestPreviewUpdateFallback() {
-  const mySessionId = _previewSessionId;
-  const pRate = state.playbackRate || 1.0;
-  const targetRate = state.sampleRate;
-  const numChannels = state.stereo ? 2 : 1;
-
-  const needsResample = 
-    lastRenderParams.sampleRate !== targetRate || 
-    lastRenderParams.stereo !== state.stereo ||
-    lastRenderParams.playbackRate !== pRate;
-
-  if (needsResample) {
-    previewResampled = await renderFilteredBuffer(previewDecoded, { 
-      playbackRate: pRate, 
-      sampleRate: targetRate 
-    }, numChannels);
-    if (mySessionId !== _previewSessionId) return;
-  }
-
-  const filteredBuf = await renderFilteredBuffer(previewResampled, {
-    hpf: state.hpf,
-    lpf: state.lpf,
-    bass: state.bass,
-    playbackRate: 1.0,
-    sampleRate: targetRate
-  }, numChannels);
-  if (mySessionId !== _previewSessionId) return;
-
-  const processedBuf = previewCtx.createBuffer(
-    filteredBuf.numberOfChannels,
-    filteredBuf.length,
-    filteredBuf.sampleRate
-  );
-
-  for (let ch = 0; ch < filteredBuf.numberOfChannels; ch++) {
-    const samples = new Float32Array(filteredBuf.getChannelData(ch));
-    processDSP(samples, state.bitDepth, state.crushMode, state.grit, state.noise);
-    if (state.normalize) normalizeBuffer(samples);
-    processedBuf.getChannelData(ch).set(samples);
-  }
-
-  previewResampledWet = processedBuf;
-
-  const oldSrc = previewSource;
-  const oldSrcOrig = previewSourceOrig;
-
-  previewSource = previewCtx.createBufferSource();
-  previewSource.buffer = previewResampledWet;
-  previewSource.loop = true;
-  previewSource.connect(gainCrunched);
-  previewSource.connect(analyserCrunched);
-
-  previewSourceOrig = previewCtx.createBufferSource();
-  previewSourceOrig.buffer = previewResampled;
-  previewSourceOrig.loop = true;
-  previewSourceOrig.connect(gainOriginal);
-  previewSourceOrig.connect(analyserOriginal);
-
-  const now = previewCtx.currentTime;
-  previewSource.start(now);
-  previewSourceOrig.start(now);
-  
-  if (oldSrc) try { oldSrc.stop(now + 0.1); } catch(e) {}
-  if (oldSrcOrig) try { oldSrcOrig.stop(now + 0.1); } catch(e) {}
-
-  lastRenderParams = { ...state };
-  log('live update: preview buffer hot-swapped', 'sys');
-  updateMetricsPanel();
+  }, 100);
 }
 
 /* ════════════════════════════════════════════════════════════════════
