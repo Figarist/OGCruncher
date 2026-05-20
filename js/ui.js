@@ -550,6 +550,18 @@ function setControlsEnabled(enabled) {
     dropZone.style.pointerEvents = enabled ? 'auto' : 'none';
     dropZone.style.opacity = enabled ? '1' : '0.6';
   }
+
+  // Toggle visual disabled state for control panels (grey out and block clicks)
+  const controlContainers = [
+    $('group-presets'),
+    document.querySelector('.audio-rack'),
+    $('group-filters')
+  ];
+  controlContainers.forEach(container => {
+    if (container) {
+      container.classList.toggle('disabled-state', !enabled);
+    }
+  });
 }
 
 btnProcess.addEventListener('click', async () => {
