@@ -324,27 +324,6 @@
           </div>
         </div>
 
-        <!-- Speed / Pitch -->
-        <div class="control-group" id="group-speed">
-          <div class="control-header">
-            <label for="slider-speed" class="control-label" data-tooltip="Adjust playback speed. Lowering it creates a 'slow & chopped' effect with lower pitch.">SPEED / PITCH</label>
-            <output id="out-speed" for="slider-speed" class="control-value">100%</output>
-          </div>
-          <div class="slider-track-wrap">
-            <input
-              type="range"
-              id="slider-speed"
-              min="0.5" max="2.0" value="1.0" step="0.01"
-              class="slider"
-              aria-valuemin="0.5" aria-valuemax="2.0" aria-valuenow="1.0"
-              aria-label="Playback speed and pitch"
-            />
-            <div class="slider-pips" aria-hidden="true">
-              <span>0.5x</span><span>1.0x</span><span>1.5x</span><span>2.0x</span>
-            </div>
-          </div>
-        </div>
-
         <!-- Mario Toggle -->
         <div class="control-group" id="group-mariomode">
           <div class="control-header">
@@ -385,26 +364,6 @@
           </button>
         </div>
 
-        <!-- Stereo Toggle -->
-        <div class="control-group" id="group-stereo">
-          <div class="control-header">
-            <label for="toggle-stereo" class="control-label" data-tooltip="Converts stereo to mono. Perfect for game SFX to save memory and CPU.">OUTPUT</label>
-            <span id="out-stereo" class="control-value">MONO</span>
-          </div>
-          <button
-            role="switch"
-            aria-checked="true"
-            id="toggle-stereo"
-            class="toggle-switch active"
-            aria-label="Toggle between Mono and Stereo output"
-          >
-            <span class="toggle-track">
-              <span class="toggle-thumb"></span>
-            </span>
-            <span class="toggle-label-text">FORCE MONO</span>
-          </button>
-        </div>
-
         <!-- IMPROVEMENT 2: Normalize Toggle -->
         <div class="control-group" id="group-normalize">
           <div class="control-header">
@@ -425,28 +384,74 @@
           </button>
         </div>
 
+        <!-- Stereo Toggle -->
+        <div class="control-group" id="group-stereo">
+          <div class="control-header">
+            <label for="toggle-stereo" class="control-label" data-tooltip="Converts stereo to mono. Perfect for game SFX to save memory and CPU.">OUTPUT</label>
+            <span id="out-stereo" class="control-value">MONO</span>
+          </div>
+          <button
+            role="switch"
+            aria-checked="true"
+            id="toggle-stereo"
+            class="toggle-switch active"
+            aria-label="Toggle between Mono and Stereo output"
+          >
+            <span class="toggle-track">
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-label-text">FORCE MONO</span>
+          </button>
+        </div>
+
+        <!-- Speed / Pitch -->
+        <div class="control-group" id="group-speed" style="grid-column: span 2;">
+          <div class="control-header">
+            <label for="slider-speed" class="control-label" data-tooltip="Adjust playback speed. Lowering it creates a 'slow & chopped' effect with lower pitch.">SPEED / PITCH</label>
+            <output id="out-speed" for="slider-speed" class="control-value">100%</output>
+          </div>
+          <div class="slider-track-wrap">
+            <input
+              type="range"
+              id="slider-speed"
+              min="0.5" max="2.0" value="1.0" step="0.01"
+              class="slider"
+              aria-valuemin="0.5" aria-valuemax="2.0" aria-valuenow="1.0"
+              aria-label="Playback speed and pitch"
+            />
+            <div class="slider-pips" aria-hidden="true">
+              <span>0.5x</span><span>1.0x</span><span>1.5x</span><span>2.0x</span>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <!-- Filters & EQ -->
-      <div class="control-group" id="group-filters">
-        <div class="control-header">
+      <!-- Filters & EQ (Collapsible) -->
+      <div class="control-group collapsible-filters" id="group-filters">
+        <button type="button" class="filters-toggle-btn" aria-expanded="false" aria-controls="filters-content" id="btn-toggle-filters">
           <span class="control-label" data-tooltip="Fine-tune frequencies to shape your lo-fi sound.">FILTERS & EQ</span>
-        </div>
-        <div class="filter-grid">
-          <div class="filter-item">
-            <label for="slider-hpf" class="filter-label" data-tooltip="Cuts low frequencies (rumble). Helps remove muddy bass and clear up the mix.">HPF (CUT LOWS)</label>
-            <input type="range" id="slider-hpf" min="20" max="1000" value="20" step="10" class="slider slider--small">
-            <output id="out-hpf" class="filter-value">20 Hz</output>
-          </div>
-          <div class="filter-item">
-            <label for="slider-lpf" class="filter-label" data-tooltip="Cuts high frequencies. Makes sound soft, 'underwater' or phone-like.">LPF (CUT HIGHS)</label>
-            <input type="range" id="slider-lpf" min="500" max="20000" value="20000" step="100" class="slider slider--small">
-            <output id="out-lpf" class="filter-value">OFF</output>
-          </div>
-          <div class="filter-item filter-item--full">
-            <label for="slider-bass" class="filter-label" data-tooltip="Enhances low-end frequencies for a deeper and more powerful punch.">BASS BOOST (80Hz)</label>
-            <input type="range" id="slider-bass" min="0" max="15" value="0" step="0.5" class="slider slider--small">
-            <output id="out-bass" class="filter-value">+0 dB</output>
+          <span class="filters-toggle-chevron">▼</span>
+        </button>
+        <div class="filters-content" id="filters-content">
+          <div class="filters-inner">
+            <div class="filter-grid">
+              <div class="filter-item">
+                <label for="slider-hpf" class="filter-label" data-tooltip="Cuts low frequencies (rumble). Helps remove muddy bass and clear up the mix.">HPF (CUT LOWS)</label>
+                <input type="range" id="slider-hpf" min="20" max="1000" value="20" step="10" class="slider slider--small">
+                <output id="out-hpf" class="filter-value">20 Hz</output>
+              </div>
+              <div class="filter-item">
+                <label for="slider-lpf" class="filter-label" data-tooltip="Cuts high frequencies. Makes sound soft, 'underwater' or phone-like.">LPF (CUT HIGHS)</label>
+                <input type="range" id="slider-lpf" min="500" max="20000" value="20000" step="100" class="slider slider--small">
+                <output id="out-lpf" class="filter-value">OFF</output>
+              </div>
+              <div class="filter-item filter-item--full">
+                <label for="slider-bass" class="filter-label" data-tooltip="Enhances low-end frequencies for a deeper and more powerful punch.">BASS BOOST (80Hz)</label>
+                <input type="range" id="slider-bass" min="0" max="15" value="0" step="0.5" class="slider slider--small">
+                <output id="out-bass" class="filter-value">+0 dB</output>
+              </div>
+            </div>
           </div>
         </div>
       </div>

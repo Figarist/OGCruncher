@@ -899,6 +899,35 @@ window.addEventListener('keydown', (e) => {
     if (statusEl) statusEl.textContent = 'ON';
   }
 
+  // ── Collapsible Filters ──
+  const groupFilters = $('group-filters');
+  const btnToggleFilters = $('btn-toggle-filters');
+  if (groupFilters && btnToggleFilters) {
+    const isExpanded = localStorage.getItem('ogcruncher_filters_expanded') === 'true';
+    if (isExpanded) {
+      groupFilters.classList.add('expanded');
+      btnToggleFilters.setAttribute('aria-expanded', 'true');
+    } else {
+      groupFilters.classList.add('collapsed');
+      btnToggleFilters.setAttribute('aria-expanded', 'false');
+    }
+
+    btnToggleFilters.addEventListener('click', () => {
+      const expanding = !groupFilters.classList.contains('expanded');
+      if (expanding) {
+        groupFilters.classList.remove('collapsed');
+        groupFilters.classList.add('expanded');
+        btnToggleFilters.setAttribute('aria-expanded', 'true');
+        localStorage.setItem('ogcruncher_filters_expanded', 'true');
+      } else {
+        groupFilters.classList.remove('expanded');
+        groupFilters.classList.add('collapsed');
+        btnToggleFilters.setAttribute('aria-expanded', 'false');
+        localStorage.setItem('ogcruncher_filters_expanded', 'false');
+      }
+    });
+  }
+
   const saved = localStorage.getItem('ogcruncher_preset');
   if (saved) {
     try {
