@@ -25,11 +25,17 @@ export const state = {
   previewVolume: 0.8, // Default volume for preview
 };
 
+let onStateChange = null;
+export function setOnStateChange(fn) {
+  onStateChange = fn;
+}
+
 export function saveState() {
   // FIXED: nextId leak removed from persistence
   const { files, processing, nextId, ...persistentState } = state;
   localStorage.setItem('ogcruncher_last_state', JSON.stringify(persistentState));
   updateHash(); // IMPROVEMENT 5: Update URL hash on every param change
+  if (onStateChange) onStateChange();
 }
 
 export function loadState(applyParamsCallback) {
@@ -167,4 +173,5 @@ function _restore(snap, applyParamsCallback) {
   const { files, processing, nextId, ...persistentState } = state;
   localStorage.setItem('ogcruncher_last_state', JSON.stringify(persistentState));
   updateHash();
+  if (onStateChange) onStateChange();
 }

@@ -5,7 +5,7 @@
 
 'use strict';
 
-import { state, saveState, loadState, updateHash, parseHash, pushHistory, undo, redo, pauseHistory } from './state.js';
+import { state, saveState, loadState, updateHash, parseHash, pushHistory, undo, redo, pauseHistory, setOnStateChange } from './state.js';
 import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
 import { initQueue, addFiles, clearQueue, startProcessing, loadDemoTrack, handleItems } from './queue.js';
 import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, updateWorkletParams, setPreviewVolume } from './preview.js';
@@ -279,15 +279,88 @@ function applyParamsToUI(p) {
   }
   
   pauseHistory(false);
+  updatePresetUI();
   updateWorkletParams();
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
-function updatePresetUI(type) {
-  btnPresetAuthor.classList.toggle('active', type === 'author');
-  if (btnPresetNes) btnPresetNes.classList.toggle('active', type === 'nes');
-  if (btnPresetAmiga) btnPresetAmiga.classList.toggle('active', type === 'amiga');
-  btnPresetUser.classList.toggle('active', type === 'user');
+function updatePresetUI() {
+  const isMatch = (preset) => {
+    if (!preset) return false;
+    return (
+      +state.bitDepth === +preset.bitDepth &&
+      +state.sampleRate === +preset.sampleRate &&
+      Math.abs((state.grit || 0) - (preset.grit || 0)) < 0.01 &&
+      Math.abs((state.noise || 0) - (preset.noise || 0)) < 0.001 &&
+      Math.abs((state.playbackRate || 1.0) - (preset.playbackRate || 1.0)) < 0.01 &&
+      +state.hpf === +preset.hpf &&
+      +state.lpf === +preset.lpf &&
+      +state.bass === +preset.bass &&
+      !!state.crushMode === !!preset.crushMode &&
+      !!state.stereo === !!preset.stereo &&
+      !!state.normalize === !!preset.normalize
+    );
+  };
+
+  const presetAuthor = {
+    bitDepth: 8,
+    sampleRate: 22050,
+    grit: 1.0,
+    noise: 0,
+    playbackRate: 1.0,
+    hpf: 20,
+    lpf: 20000,
+    bass: 0,
+    crushMode: true,
+    stereo: false,
+    normalize: true
+  };
+
+  const presetNes = {
+    bitDepth: 4,
+    sampleRate: 12000,
+    grit: 1.2,
+    noise: 0,
+    playbackRate: 1.0,
+    hpf: 80,
+    lpf: 6000,
+    bass: 2,
+    crushMode: true,
+    stereo: false,
+    normalize: true
+  };
+
+  const presetAmiga = {
+    bitDepth: 8,
+    sampleRate: 28000,
+    grit: 1.5,
+    noise: 0.005,
+    playbackRate: 1.0,
+    hpf: 20,
+    lpf: 10000,
+    bass: 0,
+    crushMode: false,
+    stereo: true,
+    normalize: true
+  };
+
+  let userPreset = null;
+  const saved = localStorage.getItem('ogcruncher_preset');
+  if (saved) {
+    try {
+      userPreset = JSON.parse(saved);
+    } catch (_) {}
+  }
+
+  const matchAuthor = isMatch(presetAuthor);
+  const matchNes = isMatch(presetNes);
+  const matchAmiga = isMatch(presetAmiga);
+  const matchUser = userPreset ? isMatch(userPreset) : false;
+
+  btnPresetAuthor.classList.toggle('active', matchAuthor);
+  if (btnPresetNes) btnPresetNes.classList.toggle('active', matchNes);
+  if (btnPresetAmiga) btnPresetAmiga.classList.toggle('active', matchAmiga);
+  btnPresetUser.classList.toggle('active', matchUser);
 }
 
 function setProgress(pct, text) {
@@ -516,12 +589,8 @@ btnPresetAuthor.addEventListener('click', () => {
     stereo: false,
     normalize: true
   });
-  updatePresetUI('author');
   log('preset: LO-Q (author default)', 'accent');
   showToast('◉ author preset loaded', 'info');
-  saveState();
-  updateWorkletParams();
-  if (state.liveUpdate) requestPreviewUpdate();
 });
 
 if (btnPresetNes) {
@@ -540,12 +609,8 @@ if (btnPresetNes) {
       stereo: false,
       normalize: true
     });
-    updatePresetUI('nes');
     log('preset: NES 8-BIT (retro gaming classic)', 'accent');
     showToast('🎮 NES 8-bit preset loaded', 'info');
-    saveState();
-    updateWorkletParams();
-    if (state.liveUpdate) requestPreviewUpdate();
   });
 }
 
@@ -565,12 +630,8 @@ if (btnPresetAmiga) {
       stereo: true,
       normalize: true
     });
-    updatePresetUI('amiga');
     log('preset: AMIGA 500 (vintage sampler)', 'accent');
     showToast('💾 Amiga 500 preset loaded', 'info');
-    saveState();
-    updateWorkletParams();
-    if (state.liveUpdate) requestPreviewUpdate();
   });
 }
 
@@ -580,12 +641,8 @@ btnPresetUser.addEventListener('click', () => {
   const p = JSON.parse(saved);
   pushHistory();
   applyParamsToUI(p);
-  updatePresetUI('user');
   log('preset: MY PRESET (user custom)', 'accent');
   showToast('👤 custom preset loaded', 'info');
-  saveState();
-  updateWorkletParams();
-  if (state.liveUpdate) requestPreviewUpdate();
 });
 
 btnSaveCustom.addEventListener('click', () => {
@@ -605,7 +662,7 @@ btnSaveCustom.addEventListener('click', () => {
   localStorage.setItem('ogcruncher_preset', JSON.stringify(preset));
   btnPresetUser.disabled = false;
   userPresetMeta.textContent = `${preset.bitDepth}-bit / ${preset.sampleRate}Hz`;
-  updatePresetUI('user');
+  updatePresetUI();
   log('custom preset saved to localstorage', 'ok');
   showToast('💾 custom preset saved', 'ok');
 });
@@ -728,6 +785,7 @@ window.addEventListener('keydown', (e) => {
    ════════════════════════════════════════════════════════════════════ */
 
 (function init() {
+  setOnStateChange(updatePresetUI);
   initUtils({ logWindow, toast, badgeStatus });
   initQueue({ 
     fileQueue, queueHeader, btnProcess, btnProcessLbl, 
@@ -843,6 +901,7 @@ window.addEventListener('keydown', (e) => {
     log('App installed via browser UI.', 'ok');
   });
 
+  updatePresetUI();
   pauseHistory(false);
   pushHistory(); 
   log('ready. drop files or click browse.', 'ok');
