@@ -8,7 +8,7 @@
 import { state, saveState, loadState, updateHash, parseHash, pushHistory, undo, redo, pauseHistory } from './state.js';
 import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
 import { initQueue, addFiles, clearQueue, startProcessing, loadDemoTrack, handleItems } from './queue.js';
-import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, updateWorkletParams } from './preview.js';
+import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, updateWorkletParams, setPreviewVolume } from './preview.js';
 
 const SITE_URL = 'https://figarist.github.io/OGCruncher/';
 
@@ -48,9 +48,10 @@ const outGrit = $('out-grit');
 const outNoise = $('out-noise');
 const outSpeed = $('out-speed');
 const outMario = $('out-mariomode');
-const outStereo = $('out-stereo');
 const outNormalize = $('out-normalize');
 const abContainer = $('ab-container');
+const sliderPreviewVolume = $('slider-preview-volume');
+const outPreviewVolume = $('out-preview-volume');
 const sliderHpf = $('slider-hpf');
 const sliderLpf = $('slider-lpf');
 const sliderBass = $('slider-bass');
@@ -258,6 +259,17 @@ function applyParamsToUI(p) {
     const statusEl = $('live-status');
     if (statusEl) statusEl.textContent = state.liveUpdate ? 'ON' : 'OFF';
   }
+  if (p.previewVolume !== undefined) {
+    state.previewVolume = +p.previewVolume;
+    if (sliderPreviewVolume) {
+      sliderPreviewVolume.value = p.previewVolume;
+      updateSliderTrack(sliderPreviewVolume);
+    }
+    if (outPreviewVolume) {
+      outPreviewVolume.textContent = Math.round(p.previewVolume * 100) + '%';
+    }
+  }
+  
   if (p.dualView !== undefined) {
     state.dualView = p.dualView;
     btnDualView.classList.toggle('active', state.dualView);
@@ -418,6 +430,18 @@ wrapSlider(sliderHpf, syncHpf);
 wrapSlider(sliderLpf, syncLpf);
 wrapSlider(sliderBass, syncBass);
 
+if (sliderPreviewVolume) {
+  sliderPreviewVolume.addEventListener('input', () => {
+    const vol = parseFloat(sliderPreviewVolume.value);
+    setPreviewVolume(vol);
+    if (outPreviewVolume) {
+      outPreviewVolume.textContent = Math.round(vol * 100) + '%';
+    }
+    updateSliderTrack(sliderPreviewVolume);
+    saveState();
+  });
+}
+
 btnMarioToggle.addEventListener('click', () => {
   pushHistory();
   state.crushMode = !state.crushMode;
@@ -533,7 +557,7 @@ function setControlsEnabled(enabled) {
     sliderHpf, sliderLpf, sliderBass,
     btnMarioToggle, btnStereoToggle, btnNormalizeToggle,
     btnLiveUpdate, btnDualView, btnPresetAuthor, btnPresetUser,
-    btnSaveCustom, btnClearQueue, btnLoadDemo, fileInput
+    btnSaveCustom, btnClearQueue, btnLoadDemo, fileInput, sliderPreviewVolume
   ];
   inputs.forEach(el => {
     if (el) el.disabled = !enabled;
