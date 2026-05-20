@@ -218,6 +218,12 @@
     <section id="panel-center" class="panel panel--controls" aria-label="Processing controls">
       <div class="panel-label" aria-hidden="true">[ PARAMETERS ]</div>
 
+      <!-- Mode selector toggle -->
+      <div class="mode-selector-wrapper">
+        <button id="btn-mode-simple" class="btn btn--mode-tab" aria-label="Switch to Simple mode">SIMPLE</button>
+        <button id="btn-mode-advanced" class="btn btn--mode-tab active" aria-label="Switch to Advanced mode">ADVANCED</button>
+      </div>
+
       <!-- Presets -->
       <div class="control-group" id="group-presets">
         <div class="control-header">
@@ -261,7 +267,33 @@
 
       <!-- ── AUDIO RACK (Grid) ── -->
       <div class="audio-rack">
-        
+
+        <!-- Simple Mode quality slider -->
+        <div class="control-group" id="group-simple-quality" style="display:none;">
+          <div class="control-header">
+            <span class="control-label">SIZE & QUALITY</span>
+            <span id="out-simple-quality" class="control-value">HIGH</span>
+          </div>
+          <div class="slider-wrapper">
+            <input
+              type="range"
+              id="slider-simple-quality"
+              min="0"
+              max="3"
+              step="1"
+              value="3"
+              aria-label="Adjust size and quality"
+            />
+            <div class="slider-pips">
+              <span class="pip-label pip-snap" data-val="0">TINY</span>
+              <span class="pip-label pip-snap" data-val="1">LOW</span>
+              <span class="pip-label pip-snap" data-val="2">MEDIUM</span>
+              <span class="pip-label pip-snap" data-val="3">HIGH</span>
+            </div>
+          </div>
+          <p class="simple-desc" id="simple-quality-desc">High Quality (32kHz / 16-bit) — clear and optimized.</p>
+        </div>
+
         <!-- Bit Depth -->
         <div class="control-group" id="group-bitdepth">
           <div class="control-header">

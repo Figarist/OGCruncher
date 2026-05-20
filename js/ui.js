@@ -81,6 +81,14 @@ const btnInfo = $('btn-info');
 const modalInfo = $('modal-info');
 const btnInfoOk = $('btn-info-ok');
 
+// Simple Mode Refs
+const btnModeSimple = $('btn-mode-simple');
+const btnModeAdvanced = $('btn-mode-advanced');
+const groupSimpleQuality = $('group-simple-quality');
+const sliderSimpleQuality = $('slider-simple-quality');
+const outSimpleQuality = $('out-simple-quality');
+const simpleQualityDesc = $('simple-quality-desc');
+
 let _isDragging = false; 
 let _installPrompt = null; 
 
@@ -125,6 +133,98 @@ function syncSampleRate(val) {
   updateSavingsEstimate();
 }
 window.syncSampleRate = syncSampleRate;
+
+function setSimpleMode(enabled) {
+  state.simpleMode = !!enabled;
+
+  if (btnModeSimple) btnModeSimple.classList.toggle('active', enabled);
+  if (btnModeAdvanced) btnModeAdvanced.classList.toggle('active', !enabled);
+
+  const advancedGroups = [
+    'group-presets',
+    'group-bitdepth',
+    'group-samplerate',
+    'group-grit',
+    'group-noise',
+    'group-mariomode',
+    'group-dither',
+    'group-normalize',
+    'group-stereo',
+    'group-speed',
+    'group-filters'
+  ];
+
+  advancedGroups.forEach(id => {
+    const el = $(id);
+    if (el) {
+      el.style.display = enabled ? 'none' : '';
+    }
+  });
+
+  if (groupSimpleQuality) {
+    groupSimpleQuality.style.display = enabled ? 'block' : 'none';
+  }
+
+  saveState();
+}
+
+function syncSimpleQuality(val) {
+  state.simpleQuality = +val;
+  if (sliderSimpleQuality) {
+    sliderSimpleQuality.value = val;
+    sliderSimpleQuality.setAttribute('aria-valuenow', val);
+    updateSliderTrack(sliderSimpleQuality);
+  }
+
+  let rate = 32000;
+  let bits = 16;
+  let label = 'HIGH';
+  let desc = 'High Quality (32kHz / 16-bit) — clear and optimized, saves ~30% space.';
+
+  if (val === 0) {
+    rate = 8000;
+    bits = 8;
+    label = 'TINY (MICRO)';
+    desc = 'Micro size (8kHz / 8-bit) — classic walkie-talkie / telephone sound. Saves ~90% space!';
+  } else if (val === 1) {
+    rate = 16000;
+    bits = 8;
+    label = 'LOW (PORTABLE)';
+    desc = 'Low size (16kHz / 8-bit) — retro GBA / old mobile sound. Saves ~80% space!';
+  } else if (val === 2) {
+    rate = 22050;
+    bits = 12;
+    label = 'MEDIUM (RETRO)';
+    desc = 'Medium size (22kHz / 12-bit) — vintage sampler / Amiga vibe. Saves ~65% space!';
+  }
+
+  if (outSimpleQuality) outSimpleQuality.textContent = label;
+  if (simpleQualityDesc) simpleQualityDesc.textContent = desc;
+
+  // Apply parameters under the hood
+  state.sampleRate = rate;
+  state.bitDepth = bits;
+
+  // Keep hidden standard sliders in sync
+  if (sliderBit) {
+    sliderBit.value = bits;
+    outBit.textContent = bits;
+    sliderBit.setAttribute('aria-valuenow', bits);
+    updateSliderTrack(sliderBit);
+  }
+  if (sliderSr) {
+    sliderSr.value = rate;
+    outSr.innerHTML = `${rate.toLocaleString()} <span class="unit">Hz</span>`;
+    sliderSr.setAttribute('aria-valuenow', rate);
+    updateSliderTrack(sliderSr);
+    updateSrButtons(rate);
+  }
+
+  saveState();
+  updateWorkletParams();
+  if (state.liveUpdate) requestPreviewUpdate();
+  updateSavingsEstimate();
+}
 
 function syncGrit(val) {
   if (!_isDragging) pushHistory();
@@ -306,6 +406,14 @@ function applyParamsToUI(p) {
   }
   if (p.activePreset !== undefined) {
     state.activePreset = p.activePreset;
+  }
+  if (p.simpleMode !== undefined) {
+    state.simpleMode = p.simpleMode;
+    setSimpleMode(state.simpleMode);
+  }
+  if (p.simpleQuality !== undefined) {
+    state.simpleQuality = p.simpleQuality;
+    syncSimpleQuality(state.simpleQuality);
   }
   
   pauseHistory(false);
@@ -550,6 +658,114 @@ wrapSlider(sliderSpeed, syncSpeed);
 wrapSlider(sliderHpf, syncHpf);
 wrapSlider(sliderLpf, syncLpf);
 wrapSlider(sliderBass, syncBass);
+
+wrapSlider(sliderSimpleQuality, syncSimpleQuality);
+
+btnModeSimple.addEventListener('click', () => {
+  if (state.simpleMode) return;
+  pushHistory();
+  
+  // 1. Take a snapshot of advanced params
+  const advancedParams = {
+    bitDepth: state.bitDepth,
+    sampleRate: state.sampleRate,
+    grit: state.grit,
+    noise: state.noise,
+    hpf: state.hpf,
+    lpf: state.lpf,
+    bass: state.bass,
+    crushMode: state.crushMode,
+    dither: state.dither,
+    stereo: state.stereo,
+    normalize: state.normalize
+  };
+  localStorage.setItem('ogcruncher_advanced_snapshot', JSON.stringify(advancedParams));
+
+  // 2. Set clean defaults for simple mode
+  state.grit = 1.0;
+  state.noise = 0.0;
+  state.hpf = 20;
+  state.lpf = 20000;
+  state.bass = 0;
+  state.crushMode = true;
+  state.dither = true;
+  state.stereo = false;
+  state.normalize = true;
+
+  // Sync hidden advanced inputs visually too
+  if (sliderGrit) {
+    sliderGrit.value = 1.0;
+    outGrit.textContent = '1.0';
+    updateSliderTrack(sliderGrit);
+  }
+  if (sliderNoise) {
+    sliderNoise.value = 0.0;
+    outNoise.textContent = '0.0';
+    updateSliderTrack(sliderNoise);
+  }
+  if (sliderHpf) {
+    sliderHpf.value = 20;
+    outHpf.textContent = '20 Hz';
+    updateSliderTrack(sliderHpf);
+  }
+  if (sliderLpf) {
+    sliderLpf.value = 20000;
+    outLpf.textContent = 'OFF';
+    updateSliderTrack(sliderLpf);
+  }
+  if (sliderBass) {
+    sliderBass.value = 0;
+    outBass.textContent = '0 dB';
+    updateSliderTrack(sliderBass);
+  }
+  if (btnMarioToggle) {
+    btnMarioToggle.setAttribute('aria-checked', true);
+    btnMarioToggle.classList.add('active');
+    outMario.textContent = 'ON';
+  }
+  if (btnDitherToggle) {
+    btnDitherToggle.setAttribute('aria-checked', true);
+    btnDitherToggle.classList.add('active');
+    outDither.textContent = 'ON';
+  }
+  if (btnStereoToggle) {
+    btnStereoToggle.setAttribute('aria-checked', true);
+    btnStereoToggle.classList.add('active');
+    outStereo.textContent = 'MONO';
+  }
+  if (btnNormalizeToggle) {
+    btnNormalizeToggle.setAttribute('aria-checked', true);
+    btnNormalizeToggle.classList.add('active');
+    outNormalize.textContent = 'ON';
+  }
+
+  // 3. Switch mode
+  setSimpleMode(true);
+  
+  // 4. Force simple quality synchronization
+  syncSimpleQuality(state.simpleQuality !== undefined ? state.simpleQuality : 3);
+  
+  log('Switched to SIMPLE mode', 'sys');
+});
+
+btnModeAdvanced.addEventListener('click', () => {
+  if (!state.simpleMode) return;
+  pushHistory();
+
+  // 1. Switch mode
+  setSimpleMode(false);
+
+  // 2. Restore snapshot if it exists
+  const saved = localStorage.getItem('ogcruncher_advanced_snapshot');
+  if (saved) {
+    try {
+      const p = JSON.parse(saved);
+      applyParamsToUI(p);
+    } catch (_) {}
+  }
+  
+  log('Switched to ADVANCED mode', 'sys');
+});
 
 if (sliderPreviewVolume) {
   sliderPreviewVolume.addEventListener('input', () => {
@@ -944,6 +1160,10 @@ window.addEventListener('keydown', (e) => {
 
   loadState(applyParamsToUI);
   parseHash(applyParamsToUI);
+  
+  // Initialize Simple Mode UI state on startup
+  setSimpleMode(state.simpleMode);
+  syncSimpleQuality(state.simpleQuality);
   window.addEventListener('hashchange', () => {
     parseHash(applyParamsToUI);
   });
