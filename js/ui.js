@@ -51,6 +51,7 @@ const outNoise = $('out-noise');
 const outSpeed = $('out-speed');
 const outMario = $('out-mariomode');
 const outNormalize = $('out-normalize');
+const outStereo = $('out-stereo');
 const abContainer = $('ab-container');
 const sliderPreviewVolume = $('slider-preview-volume');
 const outPreviewVolume = $('out-preview-volume');
