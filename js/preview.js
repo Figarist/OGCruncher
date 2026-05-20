@@ -17,6 +17,7 @@ let _previewSessionId = 0;    // Tracking ID for preview session to prevent race
 let previewCtx = null;
 let previewSource = null;     // Crunched source (fallback) or Shared source (worklet)
 let previewSourceOrig = null; // Original source (fallback)
+let gainMaster = null;        // Master volume node
 let gainCrunched = null;
 let gainOriginal = null;
 let analyserCrunched = null;
@@ -181,6 +182,9 @@ export async function togglePreview() {
       updateWorkletParams();
 
       // ── Step 4: Build sources ────────────────────────────────────────────────
+      gainMaster = previewCtx.createGain();
+      gainMaster.gain.value = state.previewVolume;
+
       previewSource = previewCtx.createBufferSource();
       previewSource.buffer = previewResampledWet;
       previewSource.loop = true;
@@ -188,14 +192,16 @@ export async function togglePreview() {
       previewSource.connect(dspWorkletNode);
       dspWorkletNode.connect(gainCrunched);
       dspWorkletNode.connect(analyserCrunched);
-      gainCrunched.connect(previewCtx.destination);
+      gainCrunched.connect(gainMaster);
 
       previewSourceOrig = previewCtx.createBufferSource();
       previewSourceOrig.buffer = previewResampled;
       previewSourceOrig.loop = true;
       previewSourceOrig.connect(gainOriginal);
       previewSourceOrig.connect(analyserOriginal);
-      gainOriginal.connect(previewCtx.destination);
+      gainOriginal.connect(gainMaster);
+
+      gainMaster.connect(previewCtx.destination);
 
       lastRenderParams = {
         sampleRate: targetRate,
@@ -248,19 +254,24 @@ export async function togglePreview() {
       gainCrunched.gain.value = isComparingOriginal ? 0 : 1;
       gainOriginal.gain.value = isComparingOriginal ? 1 : 0;
 
+      gainMaster = previewCtx.createGain();
+      gainMaster.gain.value = state.previewVolume;
+
       previewSource = previewCtx.createBufferSource();
       previewSource.buffer = previewResampledWet;
       previewSource.loop = true;
       previewSource.connect(gainCrunched);
       previewSource.connect(analyserCrunched);
-      gainCrunched.connect(previewCtx.destination);
+      gainCrunched.connect(gainMaster);
 
       previewSourceOrig = previewCtx.createBufferSource();
       previewSourceOrig.buffer = previewResampled;
       previewSourceOrig.loop = true;
       previewSourceOrig.connect(gainOriginal);
       previewSourceOrig.connect(analyserOriginal);
-      gainOriginal.connect(previewCtx.destination);
+      gainOriginal.connect(gainMaster);
+
+      gainMaster.connect(previewCtx.destination);
 
       lastRenderParams = { ...state };
       log('Preview started (Fallback mode)', 'ok');
@@ -309,6 +320,7 @@ export function stopPreview() {
   }
   if (gainCrunched) { try { gainCrunched.disconnect(); } catch(_) {} gainCrunched = null; }
   if (gainOriginal) { try { gainOriginal.disconnect(); } catch(_) {} gainOriginal = null; }
+  if (gainMaster) { try { gainMaster.disconnect(); } catch(_) {} gainMaster = null; }
   if (analyserCrunched) { analyserCrunched = null; }
   if (analyserOriginal) { analyserOriginal = null; }
 
@@ -581,4 +593,12 @@ function startVisualizer() {
   };
 
   draw();
+}
+
+export function setPreviewVolume(vol) {
+  state.previewVolume = vol;
+  if (gainMaster && previewCtx) {
+    const now = previewCtx.currentTime;
+    gainMaster.gain.setTargetAtTime(vol, now, 0.02);
+  }
 }

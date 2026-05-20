@@ -440,6 +440,18 @@
             <span class="live-label">LIVE UPDATE: <span id="live-status">OFF</span></span>
             <kbd class="hotkey" style="margin-left:6px">N</kbd>
           </button>
+
+          <!-- Preview Volume Pill -->
+          <div class="preview-volume-pill" id="preview-volume-container">
+            <span class="volume-icon" title="Preview Volume">🔊</span>
+            <input 
+              type="range" 
+              id="slider-preview-volume" 
+              min="0" max="1" step="0.05" value="0.8" 
+              aria-label="Preview volume"
+            />
+            <span id="out-preview-volume">80%</span>
+          </div>
         </div>
       </div>
 

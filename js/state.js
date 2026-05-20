@@ -22,6 +22,7 @@ export const state = {
   liveUpdate: true,   // IMPROVEMENT: enabled by default
   normalize: true,    // IMPROVEMENT 2: peak normalization toggle
   dualView: false,    // NEW: show both spectra simultaneously
+  previewVolume: 0.8, // Default volume for preview
 };
 
 export function saveState() {
