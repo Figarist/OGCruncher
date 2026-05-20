@@ -25,7 +25,7 @@ export const state = {
   dualView: false,    // NEW: show both spectra simultaneously
   previewVolume: 0.8, // Default volume for preview
   activePreset: 'author',
-  simpleMode: false,
+  simpleMode: true,
   simpleQuality: 3,
 };
 
