@@ -9,10 +9,9 @@ import './ui.js';
 import { log, showToast } from './utils.js';
 
 // Register Service Worker and manage updates
-if ('serviceWorker' in navigator) {
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // Vite PWA sw.js is in the root of the output directory
-    navigator.serviceWorker.register('./sw.js')
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`)
       .then(reg => {
         log('Service Worker registered successfully.', 'sys');
         

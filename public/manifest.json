@@ -1,11 +1,11 @@
 {
   "name": "OGCruncher",
   "short_name": "OGCruncher",
-  "description": "In-browser audio bit-crusher and lo-fi converter by figarist.",
+"description": "A local browser audio bit-crusher and lo-fi converter by Ihor Sivochka.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#07070d",
-  "theme_color": "#0a0a0f",
+"background_color": "#f2f0eb",
+"theme_color": "#f2f0eb",
   "orientation": "any",
   "categories": ["utilities", "music", "productivity"],
   "icons": [

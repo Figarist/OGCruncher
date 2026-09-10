@@ -91,6 +91,18 @@ const simpleQualityDesc = $('simple-quality-desc');
 
 let _isDragging = false; 
 let _installPrompt = null; 
+let _infoTrigger = null;
+
+function openInfoModal() {
+  _infoTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : btnInfo;
+  modalInfo.hidden = false;
+  btnInfoOk.focus();
+}
+
+function closeInfoModal() {
+  modalInfo.hidden = true;
+  if (_infoTrigger && typeof _infoTrigger.focus === 'function') _infoTrigger.focus();
+}
 
 /* ════════════════════════════════════════════════════════════════════
    SYNC FUNCTIONS
@@ -136,6 +148,9 @@ window.syncSampleRate = syncSampleRate;
 
 function setSimpleMode(enabled) {
   state.simpleMode = !!enabled;
+
+  const modeSelector = document.getElementById('mode-selector');
+  if (modeSelector) modeSelector.dataset.mode = enabled ? 'simple' : 'advanced';
 
   if (btnModeSimple) btnModeSimple.classList.toggle('active', enabled);
   if (btnModeAdvanced) btnModeAdvanced.classList.toggle('active', !enabled);
@@ -1028,16 +1043,24 @@ btnLoadDemo.addEventListener('click', (e) => {
   loadDemoTrack();
 });
 
-btnInfo.addEventListener('click', () => {
-  modalInfo.hidden = false;
-});
+btnInfo.addEventListener('click', openInfoModal);
 
 btnInfoOk.addEventListener('click', () => {
-  modalInfo.hidden = true;
+  closeInfoModal();
 });
 
 modalInfo.addEventListener('click', (e) => {
-  if (e.target === modalInfo) modalInfo.hidden = true;
+  if (e.target === modalInfo) closeInfoModal();
+});
+
+modalInfo.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeInfoModal();
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    btnInfoOk.focus();
+  }
 });
 
 window.addEventListener('keydown', (e) => {
@@ -1194,6 +1217,7 @@ window.addEventListener('keydown', (e) => {
   if (!localStorage.getItem('og_seen_info')) {
     modalInfo.hidden = false;
     localStorage.setItem('og_seen_info', 'true');
+    btnInfoOk.focus();
   }
 
   // ── PWA Install Prompt ────────────────────────────────────────────────

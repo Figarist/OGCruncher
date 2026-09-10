@@ -9,7 +9,6 @@ import { state } from './state.js';
 import { log, showToast, formatBytes, setBadge } from './utils.js';
 import { buildFilterChain, safeOfflineCtx } from './dsp.js';
 import { stopPreview } from './preview.js';
-import DSPWorker from './dsp.worker.js?worker&type=classic';
 
 /* ════════════════════════════════════════════════════════════════════
    DOM REFS (Initialized via initQueue)
@@ -23,7 +22,10 @@ let _worker = null;
 
 function getWorker() {
   if (!_worker) {
-    _worker = new DSPWorker();
+    // Keep the encoder worker classic: dsp.worker.js uses importScripts() for
+    // the existing Emscripten encoders. The URL form lets Vite preserve the
+    // browser's classic-worker default in both dev and production builds.
+    _worker = new Worker(new URL('./dsp.worker.js', import.meta.url));
   }
   return _worker;
 }
@@ -461,7 +463,7 @@ export async function loadDemoTrack() {
   _dom.btnLoadDemo.textContent = 'LOADING...';
   
   try {
-    const response = await fetch('demo.mp3');
+    const response = await fetch(`${import.meta.env.BASE_URL}demo.mp3`);
     if (!response.ok) throw new Error('Demo track not found');
     const blob = await response.blob();
     const file = new File([blob], 'demo.mp3', { type: 'audio/mpeg' });
