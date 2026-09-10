@@ -1,0 +1,31 @@
+{
+  "date": "2026-09-10",
+  "scope": "Current-source Node VM measurements after remediation; no browser audio device or lossy codec round-trip",
+  "observations": [
+    {
+      "id": "A03",
+      "inputRightToLeft": 0.1,
+      "outputRightToLeft": 0.09999999627470976,
+      "normalize": "linked"
+    },
+    {
+      "id": "A04",
+      "inputPeak": 0.00001,
+      "outputPeak": 0.000009999999747378752,
+      "crush": false,
+      "normalize": false
+    },
+    {
+      "id": "A05",
+      "zeroSampleByte": 128,
+      "fileBytes": 48,
+      "dataBytes": 3,
+      "padding": 1
+    },
+    {
+      "id": "S04",
+      "invalidFieldsIgnored": true
+    }
+  ],
+  "verificationBoundary": "Use npm test for assertions; these measurements do not prove browser, listening, codec, accessibility or cross-browser behavior."
+}

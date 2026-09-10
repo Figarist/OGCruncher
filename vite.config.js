@@ -18,7 +18,10 @@ export default defineConfig({
   },
   plugins: [
     VitePWA({
-      registerType: 'autoUpdate',
+    // Registration is owned by js/main.js. Prompt-style updates avoid replacing
+    // a page that owns in-memory queue files and output Blob URLs.
+    registerType: 'prompt',
+    injectRegister: null,
       includeAssets: ['robots.txt'],
       manifest: {
         name: 'OGCruncher',
@@ -41,6 +44,8 @@ export default defineConfig({
         ]
       },
       workbox: {
+        skipWaiting: false,
+        clientsClaim: false,
         // Cache all static assets from the build
         globPatterns: ['**/*.{js,css,html,ico,png,svg,mp3,mem}'],
         // Increase the size limit for cached files (OggVorbisEncoder is ~350kb, .mem is ~550kb)

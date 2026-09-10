@@ -1,196 +1,178 @@
 /**
- * OGCruncher — DSP Web Worker
- * Handles heavy processing and encoding in a background thread.
+ * OGCruncher — classic DSP and encoding worker.
+ *
+ * The worker receives one immutable processing snapshot per file. Encoding
+ * failures are isolated by format so a good WAV is not lost because OGG failed.
  */
 
 'use strict';
 
-// Wait for Emscripten's async .mem file loading to complete
 let resolveEncoderReady;
-const encoderReadyPromise = new Promise(resolve => {
+let rejectEncoderReady;
+let encoderRuntimeReady = false;
+const encoderReadyPromise = new Promise((resolve, reject) => {
   resolveEncoderReady = resolve;
+  rejectEncoderReady = reject;
 });
+const encoderReadyTimeout = setTimeout(() => {
+  if (!encoderRuntimeReady) rejectEncoderReady(new Error('OGG encoder initialization timed out.'));
+}, 15000);
 
-// Increase Wasm memory limit for OggVorbisEncoder (default 16MB is too small for long files)
-// Also provide locateFile to resolve the relative path of the .mem file from the root directory
 self.OggVorbisEncoderConfig = {
-  TOTAL_MEMORY: 536870912, // 512 MB
-  locateFile: function(path) {
-    if (path.endsWith('.mem')) {
-      return new URL('../' + path, self.location.href).href;
-    }
-    return path;
+  TOTAL_MEMORY: 536870912,
+  locateFile(path) {
+    return path.endsWith('.mem')
+      ? new URL('../' + path, self.location.href).href
+      : path;
   },
-  onRuntimeInitialized: function() {
+  onRuntimeInitialized() {
+    encoderRuntimeReady = true;
+    clearTimeout(encoderReadyTimeout);
     resolveEncoderReady();
-  }
+  },
 };
 
-// Dynamically resolve unhashed static library URLs using Web API URL constructor
-importScripts(
-  new URL('../OggVorbisEncoder.min.js', self.location.href).href,
-  new URL('../lame.min.js', self.location.href).href
-);
+let oggLoadError = null;
+let mp3LoadError = null;
+try {
+  importScripts(new URL('../OggVorbisEncoder.min.js', self.location.href).href);
+} catch (error) {
+  oggLoadError = error;
+  rejectEncoderReady(error);
+}
+try {
+  importScripts(new URL('../lame.min.js', self.location.href).href);
+} catch (error) {
+  mp3LoadError = error;
+}
 
-// ── DSP FUNCTIONS ────────────────────────────────────────────────────────────
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
 
-function processDSP(buf, bitDepth, crushMode, dither, grit = 1.5, noise = 0.0) {
-  bitDepth = Math.max(1, Math.min(16, bitDepth || 8));
-  grit = Math.max(1.0, Math.min(10.0, grit || 1.5));
-  noise = Math.max(0.0, Math.min(1.0, noise || 0.0));
+function finiteOr(value, fallback) {
+  return Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
 
-  const N = buf.length;
+function createSeededRandom(seed = 1) {
+  let value = (Number(seed) >>> 0) || 1;
+  return () => {
+    value = (1664525 * value + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+}
 
-  if (noise > 0) {
-    for (let i = 0; i < N; i++) {
-      buf[i] += (Math.random() * 2 - 1) * noise;
-    }
+function processDSP(buf, bitDepth = 8, crushMode = true, dither = true,
+                   grit = 1, noise = 0, random = Math.random) {
+  const bits = Math.round(clamp(finiteOr(bitDepth, 8), 1, 16));
+  const drive = clamp(finiteOr(grit, 1), 1, 10);
+  const noiseLevel = clamp(finiteOr(noise, 0), 0, 0.05);
+  if (!buf || !buf.length) return false;
+
+  if (noiseLevel > 0) {
+    for (let i = 0; i < buf.length; i++) buf[i] += (random() * 2 - 1) * noiseLevel;
   }
-
-  // Remove DC offset
-  let sum = 0;
-  for (let i = 0; i < N; i++) sum += buf[i];
-  const dc = sum / N;
-  for (let i = 0; i < N; i++) buf[i] -= dc;
-
-  // Initial peak normalization for consistent crushing
-  let peak = 0;
-  for (let i = 0; i < N; i++) {
-    const a = buf[i] < 0 ? -buf[i] : buf[i];
-    if (a > peak) peak = a;
-  }
-  const invPeak = 1 / (peak + 1e-9);
-  for (let i = 0; i < N; i++) buf[i] *= invPeak;
-
   if (crushMode) {
-    // Step 1: Soft expander (nonlinear shaping)
-    for (let i = 0; i < N; i++) {
-      const x = buf[i];
-      buf[i] = (x < 0 ? -1 : x > 0 ? 1 : 0) * Math.pow(x < 0 ? -x : x, 1.15);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i];
+    const dc = sum / buf.length;
+    for (let i = 0; i < buf.length; i++) buf[i] -= dc;
+
+    for (let i = 0; i < buf.length; i++) {
+      const x = clamp(buf[i], -1, 1);
+      buf[i] = Math.sign(x) * Math.pow(Math.abs(x), 1.15);
     }
 
-    // Step 2: Quantize with True TPDF dither
-    // Dither is added HERE — after all nonlinear processing, immediately before rounding.
-    // Amplitude = 1 LSB = 1/halfLev in the normalized [-1, 1] scale.
-    const levels = 1 << bitDepth;
-    const halfLev = levels >> 1;
-    const lsb = 1 / halfLev; // ← correct 1 LSB amplitude (was errRange = 1/(1<<bitDepth) = 0.5 LSB)
-    for (let i = 0; i < N; i++) {
-      if (dither) {
-        buf[i] += (Math.random() - Math.random()) * lsb; // TPDF: triangular, zero mean, ±1 LSB
-      }
-      buf[i] = Math.round(buf[i] * halfLev) / halfLev;
+    const halfLevels = 1 << (bits - 1);
+    const lsb = 1 / halfLevels;
+    for (let i = 0; i < buf.length; i++) {
+      const shapedDither = dither ? (random() - random()) * lsb : 0;
+      buf[i] = Math.round((buf[i] + shapedDither) * halfLevels) / halfLevels;
     }
 
-    // Step 3: Anti-alias (adjacent-sample average)
-    let prev = 0;
-    for (let i = 0; i < N; i++) {
-      const cur = buf[i];
-      buf[i] = (cur + prev) * 0.5;
-      prev = cur;
+    let previous = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const current = buf[i];
+      buf[i] = (current + previous) * 0.5;
+      previous = current;
     }
-
+  }
+  if (drive > 1) {
+    const compensation = Math.tanh(drive);
+    for (let i = 0; i < buf.length; i++) buf[i] = Math.tanh(buf[i] * drive) / compensation;
   }
 
-  // Check for clipping BEFORE final saturation
   let clipped = false;
-  for (let i = 0; i < N; i++) {
-    if (buf[i] > 1.0 || buf[i] < -1.0) {
-      clipped = true;
-      break;
-    }
+  for (let i = 0; i < buf.length; i++) {
+    if (buf[i] > 1 || buf[i] < -1) clipped = true;
+    buf[i] = clamp(buf[i], -1, 1);
   }
-
-  // 5. Final saturation (grit)
-  for (let i = 0; i < N; i++) {
-    buf[i] = Math.tanh(buf[i] * grit);
-  }
-
   return clipped;
 }
 
-function normalizeBuffer(buf) {
+function normalizeChannels(channels) {
   let peak = 0;
-  for (let i = 0; i < buf.length; i++) {
-    const a = buf[i] < 0 ? -buf[i] : buf[i];
-    if (a > peak) peak = a;
+  for (const channel of channels) {
+    for (let i = 0; i < channel.length; i++) peak = Math.max(peak, Math.abs(channel[i]));
   }
-  if (peak > 1e-6) {
-    const inv = 1 / peak;
-    for (let i = 0; i < buf.length; i++) buf[i] *= inv;
+  if (peak <= 1e-6 || !Number.isFinite(peak)) return;
+  const scale = 1 / peak;
+  for (const channel of channels) {
+    for (let i = 0; i < channel.length; i++) channel[i] = clamp(channel[i] * scale, -1, 1);
   }
 }
-
-function detectClipping(buf) {
-  for (let i = 0; i < buf.length; i++) {
-    if (buf[i] > 1.0 || buf[i] < -1.0) return true;
-  }
-  return false;
-}
-
-// ── ENCODERS (Returning ArrayBuffers for transferability) ────────────────────
 
 async function encodeOGG(channels, sampleRate) {
-  const numChannels = channels.length;
-  
-  // Wait for the .mem file to be loaded and the heap to be initialized
+  if (oggLoadError) throw new Error(`OGG encoder unavailable: ${oggLoadError.message || oggLoadError}`);
   await encoderReadyPromise;
-
-  // @ts-ignore
-  const encoder = new OggVorbisEncoder(sampleRate, numChannels, 0.0);
-
-  const CHUNK_SIZE = 16384; 
-  const totalSamples = channels[0].length;
-
-  for (let i = 0; i < totalSamples; i += CHUNK_SIZE) {
-    const chunkEnd = Math.min(i + CHUNK_SIZE, totalSamples);
-    const chunks = channels.map(ch => ch.subarray(i, chunkEnd));
-    encoder.encode(chunks);
+  if (typeof OggVorbisEncoder !== 'function') throw new Error('OGG encoder is unavailable.');
+  const encoder = new OggVorbisEncoder(sampleRate, channels.length, 0.0);
+  const chunkSize = 16384;
+  for (let i = 0; i < channels[0].length; i += chunkSize) {
+    encoder.encode(channels.map(channel => channel.subarray(i, Math.min(i + chunkSize, channels[0].length))));
   }
-
-  // OggVorbisEncoder.finish() returns a Blob, not an ArrayBuffer.
-  // Convert to ArrayBuffer for transferable postMessage.
-  const blob = encoder.finish();
-  return await blob.arrayBuffer();
+  return (await encoder.finish().arrayBuffer());
 }
 
-function encodeWAV(channels, sampleRate, bitDepth) {
-  const containerDepth = bitDepth <= 8 ? 8 : 16;
-  const numChannels = channels.length;
-  const numSamples = channels[0].length;
-  const bytesPerSample = containerDepth === 16 ? 2 : 1;
+function encodeWAV(channels, sampleRate, effectBits) {
+  const containerDepth = Math.round(effectBits) <= 8 ? 8 : 16;
+  const numChannels = Math.max(1, channels.length);
+  const numSamples = channels[0] ? channels[0].length : 0;
+  const bytesPerSample = containerDepth === 8 ? 1 : 2;
   const blockAlign = numChannels * bytesPerSample;
-  const buffer = new ArrayBuffer(44 + numSamples * blockAlign);
+  const dataBytes = numSamples * blockAlign;
+  const padding = dataBytes % 2;
+  const fileBytes = 44 + dataBytes + padding;
+  const buffer = new ArrayBuffer(fileBytes);
   const view = new DataView(buffer);
-
-  const writeString = (v, offset, str) => {
-    for (let i = 0; i < str.length; i++) v.setUint8(offset + i, str.charCodeAt(i));
+  const writeString = (offset, text) => {
+    for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
   };
-
-  writeString(view, 0, 'RIFF');
-  view.setUint32(4, 36 + numSamples * blockAlign, true);
-  writeString(view, 8, 'WAVE');
-  writeString(view, 12, 'fmt ');
+  writeString(0, 'RIFF');
+  view.setUint32(4, fileBytes - 8, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
   view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint32(24, Math.round(sampleRate), true);
+  view.setUint32(28, Math.round(sampleRate) * blockAlign, true);
   view.setUint16(32, blockAlign, true);
   view.setUint16(34, containerDepth, true);
-  writeString(view, 36, 'data');
-  view.setUint32(40, numSamples * blockAlign, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataBytes, true);
 
   let offset = 44;
   for (let i = 0; i < numSamples; i++) {
     for (let ch = 0; ch < numChannels; ch++) {
-      let s = Math.max(-1, Math.min(1, channels[ch][i]));
-      if (containerDepth === 16) {
-        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-        offset += 2;
-      } else {
-        view.setUint8(offset, (s + 1) * 127.5);
+      const sample = clamp(Number((channels[ch] || channels[0])[i]) || 0, -1, 1);
+      if (containerDepth === 8) {
+        view.setUint8(offset, clamp(Math.round((sample + 1) * 127.5), 0, 255));
         offset += 1;
+      } else {
+        const value = sample < 0 ? Math.round(sample * 0x8000) : Math.round(sample * 0x7fff);
+        view.setInt16(offset, clamp(value, -0x8000, 0x7fff), true);
+        offset += 2;
       }
     }
   }
@@ -198,114 +180,83 @@ function encodeWAV(channels, sampleRate, bitDepth) {
 }
 
 function encodeMP3(channels, sampleRate) {
-  const numChannels = channels.length;
-  const numSamples = channels[0].length;
-
-  // @ts-ignore
-  const mp3encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, 128);
-  const mp3Data = [];
-  const sampleBlockSize = 1152;
-
-  const intChannels = channels.map(ch => {
-    const i16 = new Int16Array(ch.length);
-    for (let i = 0; i < ch.length; i++) {
-      let s = Math.max(-1, Math.min(1, ch[i]));
-      i16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  if (mp3LoadError || typeof lamejs === 'undefined') throw new Error('MP3 encoder is unavailable.');
+  const encoder = new lamejs.Mp3Encoder(channels.length, sampleRate, 128);
+  const intChannels = channels.map(channel => {
+    const output = new Int16Array(channel.length);
+    for (let i = 0; i < channel.length; i++) {
+      const sample = clamp(channel[i], -1, 1);
+      output[i] = sample < 0 ? Math.round(sample * 0x8000) : Math.round(sample * 0x7fff);
     }
-    return i16;
+    return output;
   });
-
-  for (let i = 0; i < numSamples; i += sampleBlockSize) {
-    const chunkEnd = Math.min(i + sampleBlockSize, numSamples);
-    const leftChunk = intChannels[0].subarray(i, chunkEnd);
-    const rightChunk = numChannels > 1 ? intChannels[1].subarray(i, chunkEnd) : leftChunk;
-
-    let mp3buf;
-    if (numChannels === 1) {
-      mp3buf = mp3encoder.encodeBuffer(leftChunk);
-    } else {
-      mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
-    }
-    if (mp3buf.length > 0) mp3Data.push(mp3buf);
+  const chunks = [];
+  for (let i = 0; i < intChannels[0].length; i += 1152) {
+    const left = intChannels[0].subarray(i, Math.min(i + 1152, intChannels[0].length));
+    const right = intChannels.length > 1 ? intChannels[1].subarray(i, Math.min(i + 1152, intChannels[0].length)) : left;
+    const chunk = channels.length === 1 ? encoder.encodeBuffer(left) : encoder.encodeBuffer(left, right);
+    if (chunk.length) chunks.push(chunk);
   }
-
-  const mp3buf = mp3encoder.flush();
-  if (mp3buf.length > 0) mp3Data.push(mp3buf);
-
-  // Combine multiple Uint8Arrays into one ArrayBuffer
-  const totalLength = mp3Data.reduce((acc, curr) => acc + curr.length, 0);
-  const result = new Uint8Array(totalLength);
+  const tail = encoder.flush();
+  if (tail.length) chunks.push(tail);
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const output = new Uint8Array(total);
   let offset = 0;
-  for (const chunk of mp3Data) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return result.buffer;
+  for (const chunk of chunks) { output.set(chunk, offset); offset += chunk.length; }
+  return output.buffer;
 }
 
-// ── MESSAGE HANDLER ──────────────────────────────────────────────────────────
+let cancelled = false;
 
-self.onmessage = async function(e) {
-  const msg = e.data;
+self.onmessage = async function(event) {
+  const msg = event.data || {};
+  if (msg.type === 'cancel') {
+    cancelled = true;
+    return;
+  }
   if (msg.type !== 'process') return;
+  cancelled = false;
 
   try {
-    const { channels, sampleRate, bitDepth, crushMode, dither, grit, noise, normalize, bitDepthOriginal, fileName } = msg;
-    const numChannels = channels.length;
-
+    const { channels, sampleRate, fileName, randomSeed } = msg;
+    const params = {
+      bitDepth: msg.bitDepth,
+      crushMode: msg.crushMode,
+      dither: msg.dither,
+      grit: msg.grit,
+      noise: msg.noise,
+      normalize: msg.normalize,
+    };
     self.postMessage({ type: 'progress', pct: 5, label: 'DSP…' });
-
+    const random = createSeededRandom(randomSeed);
     let hasClipping = false;
-
-    // 1. DSP Processing
-    for (let ch = 0; ch < numChannels; ch++) {
-      const clipped = processDSP(channels[ch], bitDepth, crushMode, dither, grit, noise);
-      if (clipped) hasClipping = true;
-
-      if (normalize) {
-        normalizeBuffer(channels[ch]);
-      }
-
-      self.postMessage({ 
-        type: 'progress', 
-        pct: 5 + ((ch + 1) / numChannels) * 35, 
-        label: `DSP channel ${ch + 1}/${numChannels}…` 
-      });
+    for (let ch = 0; ch < channels.length; ch++) {
+      if (cancelled) throw new Error('Processing cancelled.');
+      if (processDSP(channels[ch], params.bitDepth, params.crushMode, params.dither,
+          params.grit, params.noise, random)) hasClipping = true;
+      self.postMessage({ type: 'progress', pct: 5 + ((ch + 1) / channels.length) * 35,
+        label: `DSP channel ${ch + 1}/${channels.length}…` });
     }
+    if (params.normalize) normalizeChannels(channels);
 
-    // 2. Encoding OGG (async — finish() returns Blob → ArrayBuffer)
+    const formats = {};
+    const errors = [];
+    const attempt = async (format, fn) => {
+      if (cancelled) throw new Error('Processing cancelled.');
+      try { formats[format] = await fn(); }
+      catch (error) { errors.push({ format, message: error.message || String(error) }); }
+    };
     self.postMessage({ type: 'progress', pct: 40, label: 'Encoding OGG…' });
-    const ogg = await encodeOGG(channels, sampleRate);
-
-    // 3. Encoding WAV
+    await attempt('ogg', () => encodeOGG(channels, sampleRate));
     self.postMessage({ type: 'progress', pct: 65, label: 'Encoding WAV…' });
-    const wav = encodeWAV(channels, sampleRate, bitDepthOriginal);
-
-    // 4. Encoding MP3
+    await attempt('wav', () => encodeWAV(channels, sampleRate, params.bitDepth));
     self.postMessage({ type: 'progress', pct: 82, label: 'Encoding MP3…' });
-    const mp3 = encodeMP3(channels, sampleRate);
+    await attempt('mp3', () => encodeMP3(channels, sampleRate));
+    if (!Object.keys(formats).length) throw new Error(errors.map(item => `${item.format}: ${item.message}`).join('; '));
 
-    // 5. Finalize
-    const transferList = [];
-    [ogg, wav, mp3].forEach(buf => {
-      if (buf instanceof ArrayBuffer) {
-        transferList.push(buf);
-      } else if (buf && buf.buffer instanceof ArrayBuffer) {
-        transferList.push(buf.buffer);
-      }
-    });
-
-    self.postMessage({
-      type: 'done',
-      ogg,
-      wav,
-      mp3,
-      hasClipping,
-      fileName
-    }, transferList);
-
-  } catch (err) {
-    const errorString = err.message || err.name || String(err);
-    self.postMessage({ type: 'error', message: errorString, fileName: msg.fileName });
+    const transferList = Object.values(formats).filter(value => value instanceof ArrayBuffer);
+    self.postMessage({ type: 'done', formats, errors, hasClipping, fileName }, transferList);
+  } catch (error) {
+    self.postMessage({ type: 'error', message: error.message || String(error), fileName: msg.fileName });
   }
 };

@@ -1,0 +1,62 @@
+{
+  "scope": "Node VM characterization of checked-in source; no browser audio or listening test",
+  "observations": [
+    {
+      "id": "A03",
+      "inputRightToLeft": 0.1,
+      "outputRightToLeft": 1,
+      "normalizeToggle": false
+    },
+    {
+      "id": "A04",
+      "inputPeak": 0.00001,
+      "outputPeak": 0.7615521550178528,
+      "crush": false,
+      "normalizeToggle": false,
+      "grit": 1
+    },
+    {
+      "id": "A04-noise",
+      "input": "silence",
+      "noiseSetting": 0.00001,
+      "outputPeak": 0.7615529894828796
+    },
+    {
+      "id": "A05",
+      "zeroSampleByte": 127,
+      "expectedUnsignedSilence": 128,
+      "fileBytes": 47,
+      "dataBytes": 3,
+      "missingEvenBytePadding": true
+    },
+    {
+      "id": "F01",
+      "durationSeconds": 10,
+      "sampleRate": 22050,
+      "channels": 1,
+      "dspBits": 12,
+      "estimatedByCurrentFormula": 330794,
+      "actualWavBytes": 441044
+    },
+    {
+      "id": "A02",
+      "workletOutputPeak": 1.265802264213562,
+      "exceedsFullScale": true
+    },
+    {
+      "id": "core-parity",
+      "maxAbsoluteDifference": 0,
+      "dither": false,
+      "noise": 0
+    },
+    {
+      "id": "worklet-copy",
+      "identical": true
+    },
+    {
+      "id": "S04",
+      "bitDepthIsNaN": true,
+      "sampleRateIsNaN": true
+    }
+  ]
+}
