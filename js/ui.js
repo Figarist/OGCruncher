@@ -5,9 +5,9 @@
 
 'use strict';
 
-import { state, saveState, loadState, updateHash, parseHash, pushHistory, undo, redo, pauseHistory, setOnStateChange } from './state.js';
+import { state, DEFAULTS, saveState, updateHash, parseHash, readSavedState, sanitizeParams, getStateSnapshot, pushHistory, undo, redo, pauseHistory, pausePersistence, setOnStateChange } from './state.js';
 import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
-import { initQueue, addFiles, clearQueue, startProcessing, loadDemoTrack, handleItems, updateSavingsEstimate } from './queue.js';
+import { initQueue, addFiles, clearQueue, cancelProcessing, startProcessing, loadDemoTrack, handleItems, updateSavingsEstimate } from './queue.js';
 import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, updateWorkletParams, setPreviewVolume, updateLiveFilters } from './preview.js';
 
 const SITE_URL = window.location.origin + window.location.pathname;
@@ -80,6 +80,8 @@ const btnLoadDemo = $('btn-load-demo');
 const btnInfo = $('btn-info');
 const modalInfo = $('modal-info');
 const btnInfoOk = $('btn-info-ok');
+const btnCancel = $('btn-cancel');
+const batchSummary = $('batch-summary');
 
 // Simple Mode Refs
 const btnModeSimple = $('btn-mode-simple');
@@ -92,6 +94,14 @@ const simpleQualityDesc = $('simple-quality-desc');
 let _isDragging = false; 
 let _installPrompt = null; 
 let _infoTrigger = null;
+
+function safeGet(key) {
+  try { return window.localStorage?.getItem(key); } catch (_) { return null; }
+}
+
+function safeSet(key, value) {
+  try { window.localStorage?.setItem(key, value); } catch (_) { /* persistence is optional */ }
+}
 
 function openInfoModal() {
   _infoTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : btnInfo;
@@ -136,7 +146,7 @@ function syncSampleRate(val) {
   state.activePreset = null;
   state.sampleRate = +val;
   sliderSr.value = val;
-  outSr.innerHTML = `${(+val).toLocaleString()} <span class="unit">Hz</span>`;
+  outSr.textContent = `${(+val).toLocaleString()} Hz`;
   sliderSr.setAttribute('aria-valuenow', val);
   updateSliderTrack(sliderSr);
   updateSrButtons(val);
@@ -146,7 +156,14 @@ function syncSampleRate(val) {
 }
 window.syncSampleRate = syncSampleRate;
 
-function setSimpleMode(enabled) {
+const SIMPLE_QUALITY = [
+  { rate: 8000, bits: 8, label: 'TINY (MICRO)', desc: 'Micro size (8kHz / 8-bit) — telephone-like and intentionally lo-fi.' },
+  { rate: 16000, bits: 8, label: 'LOW (PORTABLE)', desc: 'Low size (16kHz / 8-bit) — compact retro/mobile character.' },
+  { rate: 22050, bits: 12, label: 'MEDIUM (RETRO)', desc: 'Medium size (22.05kHz / 12-bit) — audible vintage texture.' },
+  { rate: 32000, bits: 16, label: 'HIGH', desc: 'High quality (32kHz / 16-bit) — the least destructive Simple option.' },
+];
+
+function setSimpleMode(enabled, { persist = true } = {}) {
   state.simpleMode = !!enabled;
 
   const modeSelector = document.getElementById('mode-selector');
@@ -154,6 +171,8 @@ function setSimpleMode(enabled) {
 
   if (btnModeSimple) btnModeSimple.classList.toggle('active', enabled);
   if (btnModeAdvanced) btnModeAdvanced.classList.toggle('active', !enabled);
+  btnModeSimple?.setAttribute('aria-pressed', String(enabled));
+  btnModeAdvanced?.setAttribute('aria-pressed', String(!enabled));
 
   const advancedGroups = [
     'group-presets',
@@ -180,68 +199,46 @@ function setSimpleMode(enabled) {
     groupSimpleQuality.style.display = enabled ? 'block' : 'none';
   }
 
-  saveState();
+  if (persist) saveState();
 }
 
-function syncSimpleQuality(val) {
-  val = +val;
-  if (isNaN(val) || val < 0 || val > 3) {
-    val = 3;
-  }
+function applySimpleQualityToState(val) {
+  val = Number.isInteger(+val) && +val >= 0 && +val <= 3 ? +val : DEFAULTS.simpleQuality;
+  const quality = SIMPLE_QUALITY[val];
   state.simpleQuality = val;
+  state.sampleRate = quality.rate;
+  state.bitDepth = quality.bits;
+  return quality;
+}
+
+function syncSimpleQuality(val, { persist = true, requestPreview = true } = {}) {
+  const quality = applySimpleQualityToState(val);
   if (sliderSimpleQuality) {
-    sliderSimpleQuality.value = val;
-    sliderSimpleQuality.setAttribute('aria-valuenow', val);
+    sliderSimpleQuality.value = state.simpleQuality;
+    sliderSimpleQuality.setAttribute('aria-valuenow', state.simpleQuality);
     updateSliderTrack(sliderSimpleQuality);
   }
-
-  let rate = 32000;
-  let bits = 16;
-  let label = 'HIGH';
-  let desc = 'High Quality (32kHz / 16-bit) — clear and optimized, saves ~30% space.';
-
-  if (val === 0) {
-    rate = 8000;
-    bits = 8;
-    label = 'TINY (MICRO)';
-    desc = 'Micro size (8kHz / 8-bit) — classic walkie-talkie / telephone sound. Saves ~90% space!';
-  } else if (val === 1) {
-    rate = 16000;
-    bits = 8;
-    label = 'LOW (PORTABLE)';
-    desc = 'Low size (16kHz / 8-bit) — retro GBA / old mobile sound. Saves ~80% space!';
-  } else if (val === 2) {
-    rate = 22050;
-    bits = 12;
-    label = 'MEDIUM (RETRO)';
-    desc = 'Medium size (22kHz / 12-bit) — vintage sampler / Amiga vibe. Saves ~65% space!';
-  }
-
-  if (outSimpleQuality) outSimpleQuality.textContent = label;
-  if (simpleQualityDesc) simpleQualityDesc.textContent = desc;
-
-  // Apply parameters under the hood
-  state.sampleRate = rate;
-  state.bitDepth = bits;
+  if (outSimpleQuality) outSimpleQuality.textContent = quality.label;
+  if (simpleQualityDesc) simpleQualityDesc.textContent = quality.desc;
 
   // Keep hidden standard sliders in sync
   if (sliderBit) {
-    sliderBit.value = bits;
-    outBit.textContent = bits;
-    sliderBit.setAttribute('aria-valuenow', bits);
+    sliderBit.value = state.bitDepth;
+    outBit.textContent = state.bitDepth;
+    sliderBit.setAttribute('aria-valuenow', state.bitDepth);
     updateSliderTrack(sliderBit);
   }
   if (sliderSr) {
-    sliderSr.value = rate;
-    outSr.innerHTML = `${rate.toLocaleString()} <span class="unit">Hz</span>`;
-    sliderSr.setAttribute('aria-valuenow', rate);
+    sliderSr.value = state.sampleRate;
+    outSr.textContent = `${state.sampleRate.toLocaleString()} Hz`;
+    sliderSr.setAttribute('aria-valuenow', state.sampleRate);
     updateSliderTrack(sliderSr);
-    updateSrButtons(rate);
+    updateSrButtons(state.sampleRate);
   }
 
-  saveState();
+  if (persist) saveState();
   updateWorkletParams();
-  if (state.liveUpdate) requestPreviewUpdate();
+  if (requestPreview && state.liveUpdate) requestPreviewUpdate();
   updateSavingsEstimate();
 }
 
@@ -250,7 +247,8 @@ function syncGrit(val) {
   state.activePreset = null;
   state.grit = +val;
   sliderGrit.value = val;
-  outGrit.textContent = val;
+  sliderGrit.setAttribute('aria-valuenow', val);
+  outGrit.textContent = (+val).toFixed(1);
   updateSliderTrack(sliderGrit);
   saveState();
   updateWorkletParams();
@@ -262,7 +260,8 @@ function syncNoise(val) {
   state.activePreset = null;
   state.noise = +val;
   sliderNoise.value = val;
-  outNoise.textContent = val;
+  sliderNoise.setAttribute('aria-valuenow', val);
+  outNoise.textContent = (+val).toFixed(3);
   updateSliderTrack(sliderNoise);
   saveState();
   updateWorkletParams();
@@ -274,6 +273,7 @@ function syncSpeed(val) {
   state.activePreset = null;
   state.playbackRate = parseFloat(val);
   sliderSpeed.value = state.playbackRate;
+  sliderSpeed.setAttribute('aria-valuenow', state.playbackRate);
   outSpeed.textContent = Math.round(state.playbackRate * 100) + '%';
   updateSliderTrack(sliderSpeed);
   saveState();
@@ -285,6 +285,7 @@ function syncHpf(val) {
   state.activePreset = null;
   state.hpf = +val;
   sliderHpf.value = val;
+  sliderHpf.setAttribute('aria-valuenow', val);
   outHpf.textContent = val > 20 ? `${val} Hz` : '20 Hz';
   updateSliderTrack(sliderHpf);
   saveState();
@@ -297,6 +298,7 @@ function syncLpf(val) {
   state.activePreset = null;
   state.lpf = +val;
   sliderLpf.value = val;
+  sliderLpf.setAttribute('aria-valuenow', val);
   outLpf.textContent = val < 20000 ? `${val} Hz` : 'OFF';
   updateSliderTrack(sliderLpf);
   saveState();
@@ -309,6 +311,7 @@ function syncBass(val) {
   state.activePreset = null;
   state.bass = +val;
   sliderBass.value = val;
+  sliderBass.setAttribute('aria-valuenow', val);
   outBass.textContent = val > 0 ? `+${val} dB` : '0 dB';
   updateSliderTrack(sliderBass);
   saveState();
@@ -317,129 +320,44 @@ function syncBass(val) {
 }
 
 function applyParamsToUI(p) {
-  pauseHistory(true); 
-  
-  if (p.bitDepth !== undefined) {
-    state.bitDepth = +p.bitDepth;
-    sliderBit.value = p.bitDepth;
-    outBit.textContent = p.bitDepth;
-    sliderBit.setAttribute('aria-valuenow', p.bitDepth);
-    updateSliderTrack(sliderBit);
+  const options = arguments[1] || {};
+  const valid = sanitizeParams(p);
+  pauseHistory(true);
+  Object.assign(state, valid);
+  if (state.simpleMode && Object.prototype.hasOwnProperty.call(valid, 'simpleQuality')) {
+    applySimpleQualityToState(state.simpleQuality);
   }
-  if (p.sampleRate !== undefined) {
-    state.sampleRate = +p.sampleRate;
-    sliderSr.value = p.sampleRate;
-    outSr.innerHTML = `${(+p.sampleRate).toLocaleString()} <span class="unit">Hz</span>`;
-    sliderSr.setAttribute('aria-valuenow', p.sampleRate);
-    updateSliderTrack(sliderSr);
-    updateSrButtons(p.sampleRate);
-  }
-  if (p.grit !== undefined) {
-    state.grit = +p.grit;
-    sliderGrit.value = p.grit;
-    outGrit.textContent = p.grit;
-    updateSliderTrack(sliderGrit);
-  }
-  if (p.noise !== undefined) {
-    state.noise = +p.noise;
-    sliderNoise.value = p.noise;
-    outNoise.textContent = p.noise;
-    updateSliderTrack(sliderNoise);
-  }
-  if (p.playbackRate !== undefined) {
-    state.playbackRate = parseFloat(p.playbackRate);
-    sliderSpeed.value = state.playbackRate;
-    outSpeed.textContent = Math.round(state.playbackRate * 100) + '%';
-    updateSliderTrack(sliderSpeed);
-  }
-  if (p.hpf !== undefined) {
-    state.hpf = +p.hpf;
-    sliderHpf.value = p.hpf;
-    outHpf.textContent = p.hpf > 20 ? `${p.hpf} Hz` : '20 Hz';
-    updateSliderTrack(sliderHpf);
-  }
-  if (p.lpf !== undefined) {
-    state.lpf = +p.lpf;
-    sliderLpf.value = p.lpf;
-    outLpf.textContent = p.lpf < 20000 ? `${p.lpf} Hz` : 'OFF';
-    updateSliderTrack(sliderLpf);
-  }
-  if (p.bass !== undefined) {
-    state.bass = +p.bass;
-    sliderBass.value = p.bass;
-    outBass.textContent = p.bass > 0 ? `+${p.bass} dB` : '0 dB';
-    updateSliderTrack(sliderBass);
-  }
-  
-  if (p.crushMode !== undefined) {
-    state.crushMode = p.crushMode;
-    btnMarioToggle.setAttribute('aria-checked', state.crushMode);
-    btnMarioToggle.classList.toggle('active', state.crushMode);
-    outMario.textContent = state.crushMode ? 'ON' : 'OFF';
-  }
-  if (p.dither !== undefined) {
-    state.dither = p.dither;
-    if (btnDitherToggle) {
-      btnDitherToggle.setAttribute('aria-checked', state.dither);
-      btnDitherToggle.classList.toggle('active', state.dither);
-    }
-    if (outDither) {
-      outDither.textContent = state.dither ? 'ON' : 'OFF';
-    }
-  }
-  if (p.stereo !== undefined) {
-    state.stereo = p.stereo;
-    const isForceMono = !state.stereo;
-    btnStereoToggle.setAttribute('aria-checked', isForceMono);
-    btnStereoToggle.classList.toggle('active', isForceMono);
-    outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
-  }
-  if (p.normalize !== undefined) {
-    state.normalize = p.normalize;
-    btnNormalizeToggle.setAttribute('aria-checked', state.normalize);
-    btnNormalizeToggle.classList.toggle('active', state.normalize);
-    outNormalize.textContent = state.normalize ? 'ON' : 'OFF';
-  }
-  if (p.liveUpdate !== undefined) {
-    state.liveUpdate = p.liveUpdate;
-    btnLiveUpdate.classList.toggle('active', state.liveUpdate);
-    const statusEl = $('live-status');
-    if (statusEl) statusEl.textContent = state.liveUpdate ? 'ON' : 'OFF';
-  }
-  if (p.previewVolume !== undefined) {
-    state.previewVolume = +p.previewVolume;
-    if (sliderPreviewVolume) {
-      sliderPreviewVolume.value = p.previewVolume;
-      updateSliderTrack(sliderPreviewVolume);
-    }
-    if (outPreviewVolume) {
-      outPreviewVolume.textContent = Math.round(p.previewVolume * 100) + '%';
-    }
-    setPreviewVolume(state.previewVolume);
-  }
-  
-  if (p.dualView !== undefined) {
-    state.dualView = p.dualView;
-    btnDualView.classList.toggle('active', state.dualView);
-    btnDualView.textContent = `DUAL VIEW: ${state.dualView ? 'ON' : 'OFF'}`;
-  }
-  if (p.activePreset !== undefined) {
-    state.activePreset = p.activePreset;
-  }
-  if (p.simpleMode !== undefined) {
-    state.simpleMode = p.simpleMode;
-    setSimpleMode(state.simpleMode);
-  }
-  if (p.simpleQuality !== undefined) {
-    state.simpleQuality = p.simpleQuality;
-    syncSimpleQuality(state.simpleQuality);
-  }
-  
+
+  setSimpleMode(state.simpleMode, { persist: false });
+  if (sliderBit) { sliderBit.value = state.bitDepth; outBit.textContent = state.bitDepth; sliderBit.setAttribute('aria-valuenow', state.bitDepth); updateSliderTrack(sliderBit); }
+  if (sliderSr) { sliderSr.value = state.sampleRate; outSr.textContent = `${state.sampleRate.toLocaleString()} Hz`; sliderSr.setAttribute('aria-valuenow', state.sampleRate); updateSliderTrack(sliderSr); updateSrButtons(state.sampleRate); }
+  if (sliderGrit) { sliderGrit.value = state.grit; sliderGrit.setAttribute('aria-valuenow', state.grit); outGrit.textContent = state.grit.toFixed(1); updateSliderTrack(sliderGrit); }
+  if (sliderNoise) { sliderNoise.value = state.noise; sliderNoise.setAttribute('aria-valuenow', state.noise); outNoise.textContent = state.noise.toFixed(3); updateSliderTrack(sliderNoise); }
+  if (sliderSpeed) { sliderSpeed.value = state.playbackRate; sliderSpeed.setAttribute('aria-valuenow', state.playbackRate); outSpeed.textContent = `${Math.round(state.playbackRate * 100)}%`; updateSliderTrack(sliderSpeed); }
+  if (sliderHpf) { sliderHpf.value = state.hpf; sliderHpf.setAttribute('aria-valuenow', state.hpf); outHpf.textContent = `${state.hpf} Hz`; updateSliderTrack(sliderHpf); }
+  if (sliderLpf) { sliderLpf.value = state.lpf; sliderLpf.setAttribute('aria-valuenow', state.lpf); outLpf.textContent = state.lpf >= 20000 ? 'OFF' : `${state.lpf} Hz`; updateSliderTrack(sliderLpf); }
+  if (sliderBass) { sliderBass.value = state.bass; sliderBass.setAttribute('aria-valuenow', state.bass); outBass.textContent = state.bass > 0 ? `+${state.bass} dB` : '0 dB'; updateSliderTrack(sliderBass); }
+
+  const switches = [
+    [btnMarioToggle, state.crushMode, outMario],
+    [btnDitherToggle, state.dither, outDither],
+    [btnNormalizeToggle, state.normalize, outNormalize],
+  ];
+  switches.forEach(([button, value, output]) => { if (button) { button.setAttribute('aria-checked', String(value)); button.classList.toggle('active', value); } if (output) output.textContent = value ? 'ON' : 'OFF'; });
+  if (btnStereoToggle) { const forceMono = !state.stereo; btnStereoToggle.setAttribute('aria-checked', String(forceMono)); btnStereoToggle.classList.toggle('active', forceMono); }
+  if (outStereo) outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
+  if (btnLiveUpdate) btnLiveUpdate.classList.toggle('active', state.liveUpdate);
+  const liveStatus = $('live-status'); if (liveStatus) liveStatus.textContent = state.liveUpdate ? 'ON' : 'OFF';
+  if (sliderPreviewVolume) { sliderPreviewVolume.value = state.previewVolume; updateSliderTrack(sliderPreviewVolume); }
+  if (outPreviewVolume) outPreviewVolume.textContent = `${Math.round(state.previewVolume * 100)}%`;
+  setPreviewVolume(state.previewVolume);
+  if (btnDualView) { btnDualView.classList.toggle('active', state.dualView); btnDualView.textContent = `DUAL VIEW: ${state.dualView ? 'ON' : 'OFF'}`; }
+  if (state.simpleMode) syncSimpleQuality(state.simpleQuality, { persist: false, requestPreview: false });
   pauseHistory(false);
-  saveState();
   updatePresetUI();
   updateWorkletParams();
-  if (state.liveUpdate) requestPreviewUpdate();
+  if (options.persist !== false) saveState();
+  if (options.requestPreview !== false && state.liveUpdate) requestPreviewUpdate();
 }
 
 function updatePresetUI() {
@@ -507,7 +425,7 @@ function updatePresetUI() {
   };
 
   let userPreset = null;
-  const saved = localStorage.getItem('ogcruncher_preset');
+  const saved = safeGet('ogcruncher_preset');
   if (saved) {
     try {
       userPreset = JSON.parse(saved);
@@ -531,6 +449,8 @@ function updatePresetUI() {
   if (btnPresetNes) btnPresetNes.classList.toggle('active', matchNes);
   if (btnPresetAmiga) btnPresetAmiga.classList.toggle('active', matchAmiga);
   btnPresetUser.classList.toggle('active', matchUser);
+  const effective = $('effective-settings');
+  if (effective) effective.textContent = `${state.simpleMode ? 'Simple' : 'Advanced'} · ${state.sampleRate.toLocaleString()} Hz · ${state.bitDepth}-bit effect · ${state.stereo ? 'stereo' : 'mono'} output · filters ${state.hpf > 20 || state.lpf < 20000 || state.bass > 0 ? 'on' : 'off'}`;
   updateSavingsEstimate();
 }
 
@@ -573,12 +493,13 @@ function initResizers() {
   const resizerRight = $('resizer-right');
   if (!main || !resizerLeft || !resizerRight) return;
 
-  const savedLeft = localStorage.getItem('og_col_left');
-  const savedCenter = localStorage.getItem('og_col_center');
-  const savedRight = localStorage.getItem('og_col_right');
-  if (savedLeft) main.style.setProperty('--col-left', savedLeft);
-  if (savedCenter) main.style.setProperty('--col-center', savedCenter);
-  if (savedRight) main.style.setProperty('--col-right', savedRight);
+  const savedLeft = safeGet('og_col_left');
+  const savedCenter = safeGet('og_col_center');
+  const savedRight = safeGet('og_col_right');
+  const validColumn = value => /^(?:\d+(?:\.\d+)?px|1fr|auto)$/.test(String(value));
+  if (validColumn(savedLeft)) main.style.setProperty('--col-left', savedLeft);
+  if (validColumn(savedCenter)) main.style.setProperty('--col-center', savedCenter);
+  if (validColumn(savedRight)) main.style.setProperty('--col-right', savedRight);
 
   let activeResizer = null;
 
@@ -590,6 +511,20 @@ function initResizers() {
     main.style.transition = 'none';
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const onKeyDown = (e) => {
+    if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    e.preventDefault();
+    const direction = e.key === 'ArrowRight' ? 1 : -1;
+    const rect = main.getBoundingClientRect();
+    const current = e.currentTarget.dataset.resizer === 'left'
+      ? parseFloat(getComputedStyle(main).gridTemplateColumns) || rect.width * .25
+      : parseFloat(getComputedStyle(main).gridTemplateColumns.split(' ')[2]) || rect.width * .33;
+    const next = Math.max(e.currentTarget.dataset.resizer === 'left' ? 240 : 320, current + direction * 24);
+    const variable = e.currentTarget.dataset.resizer === 'left' ? '--col-left' : '--col-center';
+    main.style.setProperty(variable, `${next}px`);
+    safeSet(e.currentTarget.dataset.resizer === 'left' ? 'og_col_left' : 'og_col_center', `${next}px`);
   };
 
   const onMouseMove = (e) => {
@@ -620,9 +555,9 @@ function initResizers() {
       main.style.transition = '';
       const style = getComputedStyle(main);
       const cols = style.gridTemplateColumns.split(' ');
-      localStorage.setItem('og_col_left', cols[0]);
-      localStorage.setItem('og_col_center', cols[2]);
-      localStorage.setItem('og_col_right', cols[4]);
+      safeSet('og_col_left', cols[0]);
+      safeSet('og_col_center', cols[2]);
+      safeSet('og_col_right', cols[4]);
     }
     activeResizer = null;
     document.body.style.cursor = '';
@@ -633,6 +568,8 @@ function initResizers() {
 
   resizerLeft.addEventListener('mousedown', onMouseDown);
   resizerRight.addEventListener('mousedown', onMouseDown);
+  resizerLeft.addEventListener('keydown', onKeyDown);
+  resizerRight.addEventListener('keydown', onKeyDown);
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -680,110 +617,33 @@ wrapSlider(sliderBass, syncBass);
 
 wrapSlider(sliderSimpleQuality, syncSimpleQuality);
 
+function advancedSnapshot() {
+  const snapshot = getStateSnapshot();
+  delete snapshot.simpleMode;
+  delete snapshot.simpleQuality;
+  return snapshot;
+}
+
 btnModeSimple.addEventListener('click', () => {
-  if (state.simpleMode) return;
+  if (state.simpleMode || state.processing) return;
   pushHistory();
-  
-  // 1. Take a snapshot of advanced params
-  const advancedParams = {
-    bitDepth: state.bitDepth,
-    sampleRate: state.sampleRate,
-    grit: state.grit,
-    noise: state.noise,
-    hpf: state.hpf,
-    lpf: state.lpf,
-    bass: state.bass,
-    crushMode: state.crushMode,
-    dither: state.dither,
-    stereo: state.stereo,
-    normalize: state.normalize
-  };
-  localStorage.setItem('ogcruncher_advanced_snapshot', JSON.stringify(advancedParams));
-
-  // 2. Set clean defaults for simple mode
-  state.grit = 1.0;
-  state.noise = 0.0;
-  state.hpf = 20;
-  state.lpf = 20000;
-  state.bass = 0;
-  state.crushMode = true;
-  state.dither = true;
-  state.stereo = false;
-  state.normalize = true;
-
-  // Sync hidden advanced inputs visually too
-  if (sliderGrit) {
-    sliderGrit.value = 1.0;
-    outGrit.textContent = '1.0';
-    updateSliderTrack(sliderGrit);
-  }
-  if (sliderNoise) {
-    sliderNoise.value = 0.0;
-    outNoise.textContent = '0.0';
-    updateSliderTrack(sliderNoise);
-  }
-  if (sliderHpf) {
-    sliderHpf.value = 20;
-    outHpf.textContent = '20 Hz';
-    updateSliderTrack(sliderHpf);
-  }
-  if (sliderLpf) {
-    sliderLpf.value = 20000;
-    outLpf.textContent = 'OFF';
-    updateSliderTrack(sliderLpf);
-  }
-  if (sliderBass) {
-    sliderBass.value = 0;
-    outBass.textContent = '0 dB';
-    updateSliderTrack(sliderBass);
-  }
-  if (btnMarioToggle) {
-    btnMarioToggle.setAttribute('aria-checked', true);
-    btnMarioToggle.classList.add('active');
-    outMario.textContent = 'ON';
-  }
-  if (btnDitherToggle) {
-    btnDitherToggle.setAttribute('aria-checked', true);
-    btnDitherToggle.classList.add('active');
-    outDither.textContent = 'ON';
-  }
-  if (btnStereoToggle) {
-    btnStereoToggle.setAttribute('aria-checked', true);
-    btnStereoToggle.classList.add('active');
-    outStereo.textContent = 'MONO';
-  }
-  if (btnNormalizeToggle) {
-    btnNormalizeToggle.setAttribute('aria-checked', true);
-    btnNormalizeToggle.classList.add('active');
-    outNormalize.textContent = 'ON';
-  }
-
-  // 3. Switch mode
-  setSimpleMode(true);
-  
-  // 4. Force simple quality synchronization
-  syncSimpleQuality(state.simpleQuality !== undefined ? state.simpleQuality : 3);
-  
-  log('Switched to SIMPLE mode', 'sys');
+  safeSet('ogcruncher_advanced_snapshot', JSON.stringify(advancedSnapshot()));
+  applyParamsToUI({
+    ...DEFAULTS,
+    simpleMode: true,
+    simpleQuality: state.simpleQuality,
+    activePreset: null,
+  });
+  log('Switched to SIMPLE mode; hidden Advanced settings are neutralized.', 'sys');
 });
 
 btnModeAdvanced.addEventListener('click', () => {
-  if (!state.simpleMode) return;
+  if (!state.simpleMode || state.processing) return;
   pushHistory();
-
-  // 1. Switch mode
-  setSimpleMode(false);
-
-  // 2. Restore snapshot if it exists
-  const saved = localStorage.getItem('ogcruncher_advanced_snapshot');
-  if (saved) {
-    try {
-      const p = JSON.parse(saved);
-      applyParamsToUI(p);
-    } catch (_) {}
-  }
-  
-  log('Switched to ADVANCED mode', 'sys');
+  let snapshot = {};
+  try { snapshot = sanitizeParams(JSON.parse(safeGet('ogcruncher_advanced_snapshot') || '{}')); } catch (_) {}
+  applyParamsToUI({ ...snapshot, simpleMode: false, activePreset: snapshot.activePreset ?? null });
+  log('Switched to ADVANCED mode.', 'sys');
 });
 
 if (sliderPreviewVolume) {
@@ -940,7 +800,7 @@ if (btnPresetAmiga) {
 }
 
 btnPresetUser.addEventListener('click', () => {
-  const saved = localStorage.getItem('ogcruncher_preset');
+  const saved = safeGet('ogcruncher_preset');
   if (!saved) return;
   try {
     const p = JSON.parse(saved);
@@ -967,9 +827,10 @@ btnSaveCustom.addEventListener('click', () => {
     lpf: state.lpf,
     bass: state.bass,
     normalize: state.normalize,
+    playbackRate: state.playbackRate,
     ts: Date.now()
   };
-  localStorage.setItem('ogcruncher_preset', JSON.stringify(preset));
+  safeSet('ogcruncher_preset', JSON.stringify(preset));
   state.activePreset = 'user';
   btnPresetUser.disabled = false;
   userPresetMeta.textContent = `${preset.bitDepth}-bit / ${preset.sampleRate}Hz`;
@@ -981,8 +842,9 @@ btnSaveCustom.addEventListener('click', () => {
 function setControlsEnabled(enabled) {
   const inputs = [
     sliderBit, sliderSr, sliderGrit, sliderNoise, sliderSpeed,
-    sliderHpf, sliderLpf, sliderBass,
+    sliderHpf, sliderLpf, sliderBass, sliderSimpleQuality,
     btnMarioToggle, btnDitherToggle, btnStereoToggle, btnNormalizeToggle,
+    btnModeSimple, btnModeAdvanced,
     btnLiveUpdate, btnDualView, btnPresetAuthor, btnPresetNes, btnPresetAmiga, btnPresetUser,
     btnSaveCustom, btnClearQueue, btnLoadDemo, fileInput, sliderPreviewVolume
   ];
@@ -1026,6 +888,7 @@ btnProcess.addEventListener('click', async () => {
 btnPreview.addEventListener('click', togglePreview);
 btnAB.addEventListener('click', toggleAB);
 btnClearQueue.addEventListener('click', clearQueue);
+btnCancel?.addEventListener('click', cancelProcessing);
 
 btnLiveUpdate.addEventListener('click', () => {
   pushHistory();
@@ -1064,25 +927,28 @@ modalInfo.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if ((e.target.tagName === 'INPUT' && e.target.type !== 'range') || e.target.tagName === 'TEXTAREA') return;
-
-  if (state.processing) {
-    if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyC' || e.code === 'KeyN' || e.code === 'KeyZ' || e.code === 'KeyY') {
-      e.preventDefault();
-      return;
-    }
-  }
+  if (e.defaultPrevented) return;
+  if (!modalInfo.hidden) return;
+  const target = e.target instanceof Element ? e.target : null;
+  if (target?.closest('button, a, input, textarea, select, [contenteditable="true"]')) return;
 
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !e.shiftKey) {
+    if (state.processing) return;
     e.preventDefault();
     const ok = undo(applyParamsToUI);
     if (ok) showToast('↩ undo', 'sys');
     return;
   }
   if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey))) {
+    if (state.processing) return;
     e.preventDefault();
     const ok = redo(applyParamsToUI);
     if (ok) showToast('↪ redo', 'sys');
+    return;
+  }
+
+  if (state.processing) {
+    if (e.code === 'Escape') { e.preventDefault(); cancelProcessing(); }
     return;
   }
 
@@ -1108,7 +974,7 @@ window.addEventListener('keydown', (e) => {
   initUtils({ logWindow, toast, badgeStatus });
   initQueue({ 
     fileQueue, queueHeader, btnProcess, btnProcessLbl, 
-    btnPreview, resultsArea, progressWrap, btnLoadDemo,
+    btnPreview, resultsArea, progressWrap, btnLoadDemo, btnCancel, batchSummary,
     panelCenter: $('panel-center')
   });
   initPreview({ 
@@ -1121,36 +987,27 @@ window.addEventListener('keydown', (e) => {
     metricPeakCrunch:  document.getElementById('metric-peak-crunch'),
     metricDurOrig:     document.getElementById('metric-dur-orig'),
     metricDurCrunch:   document.getElementById('metric-dur-crunch'),
+    previewFileName:   document.getElementById('preview-file-name'),
   });
 
-  pauseHistory(true); 
-
-  syncBitDepth(8);
-  syncSampleRate(22050);
-  syncGrit(1.0);
-  syncNoise(0);
-  syncSpeed(1.0);
-  syncHpf(20);
-  syncLpf(20000);
-  syncBass(0);
-  
-  state.normalize = true;
-  if (btnNormalizeToggle) {
-    btnNormalizeToggle.setAttribute('aria-checked', true);
-    btnNormalizeToggle.classList.add('active');
-  }
-  
-  if (btnLiveUpdate) {
-    btnLiveUpdate.classList.add('active');
-    const statusEl = $('live-status');
-    if (statusEl) statusEl.textContent = 'ON';
-  }
+  // Hydrate once. Precedence is validated defaults < saved state < explicit URL.
+  pauseHistory(true);
+  pausePersistence(true);
+  const savedState = readSavedState();
+  const hashState = parseHash();
+  const advancedUrlKeys = ['bitDepth', 'sampleRate', 'grit', 'noise', 'playbackRate', 'hpf', 'lpf', 'bass', 'crushMode', 'dither', 'stereo', 'normalize'];
+  const initial = { ...DEFAULTS, ...savedState, ...hashState };
+  if (!Object.prototype.hasOwnProperty.call(hashState, 'simpleMode') && advancedUrlKeys.some(key => Object.prototype.hasOwnProperty.call(hashState, key))) initial.simpleMode = false;
+  applyParamsToUI(initial, { persist: false, requestPreview: false });
+  pausePersistence(false);
+  pauseHistory(false);
+  saveState();
 
   // ── Collapsible Filters ──
   const groupFilters = $('group-filters');
   const btnToggleFilters = $('btn-toggle-filters');
   if (groupFilters && btnToggleFilters) {
-    const isExpanded = localStorage.getItem('ogcruncher_filters_expanded') === 'true';
+    const isExpanded = safeGet('ogcruncher_filters_expanded') === 'true';
     if (isExpanded) {
       groupFilters.classList.add('expanded');
       btnToggleFilters.setAttribute('aria-expanded', 'true');
@@ -1165,17 +1022,17 @@ window.addEventListener('keydown', (e) => {
         groupFilters.classList.remove('collapsed');
         groupFilters.classList.add('expanded');
         btnToggleFilters.setAttribute('aria-expanded', 'true');
-        localStorage.setItem('ogcruncher_filters_expanded', 'true');
+        safeSet('ogcruncher_filters_expanded', 'true');
       } else {
         groupFilters.classList.remove('expanded');
         groupFilters.classList.add('collapsed');
         btnToggleFilters.setAttribute('aria-expanded', 'false');
-        localStorage.setItem('ogcruncher_filters_expanded', 'false');
+        safeSet('ogcruncher_filters_expanded', 'false');
       }
     });
   }
 
-  const saved = localStorage.getItem('ogcruncher_preset');
+  const saved = safeGet('ogcruncher_preset');
   if (saved) {
     try {
       const p = JSON.parse(saved);
@@ -1184,39 +1041,20 @@ window.addEventListener('keydown', (e) => {
     } catch (_) {}
   }
 
-
-  loadState(applyParamsToUI);
-  parseHash(applyParamsToUI);
-  
-  // Always start in Simple Mode on page load, preserving loaded advanced settings in snapshot
-  const advancedParams = {
-    bitDepth: state.bitDepth,
-    sampleRate: state.sampleRate,
-    grit: state.grit,
-    noise: state.noise,
-    hpf: state.hpf,
-    lpf: state.lpf,
-    bass: state.bass,
-    crushMode: state.crushMode,
-    dither: state.dither,
-    stereo: state.stereo,
-    normalize: state.normalize
-  };
-  localStorage.setItem('ogcruncher_advanced_snapshot', JSON.stringify(advancedParams));
-  state.simpleMode = true;
-  
-  // Initialize Simple Mode UI state on startup
-  setSimpleMode(true);
-  syncSimpleQuality(state.simpleQuality);
   window.addEventListener('hashchange', () => {
-    parseHash(applyParamsToUI);
+    if (state.processing) { log('Settings link ignored while batch is processing.', 'warn'); return; }
+    const values = parseHash();
+    if (!Object.keys(values).length) return;
+    const advancedKeys = ['bitDepth', 'sampleRate', 'grit', 'noise', 'playbackRate', 'hpf', 'lpf', 'bass', 'crushMode', 'dither', 'stereo', 'normalize'];
+    if (!Object.prototype.hasOwnProperty.call(values, 'simpleMode') && advancedKeys.some(key => Object.prototype.hasOwnProperty.call(values, key))) values.simpleMode = false;
+    applyParamsToUI(values);
   });
   initResizers();
   
   // Show info modal on first visit
-  if (!localStorage.getItem('og_seen_info')) {
+  if (!safeGet('og_seen_info')) {
     modalInfo.hidden = false;
-    localStorage.setItem('og_seen_info', 'true');
+    safeSet('og_seen_info', 'true');
     btnInfoOk.focus();
   }
 

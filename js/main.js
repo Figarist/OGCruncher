@@ -1,53 +1,43 @@
-/**
- * OGCruncher — Entry Point
- * by figarist · https://figarist.github.io
- */
+/** OGCruncher entry point and deliberately idle-safe PWA registration. */
 
 'use strict';
 
 import './ui.js';
-import { log, showToast } from './utils.js';
+import { log, setBadge } from './utils.js';
 
-// Register Service Worker and manage updates
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`)
-      .then(reg => {
-        log('Service Worker registered successfully.', 'sys');
-        
-        // Check for updates on load
-        if (reg.installing) {
-          log('Service Worker installing...', 'sys');
-        }
-        
-        // Listen for new service worker installation
-        reg.onupdatefound = () => {
-          const installingWorker = reg.installing;
-          if (installingWorker) {
-            installingWorker.onstatechange = () => {
-              if (installingWorker.state === 'installed') {
-                if (navigator.serviceWorker.controller) {
-                  log('New update available. Swapping service worker...', 'sys');
-                  showToast('🔄 New update installed! Reloading...', 'ok');
-                } else {
-                  log('Content cached for offline use.', 'ok');
-                }
-              }
-            };
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
+      log('Service Worker registered.', 'sys');
+      const markReady = () => {
+        const active = registration.active || registration.waiting;
+        if (active) log('Offline cache is ready for the current application revision.', 'ok');
+      };
+      if (registration.active) markReady();
+      registration.addEventListener('updatefound', () => {
+        const installing = registration.installing;
+        if (!installing) return;
+        installing.addEventListener('statechange', () => {
+          if (installing.state === 'installed') {
+            if (navigator.serviceWorker.controller) {
+              window.dispatchEvent(new CustomEvent('og-update-available', { detail: registration }));
+              log('A new version is cached. Reload when the queue and preview are idle.', 'warn');
+            } else markReady();
           }
-        };
-      })
-      .catch(err => {
-        console.error('Service Worker registration failed:', err);
+        });
       });
+    } catch (error) {
+      console.warn('Service Worker registration failed:', error);
+      log('Offline cache is unavailable; the audio workflow still runs online.', 'warn');
+    }
   });
 
-  // Auto-reload the page when a new service worker takes control
-  let refreshing = false;
+  // A controller change is observed only for status. It never reloads the page:
+  // queue files and output blobs are intentionally in-memory and must not vanish.
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (refreshing) return;
-    refreshing = true;
-    window.location.reload();
+    log('Service Worker controller changed. Reload is left to the user.', 'sys');
   });
+} else if (import.meta.env.PROD) {
+  setBadge('WEB ONLY', 'badge--amber');
 }
-

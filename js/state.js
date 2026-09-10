@@ -1,192 +1,280 @@
 /**
- * OGCruncher — State Management
- * by figarist · https://figarist.github.io
+ * OGCruncher — validated state, persistence and undo/redo.
  */
 
 'use strict';
 
-export const state = {
-  files: new Map(),   // Map<id, File> keyed by monotonically increasing counter
-  nextId: 0,          // ID counter for stable queue tracking
-  processing: false,
+export const DEFAULTS = Object.freeze({
   bitDepth: 8,
   sampleRate: 22050,
-  crushMode: true,    // expander + dither + anti-alias pipeline
-  dither: true,       // optional triangular dither noise
+  crushMode: true,
+  dither: true,
   grit: 1.0,
   noise: 0.0,
   stereo: false,
-  playbackRate: 1.0,  // FIXED: added explicit playbackRate
+  playbackRate: 1.0,
   hpf: 20,
   lpf: 20000,
   bass: 0,
-  liveUpdate: true,   // IMPROVEMENT: enabled by default
-  normalize: true,    // IMPROVEMENT 2: peak normalization toggle
-  dualView: false,    // NEW: show both spectra simultaneously
-  previewVolume: 0.8, // Default volume for preview
+  liveUpdate: true,
+  normalize: true,
+  dualView: false,
+  previewVolume: 0.8,
   activePreset: 'author',
   simpleMode: true,
   simpleQuality: 3,
+});
+
+const NUMBER_RULES = {
+  bitDepth: [1, 16, true],
+  sampleRate: [4000, 48000, true],
+  grit: [1, 10, false],
+  noise: [0, 0.05, false],
+  playbackRate: [0.5, 2, false],
+  hpf: [20, 1000, true],
+  lpf: [500, 20000, true],
+  bass: [0, 15, false],
+  previewVolume: [0, 1, false],
+  simpleQuality: [0, 3, true],
+};
+
+const BOOLEAN_KEYS = new Set([
+  'crushMode', 'dither', 'stereo', 'liveUpdate', 'normalize', 'dualView', 'simpleMode'
+]);
+const ENUM_KEYS = new Set(['activePreset']);
+const PRESETS = new Set(['author', 'nes', 'amiga', 'user']);
+
+export const state = {
+  files: new Map(),
+  nextId: 0,
+  processing: false,
+  ...DEFAULTS,
 };
 
 let onStateChange = null;
+let persistencePaused = false;
+let historyPaused = false;
+
 export function setOnStateChange(fn) {
-  onStateChange = fn;
+  onStateChange = typeof fn === 'function' ? fn : null;
+}
+
+export function pausePersistence(paused) {
+  persistencePaused = !!paused;
+}
+
+function storage() {
+  try {
+    return typeof window !== 'undefined' && window.localStorage ? window.localStorage : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function readBoolean(value) {
+  if (typeof value === 'boolean') return value;
+  if (value === '1' || value === 1) return true;
+  if (value === '0' || value === 0) return false;
+  return undefined;
+}
+
+/** Return only fields that pass their type, finiteness and range contract. */
+export function sanitizeParams(input, { includeUnknown = false } = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const output = {};
+
+  Object.entries(NUMBER_RULES).forEach(([key, [min, max, integer]]) => {
+    if (!Object.prototype.hasOwnProperty.call(input, key)) return;
+    const value = typeof input[key] === 'number' ? input[key] : Number(input[key]);
+    if (!Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) return;
+    output[key] = value;
+  });
+
+  BOOLEAN_KEYS.forEach(key => {
+    if (!Object.prototype.hasOwnProperty.call(input, key)) return;
+    const value = readBoolean(input[key]);
+    if (value !== undefined) output[key] = value;
+  });
+
+  ENUM_KEYS.forEach(key => {
+    if (!Object.prototype.hasOwnProperty.call(input, key)) return;
+    const value = input[key];
+    if (value === null || value === undefined) output[key] = null;
+    else if (typeof value === 'string' && PRESETS.has(value)) output[key] = value;
+  });
+
+  if (includeUnknown && typeof input.ts === 'number' && Number.isFinite(input.ts)) output.ts = input.ts;
+  return output;
+}
+
+export function readSavedState() {
+  const store = storage();
+  if (!store) return {};
+  try {
+    const raw = store.getItem('ogcruncher_last_state');
+    return raw ? sanitizeParams(JSON.parse(raw)) : {};
+  } catch (error) {
+    console.warn('Saved OGCruncher state is unavailable; using defaults.', error);
+    return {};
+  }
+}
+
+function persistentSnapshot() {
+  const snapshot = {};
+  Object.keys(DEFAULTS).forEach(key => { snapshot[key] = state[key]; });
+  return snapshot;
+}
+
+export function getStateSnapshot() {
+  return { ...persistentSnapshot() };
 }
 
 export function saveState() {
-  // FIXED: nextId leak removed from persistence
-  const { files, processing, nextId, ...persistentState } = state;
-  localStorage.setItem('ogcruncher_last_state', JSON.stringify(persistentState));
-  updateHash(); // IMPROVEMENT 5: Update URL hash on every param change
+  if (persistencePaused) return;
+  const snapshot = persistentSnapshot();
+  const store = storage();
+  if (store) {
+    try {
+      store.setItem('ogcruncher_last_state', JSON.stringify(snapshot));
+    } catch (error) {
+      // A blocked/full localStorage must not disable processing or preview.
+      console.warn('Could not persist OGCruncher state; continuing in memory.', error);
+    }
+  }
+  updateHash();
   if (onStateChange) onStateChange();
 }
 
-export function loadState(applyParamsCallback) {
-  const saved = localStorage.getItem('ogcruncher_last_state');
-  if (!saved) return;
-  try {
-    const p = JSON.parse(saved);
-    applyParamsCallback(p);
-  } catch (e) {
-    console.error('Failed to load state', e);
-  }
+function setHashParam(params, key, value) {
+  if (typeof value === 'boolean') params.set(key, value ? '1' : '0');
+  else if (value !== null && value !== undefined) params.set(key, String(value));
 }
 
 export function updateHash() {
-  const params = new URLSearchParams();
-  params.set('b', state.bitDepth);
-  params.set('r', state.sampleRate);
-  params.set('g', state.grit);
-  params.set('n', state.noise);
-  params.set('c', state.crushMode ? 1 : 0);
-  params.set('di', state.dither ? 1 : 0);
-  params.set('s', state.stereo ? 1 : 0);
-  params.set('h', state.hpf);
-  params.set('l', state.lpf);
-  params.set('bs', state.bass);
-  params.set('norm', state.normalize ? 1 : 0);
-  params.set('dv', state.dualView ? 1 : 0);
-  params.set('sp', state.playbackRate);
-  if (state.activePreset) {
-    params.set('p', state.activePreset);
+  if (typeof window === 'undefined' || !window.location || !window.history) return;
+  try {
+    const params = new URLSearchParams();
+    setHashParam(params, 'b', state.bitDepth);
+    setHashParam(params, 'r', state.sampleRate);
+    setHashParam(params, 'g', state.grit);
+    setHashParam(params, 'n', state.noise);
+    setHashParam(params, 'c', state.crushMode);
+    setHashParam(params, 'di', state.dither);
+    setHashParam(params, 's', state.stereo);
+    setHashParam(params, 'h', state.hpf);
+    setHashParam(params, 'l', state.lpf);
+    setHashParam(params, 'bs', state.bass);
+    setHashParam(params, 'norm', state.normalize);
+    setHashParam(params, 'dv', state.dualView);
+    setHashParam(params, 'sp', state.playbackRate);
+    setHashParam(params, 'lu', state.liveUpdate);
+    setHashParam(params, 'v', state.previewVolume);
+    setHashParam(params, 'm', state.simpleMode);
+    setHashParam(params, 'q', state.simpleQuality);
+    if (state.activePreset) setHashParam(params, 'p', state.activePreset);
+    window.history.replaceState(null, '', `${window.location.pathname}#${params.toString()}`);
+  } catch (error) {
+    console.warn('Could not update the settings link.', error);
   }
-  
-  // Use replaceState to avoid polluting back button
-  history.replaceState(null, '', '#' + params.toString());
 }
 
+function parseNumber(params, urlKey, stateKey) {
+  return params.has(urlKey) ? { [stateKey]: params.get(urlKey) } : {};
+}
+
+function parseFlag(params, urlKey, stateKey) {
+  if (!params.has(urlKey)) return {};
+  const value = params.get(urlKey);
+  return value === '1' ? { [stateKey]: true } : value === '0' ? { [stateKey]: false } : {};
+}
+
+/** Parse a share hash without mutating state, storage, history or the DOM. */
 export function parseHash(applyParamsCallback) {
-  const hash = window.location.hash.substring(1);
-  if (!hash) return;
-  
+  if (typeof window === 'undefined' || !window.location) return {};
+  const hash = String(window.location.hash || '').replace(/^#/, '');
+  if (!hash) return {};
+
   try {
     const params = new URLSearchParams(hash);
-    const p = {};
-    if (params.has('b')) p.bitDepth = Math.max(1, Math.min(16, +params.get('b')));
-    if (params.has('r')) p.sampleRate = Math.max(4000, Math.min(48000, +params.get('r')));
-    if (params.has('g')) p.grit = Math.max(1.0, Math.min(10.0, +params.get('g')));
-    if (params.has('n')) p.noise = Math.max(0, Math.min(0.05, +params.get('n')));
-    if (params.has('c')) p.crushMode = params.get('c') === '1';
-    if (params.has('di')) p.dither = params.get('di') === '1';
-    if (params.has('s')) p.stereo = params.get('s') === '1';
-    if (params.has('h')) p.hpf = Math.max(20, Math.min(1000, +params.get('h')));
-    if (params.has('l')) p.lpf = Math.max(500, Math.min(20000, +params.get('l')));
-    if (params.has('bs')) p.bass = Math.max(0, Math.min(15, +params.get('bs')));
-    if (params.has('norm')) p.normalize = params.get('norm') === '1';
-    if (params.has('dv')) p.dualView = params.get('dv') === '1';
-    if (params.has('sp')) p.playbackRate = Math.max(0.5, Math.min(2.0, +params.get('sp')));
-    if (params.has('p')) {
-      const activeP = params.get('p');
-      if (['author', 'nes', 'amiga', 'user'].includes(activeP)) {
-        p.activePreset = activeP;
-      }
-    }
-    
-    applyParamsCallback(p);
-  } catch (e) {
-    console.warn('Failed to parse hash', e);
+    const raw = {
+      ...parseNumber(params, 'b', 'bitDepth'),
+      ...parseNumber(params, 'r', 'sampleRate'),
+      ...parseNumber(params, 'g', 'grit'),
+      ...parseNumber(params, 'n', 'noise'),
+      ...parseNumber(params, 'h', 'hpf'),
+      ...parseNumber(params, 'l', 'lpf'),
+      ...parseNumber(params, 'bs', 'bass'),
+      ...parseNumber(params, 'sp', 'playbackRate'),
+      ...parseNumber(params, 'v', 'previewVolume'),
+      ...parseNumber(params, 'q', 'simpleQuality'),
+      ...parseFlag(params, 'c', 'crushMode'),
+      ...parseFlag(params, 'di', 'dither'),
+      ...parseFlag(params, 's', 'stereo'),
+      ...parseFlag(params, 'norm', 'normalize'),
+      ...parseFlag(params, 'dv', 'dualView'),
+      ...parseFlag(params, 'lu', 'liveUpdate'),
+      ...parseFlag(params, 'm', 'simpleMode'),
+    };
+    if (params.has('p')) raw.activePreset = params.get('p');
+    const parsed = sanitizeParams(raw);
+    if (applyParamsCallback && Object.keys(parsed).length) applyParamsCallback(parsed);
+    return parsed;
+  } catch (error) {
+    console.warn('Invalid OGCruncher settings link; using valid values only.', error);
+    return {};
   }
 }
 
-// ══ HISTORY ══════════════════════════════════════════════════════════
+// ══ HISTORY ════════════════════════════════════════════════════════════════
 const MAX_HISTORY = 50;
-let _history = [];   // array of snapshot objects
-let _historyIndex = -1;
-let _pauseHistory = false; // flag to suppress pushHistory during restore
+let history = [];
+let historyIndex = -1;
 
-/**
- * Control whether history pushes are ignored.
- */
 export function pauseHistory(paused) {
-  _pauseHistory = !!paused;
+  historyPaused = !!paused;
 }
 
-/**
- * Capture the current persistable state as a snapshot.
- */
 export function pushHistory() {
-  if (_pauseHistory) return;
-  const snap = _captureSnapshot();
-  
-  // If index is not at the end, discard the forward branch
-  if (_historyIndex < _history.length - 1) {
-    _history = _history.slice(0, _historyIndex + 1);
+  if (historyPaused) return;
+  const snapshot = getStateSnapshot();
+  if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
+  if (history.length && JSON.stringify(history[historyIndex]) === JSON.stringify(snapshot)) return;
+  history.push(snapshot);
+  if (history.length > MAX_HISTORY) {
+    history.shift();
+    historyIndex = Math.max(0, historyIndex - 1);
   }
-
-  // Deduplicate: skip if identical to last entry
-  if (_history.length > 0 && JSON.stringify(_history[_historyIndex]) === JSON.stringify(snap)) return;
-  
-  _history.push(snap);
-  if (_history.length > MAX_HISTORY) {
-    _history.shift();
-    _historyIndex = Math.max(0, _historyIndex - 1);
-  }
-  _historyIndex = _history.length - 1;
+  historyIndex = history.length - 1;
 }
 
-/**
- * Revert to previous state.
- */
 export function undo(applyParamsCallback) {
-  // If we are at the tail, capture the "present" state before moving back
-  const currentSnap = _captureSnapshot();
-  if (_historyIndex === _history.length - 1) {
-    if (JSON.stringify(_history[_historyIndex]) !== JSON.stringify(currentSnap)) {
-      _history.push(currentSnap);
-      _historyIndex++; // Move index to the newly pushed present state
-    }
+  const current = getStateSnapshot();
+  if (historyIndex === history.length - 1 && history.length &&
+      JSON.stringify(history[historyIndex]) !== JSON.stringify(current)) {
+    history.push(current);
+    historyIndex++;
   }
-
-  if (_historyIndex <= 0) return false;
-  
-  _historyIndex--;
-  _restore(_history[_historyIndex], applyParamsCallback);
+  if (historyIndex <= 0) return false;
+  historyIndex--;
+  restore(history[historyIndex], applyParamsCallback);
   return true;
 }
 
-/**
- * Re-apply a previously undone state.
- */
 export function redo(applyParamsCallback) {
-  if (_historyIndex >= _history.length - 1) return false;
-  _historyIndex++;
-  _restore(_history[_historyIndex], applyParamsCallback);
+  if (historyIndex >= history.length - 1) return false;
+  historyIndex++;
+  restore(history[historyIndex], applyParamsCallback);
   return true;
 }
 
-function _captureSnapshot() {
-  const { files, processing, nextId, ...snap } = state;
-  return { ...snap };
-}
-
-function _restore(snap, applyParamsCallback) {
-  _pauseHistory = true;
-  applyParamsCallback(snap);
-  _pauseHistory = false;
-  // Sync localStorage and hash without pushing a new history entry
-  const { files, processing, nextId, ...persistentState } = state;
-  localStorage.setItem('ogcruncher_last_state', JSON.stringify(persistentState));
-  updateHash();
-  if (onStateChange) onStateChange();
+function restore(snapshot, applyParamsCallback) {
+  pauseHistory(true);
+  pausePersistence(true);
+  try {
+    if (applyParamsCallback) applyParamsCallback(snapshot, { persist: false, requestPreview: false });
+  } finally {
+    pausePersistence(false);
+    pauseHistory(false);
+  }
+  saveState();
 }

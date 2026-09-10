@@ -1,63 +1,78 @@
-# OGCruncher 🎛️
+# OGCruncher
 
-**OGCruncher** is a professional-grade, in-browser audio workstation for bit-crushing and lo-fi DSP processing. Built for sound designers and game developers, it enables high-speed batch conversion of audio assets with a focus on efficiency, precision, and aesthetic feedback.
+A browser audio bit-crusher and lo-fi converter by Ihor Sivochka (Figarist).
+Audio files are processed locally and exported as Ogg Vorbis, PCM WAV and MP3.
+This is a creative processor, not currently a transparent audio converter.
 
-### 🌐 [Live Demo: figarist.github.io/OGCruncher](https://figarist.github.io/OGCruncher/)
+[Live website](https://figarist.github.io/OGCruncher/) · [Visual reference](https://figarist.github.io/uk/)
 
-![OGCruncher UI](./public/images/logo.svg)
+## Documentation
 
-## 🚀 Key Features
+- [Professional audit, 2026-09-10](docs/audit/2026-09-10/README.md).
+- [Detailed bug register](docs/audit/2026-09-10/BUGS.md).
+- [Audio and formulas](docs/audit/2026-09-10/AUDIO_AND_FORMULAS.md).
+- [UI/UX and visual alignment](docs/audit/2026-09-10/UI_UX.md).
+- [Verification record](docs/audit/2026-09-10/VERIFICATION.md).
+- [Remediation status](docs/remediation/IMPLEMENTATION_STATUS.md).
+- [Post-remediation verification](docs/remediation/VERIFICATION.md).
+- [Current numeric results](docs/remediation/numeric-results-2026-09-10.json).
+- [Architecture and design contract](DESIGN.md).
+- [Prioritized improvements](PROPOSALS.md).
 
-- **Simple & Advanced UI Modes**: Toggle between a novice-friendly interface with a single 4-step **"Size & Quality"** slider (Tiny, Low, Medium, High) and the full technical parameter rack. State snapshots preserve advanced parameters when toggling back and forth.
-- **Estimated Size Savings Widget**: Real-time comparison card showing original size, estimated WAV size, and estimated compressed (OGG/MP3) size alongside a pulsing green savings percentage badge (e.g. `-80% SPACE`).
-- **Interactive Onboarding**: A pulsing demo track call-to-action button in the dropzone to let beginners test the application immediately with zero effort.
-- **Professional DSP Engine**: True asynchronous processing using **AudioWorklet** for real-time zero-latency preview and **Web Worker** for high-speed multi-format batch encoding (Ogg, MP3, WAV) to keep the main thread fluid.
-- **Dual Spectrum Analysis**: Real-time frequency visualization comparing **Original** (pre-FX) vs. **Crunched** (post-FX) signals simultaneously. Includes frequency grid markers (1k–20k).
-- **A/B Comparison Workflow**: Instant seamless switching between processed and raw audio during preview with zero latency.
-- **Advanced Parameter Control**:
-  - **Bit Depth & Rate**: Precision resolution and sampling control.
-  - **Grit & Saturation**: Character-driven `tanh` saturation for warm analog-style clipping.
-  - **Speed / Pitch**: Native playback rate adjustment for "tape-style" pitch shifting and speed control (0.5x - 2.0x).
-  - **Crush Mode**: Integrated pipeline with soft expansion, triangular dither, and adjacent-sample anti-aliasing.
-  - **Dynamic Filters**: High-Pass (HPF), Low-Pass (LPF), and 80Hz Bass Boost.
-- **Pro Workflow Optimization**:
-  - **Resizable Interface**: Windows-style draggable handles to customize your workspace layout.
-  - **Hotkeys**: Global support for `Space` (Preview), `Enter` (Crunch), `C` (A/B Toggle), and `N` (Live Update).
-  - **Auto-Save**: State persistence via `localStorage`—your parameters and layout widths are saved automatically.
-  - **Intelligent Queue**: Individual file management and batch ZIP exports.
-- **English & Ukrainian Documentation**: Beginner-friendly professional tooltips for every parameter.
+## Current capabilities and limitations
 
-- **Frontend**: Vanilla HTML5, CSS3 (Custom Bento-grid UI), and modular **ES6+ JavaScript**.
-- **Build System**: **Vite** for optimized bundling, HMR, and cache busting.
-- **Audio Engine**: Web Audio API (Offline processing). No external DSP frameworks.
-- **Format Support**: Direct encoding to high-compression **Ogg Vorbis** (Quality 0), MP3, and WAV.
-- **Environment**: Progressive Web App (PWA) via `vite-plugin-pwa` and Desktop packaging via **Neutralinojs**.
+Simple quality tiers and Advanced controls cover effect depth, rate, saturation,
+noise, speed/pitch, HPF, LPF and bass EQ. Preview and export use the same offline
+render contract for filters, channel selection and DSP; A/B switching and spectrum
+display remain available. Batch processing is sequential, freezes one validated
+snapshot, and encodes OGG/WAV/MP3 independently in a classic Web Worker. Each result
+has an individual download with an honest per-format estimate. Drag-to-DAW is
+experimental. PWA output and a Neutralino configuration are included.
 
-## 💻 Development
+Reload, share-link parsing, undo/redo, Simple/Advanced snapshots, filename rendering,
+PCM WAV packing, channel-linked normalization, quiet-signal handling, batch locking,
+resource cleanup and prompt service-worker updates are implemented in the current
+working tree. See the [remediation status](docs/remediation/IMPLEMENTATION_STATUS.md)
+and [verification record](docs/remediation/VERIFICATION.md) for exact evidence levels.
 
-### Running Locally
-1. Install dependencies:
-```bash
-npm install
-```
-2. Start the development server:
-```bash
+Known limitations: lossy codec round-trips, human listening quality, full keyboard and
+screen-reader conformance, cross-browser/mobile-device behavior, failure injection,
+cancel/retry profiling and deployed/Neutralino runtime behavior are not fully verified.
+ZIP export, waveform seeking, LUFS metering and full Ukrainian localization are not
+implemented. Queue files and output blobs remain in memory and disappear on reload.
+
+## Development
+
+Use a Node version satisfying the installed Vite package's `engines` requirement.
+Install from the lockfile:
+
+```sh
+npm ci
 npm run dev
 ```
 
-### Desktop Build (Neutralinojs)
-To generate standalone binaries for Windows, macOS, and Linux:
-1. Build the frontend assets:
-```bash
+Open the URL printed by Vite with the `/OGCruncher/` base path.
+
+```sh
 npm run build
-```
-2. Build the desktop app:
-```bash
-neu build
+npm run preview -- --host 127.0.0.1 --port 5187 --strictPort
+node scripts/regression.cjs
+node scripts/audit-numerics.cjs
 ```
 
-## 🎨 Design System
-The UI utilizes the **Cloud Dancer** design language—a minimalist, high-contrast Bento-grid aesthetic with premium glassmorphism effects, crisp typography (`Outfit` & `Fira Code`), and a focus on visual feedback.
+`npm test` runs the deterministic regression assertions. The audit script keeps the
+historical measurements separate from current-source measurements; it does not listen
+to browser audio or perform lossy codec round-trips.
 
----
-*Developed by [figarist](https://figarist.github.io/)*
+## Deployment and privacy
+
+`vite.config.js` targets GitHub Pages under `/OGCruncher/`. The GitHub workflow builds
+Pages and Neutralino artifacts. It was not dispatched during this remediation. Desktop
+root `/index.html` serving still needs reconciliation with the web asset base, followed
+by an executable launch test; `neu build` success alone is insufficient.
+
+Inspected application code does not upload input audio. Assets/demo use HTTP requests;
+this is not a complete network privacy certification. Parameters and layout use
+localStorage; queue files and output blobs stay in memory and disappear on reload.
+Service-worker updates are surfaced without an automatic reload; the offline badge is
+not proof that every required resource is cached.

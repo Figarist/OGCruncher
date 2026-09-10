@@ -6,6 +6,11 @@
 'use strict';
 
 import { log } from './utils.js';
+import {
+  processDSP as processCoreDSP,
+  normalizeChannels,
+  processChannels,
+} from './dsp-core.js';
 
 /**
  * Apply the full bit-crush DSP pipeline to a Float32Array IN-PLACE.
@@ -17,86 +22,14 @@ import { log } from './utils.js';
  * @param {number}       noise     — white noise floor level (0.0-0.05)
  */
 export function processDSP(buf, bitDepth, crushMode, dither, grit = 1.5, noise = 0.0) {
-  bitDepth = Math.max(1, Math.min(16, bitDepth || 8));
-  grit = Math.max(1.0, Math.min(10.0, grit || 1.5));
-  noise = Math.max(0.0, Math.min(1.0, noise || 0.0));
-
-  const N = buf.length;
-
-  if (noise > 0) {
-    for (let i = 0; i < N; i++) {
-      buf[i] += (Math.random() * 2 - 1) * noise;
-    }
-  }
-
-  let sum = 0;
-  for (let i = 0; i < N; i++) sum += buf[i];
-  const dc = sum / N;
-  for (let i = 0; i < N; i++) buf[i] -= dc;
-
-  let peak = 0;
-  for (let i = 0; i < N; i++) {
-    const a = buf[i] < 0 ? -buf[i] : buf[i];
-    if (a > peak) peak = a;
-  }
-  const invPeak = 1 / (peak + 1e-9);
-  for (let i = 0; i < N; i++) buf[i] *= invPeak;
-
-  if (crushMode) {
-    // Step 1: Soft expander (nonlinear shaping)
-    for (let i = 0; i < N; i++) {
-      const x = buf[i];
-      buf[i] = (x < 0 ? -1 : x > 0 ? 1 : 0) * Math.pow(x < 0 ? -x : x, 1.15);
-    }
-
-    // Step 2: Quantize with True TPDF dither
-    // Dither is added HERE — after all nonlinear processing, immediately before rounding.
-    // Amplitude = 1 LSB = 1/halfLev in the normalized [-1, 1] scale.
-    const levels = 1 << bitDepth;
-    const halfLev = levels >> 1;
-    const lsb = 1 / halfLev; // ← correct 1 LSB amplitude (was errRange = 1/(1<<bitDepth) = 0.5 LSB)
-    for (let i = 0; i < N; i++) {
-      if (dither) {
-        buf[i] += (Math.random() - Math.random()) * lsb; // TPDF: triangular, zero mean, ±1 LSB
-      }
-      buf[i] = Math.round(buf[i] * halfLev) / halfLev;
-    }
-
-    // Step 3: Anti-alias (adjacent-sample average - FIR)
-    let prev = 0;
-    for (let i = 0; i < N; i++) {
-      const cur = buf[i];
-      buf[i] = (cur + prev) * 0.5;
-      prev = cur;
-    }
-  }
-
-  let clipped = false;
-  for (let i = 0; i < N; i++) {
-    if (buf[i] > 1.0 || buf[i] < -1.0) {
-      clipped = true;
-      break;
-    }
-  }
-
-  for (let i = 0; i < N; i++) {
-    buf[i] = Math.tanh(buf[i] * grit);
-  }
-
-  return clipped;
+  return processCoreDSP(buf, bitDepth, crushMode, dither, grit, noise);
 }
 
 export function normalizeBuffer(buf) {
-  let peak = 0;
-  for (let i = 0; i < buf.length; i++) {
-    const a = buf[i] < 0 ? -buf[i] : buf[i];
-    if (a > peak) peak = a;
-  }
-  if (peak > 1e-6) {
-    const inv = 1 / peak;
-    for (let i = 0; i < buf.length; i++) buf[i] *= inv;
-  }
+  normalizeChannels([buf]);
 }
+
+export { processChannels };
 
 /**
  * Compute RMS and peak from an AudioBuffer (all channels averaged).
@@ -120,12 +53,12 @@ export function computeAudioMetrics(audioBuffer) {
   }
 
   const rms = Math.sqrt(sumSq / (totalSamples || 1));
-  const rmsDb = rms > 1e-9 ? 20 * Math.log10(rms) : -Infinity;
-  const peakDb = peak > 1e-9 ? 20 * Math.log10(peak) : -Infinity;
+  const rmsDb = rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+  const peakDb = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
 
   return {
-    rmsDb: isFinite(rmsDb) ? rmsDb : -96,
-    peakDb: isFinite(peakDb) ? peakDb : -96,
+    rmsDb,
+    peakDb,
   };
 }
 
@@ -165,7 +98,7 @@ export async function renderFilteredBuffer(buffer, params, targetChannels) {
   const targetRate = params.sampleRate || buffer.sampleRate;
   const targetLength = Math.ceil((buffer.duration / pRate) * targetRate);
   
-  const offCtx = new OfflineAudioContext(numChannels, targetLength, targetRate);
+  const offCtx = safeOfflineCtx(numChannels, targetLength, targetRate);
   const src = offCtx.createBufferSource();
   src.buffer = buffer;
   src.playbackRate.value = pRate;

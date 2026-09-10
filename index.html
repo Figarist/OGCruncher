@@ -23,13 +23,13 @@
   <meta property="twitter:image" content="https://figarist.github.io/OGCruncher/images/social-card.png" />
 
   <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="images/logo.svg" />
-  <link rel="apple-touch-icon" href="images/logo.svg" />
+  <link rel="icon" type="image/svg+xml" href="%BASE_URL%images/logo.svg" />
+  <link rel="apple-touch-icon" href="%BASE_URL%images/logo.svg" />
 
   <title>OGCruncher — Free Online Audio Bit-Crusher & OGG Compressor</title>
 
   <!-- PWA -->
-  <link rel="manifest" href="manifest.json" />
+  <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
   <meta name="theme-color" content="#f2f0eb" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -114,21 +114,21 @@
         <div id="metrics-panel" class="metrics-panel" style="display:none;">
           <div class="metrics-row">
             <span class="metrics-label">RMS</span>
-            <span id="metric-rms-orig" class="metrics-val metrics-val--orig">—</span>
+             <span id="metric-rms-orig" class="metrics-val metrics-val--orig">DRY —</span>
             <span class="metrics-arrow">→</span>
-            <span id="metric-rms-crunch" class="metrics-val metrics-val--crunch">—</span>
+             <span id="metric-rms-crunch" class="metrics-val metrics-val--crunch">WET —</span>
           </div>
           <div class="metrics-row">
             <span class="metrics-label">PEAK</span>
-            <span id="metric-peak-orig" class="metrics-val metrics-val--orig">—</span>
+             <span id="metric-peak-orig" class="metrics-val metrics-val--orig">DRY —</span>
             <span class="metrics-arrow">→</span>
-            <span id="metric-peak-crunch" class="metrics-val metrics-val--crunch">—</span>
+             <span id="metric-peak-crunch" class="metrics-val metrics-val--crunch">WET —</span>
           </div>
           <div class="metrics-row">
             <span class="metrics-label">DUR</span>
-            <span id="metric-dur-orig" class="metrics-val metrics-val--orig">—</span>
+             <span id="metric-dur-orig" class="metrics-val metrics-val--orig">DRY —</span>
             <span class="metrics-arrow">→</span>
-            <span id="metric-dur-crunch" class="metrics-val metrics-val--crunch">—</span>
+             <span id="metric-dur-crunch" class="metrics-val metrics-val--crunch">WET —</span>
           </div>
         </div>
       </div>
@@ -151,8 +151,8 @@
       <!-- Savings Estimate Card -->
       <div id="savings-estimate" class="savings-estimate" style="display:none;">
         <div class="savings-header">
-          <span class="savings-title-text">⚡ ESTIMATED SAVINGS</span>
-          <span id="savings-pct-badge" class="badge badge--green badge--pulse-green">-0%</span>
+           <span class="savings-title-text">⚡ SIZE OUTLOOK · METADATA-BACKED ESTIMATES</span>
+           <span id="savings-pct-badge" class="badge badge--amber">ANALYZING…</span>
         </div>
         <div class="savings-grid">
           <div class="savings-col">
@@ -164,17 +164,22 @@
             <span id="savings-estimated-wav" class="savings-val">0 KB</span>
             <span id="savings-pct-wav" class="savings-sub">-0%</span>
           </div>
-          <div class="savings-col highlight-ogg">
-            <span class="savings-label">EST. COMPRESSED</span>
-            <span id="savings-estimated-ogg" class="savings-val">0 KB</span>
-            <span id="savings-pct-ogg" class="savings-sub">-0%</span>
-          </div>
+           <div class="savings-col highlight-ogg">
+             <span class="savings-label">EST. OGG RANGE</span>
+             <span id="savings-estimated-ogg" class="savings-val">0 KB</span>
+             <span id="savings-pct-ogg" class="savings-sub">-0%</span>
+           </div>
+           <div class="savings-col highlight-mp3">
+             <span class="savings-label">EST. MP3</span>
+             <span id="savings-estimated-mp3" class="savings-val">0 KB</span>
+             <span id="savings-pct-mp3" class="savings-sub">-0%</span>
+           </div>
         </div>
       </div>
     </section>
 
     <!-- LEFT RESIZER -->
-    <div class="resizer" id="resizer-left" data-resizer="left">
+     <div class="resizer" id="resizer-left" data-resizer="left" role="separator" aria-orientation="vertical" aria-label="Resize input panel" tabindex="0">
       <div class="resizer-line"></div>
     </div>
 
@@ -184,8 +189,8 @@
 
       <!-- Mode selector toggle -->
       <div class="mode-selector-wrapper" id="mode-selector" data-mode="simple" role="group" aria-label="Processing mode">
-        <button id="btn-mode-simple" class="btn btn--mode-tab active" aria-label="Switch to Simple mode">SIMPLE</button>
-        <button id="btn-mode-advanced" class="btn btn--mode-tab" aria-label="Switch to Advanced mode">ADVANCED</button>
+        <button id="btn-mode-simple" class="btn btn--mode-tab active" aria-pressed="true" aria-label="Switch to Simple mode">SIMPLE</button>
+        <button id="btn-mode-advanced" class="btn btn--mode-tab" aria-pressed="false" aria-label="Switch to Advanced mode">ADVANCED</button>
       </div>
 
       <!-- Presets -->
@@ -429,7 +434,7 @@
         </div>
 
         <!-- Speed / Pitch -->
-        <div class="control-group" id="group-speed" style="grid-column: span 2;">
+        <div class="control-group" id="group-speed">
           <div class="control-header">
             <label for="slider-speed" class="control-label" data-tooltip="Adjust playback speed. Lowering it creates a 'slow & chopped' effect with lower pitch.">SPEED / PITCH</label>
             <output id="out-speed" for="slider-speed" class="control-value">100%</output>
@@ -480,10 +485,19 @@
         </div>
       </div>
 
+      <details class="help-panel">
+        <summary>HOW SETTINGS WORK</summary>
+        <p>Simple mode selects a complete quality tier. Advanced mode exposes every
+        parameter. Preview uses the same offline render order as export; ORIGINAL
+        means a dry signal at the selected output rate, channel mode and speed.</p>
+        <p>Monitor volume changes listening level only. Normalize is linked peak
+        normalization for export and is not perceptual loudness matching.</p>
+      </details>
+
       <!-- Action buttons -->
       <div class="action-stack">
         <div class="action-row">
-          <button id="btn-preview" class="btn btn--secondary" disabled aria-label="Preview">
+          <button id="btn-preview" class="btn btn--secondary" disabled aria-label="Preview selected audio">
             <span class="btn-icon" id="preview-icon">▶</span>
             <span id="btn-preview-label">PREVIEW</span>
             <kbd class="hotkey">Space</kbd>
@@ -494,6 +508,10 @@
             <kbd class="hotkey">Enter</kbd>
           </button>
         </div>
+        <p id="preview-file-name" class="preview-file-name" aria-live="polite"></p>
+        <p id="effective-settings" class="effective-settings">Effective settings appear after a file is loaded.</p>
+        <p id="batch-summary" class="batch-summary" role="status" aria-live="polite"></p>
+        <button id="btn-cancel" type="button" class="btn btn--ghost btn--xs cancel-button" hidden>STOP PROCESSING</button>
         <div id="ab-container" class="ab-container" style="display:none;">
           <button id="btn-ab" class="btn btn--ab-toggle" aria-label="Toggle comparison">
             <span class="ab-label">COMPARING:</span>
@@ -536,7 +554,7 @@
     </section>
 
     <!-- RIGHT RESIZER -->
-    <div class="resizer" id="resizer-right" data-resizer="right">
+     <div class="resizer" id="resizer-right" data-resizer="right" role="separator" aria-orientation="vertical" aria-label="Resize output panel" tabindex="0">
       <div class="resizer-line"></div>
     </div>
 

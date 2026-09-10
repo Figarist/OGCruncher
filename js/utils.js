@@ -40,9 +40,17 @@ export function setBadge(text, cls = 'badge--amber') {
 }
 
 export function formatBytes(b) {
+  if (!Number.isFinite(b)) return '—';
   if (b < 1024) return `${b} B`;
   if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
   return `${(b / 1048576).toFixed(2)} MB`;
+}
+
+export function formatSizeChange(outputBytes, inputBytes) {
+  if (!(inputBytes > 0) || !Number.isFinite(outputBytes)) return 'change unavailable';
+  const percent = Math.round(((outputBytes - inputBytes) / inputBytes) * 100);
+  if (percent === 0) return '0%';
+  return `${percent > 0 ? '+' : ''}${percent}%`;
 }
 
 export function updateSliderTrack(slider) {

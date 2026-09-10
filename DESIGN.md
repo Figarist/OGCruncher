@@ -1,101 +1,81 @@
-# OGCruncher Design Document V2.1 🎛️
+# OGCruncher architecture and design contract
 
-## 1. Overview
-**OGCruncher** is a high-performance, browser-based audio processing tool designed for bit-crushing and lo-fi sound design. It prioritizes speed, precision, and a professional "Cloud Dancer" aesthetic for game developers and sound designers who need to batch-process audio assets into high-quality Ogg Vorbis, MP3, or WAV formats with specific lo-fi characteristics.
+Updated 2026-09-10. The baseline audit was recorded at
+`fc0209cd27a3ffa7562955bac22cf272eb740f39`; current implementation evidence is in
+the [remediation status](docs/remediation/IMPLEMENTATION_STATUS.md) and
+[verification record](docs/remediation/VERIFICATION.md).
 
-## 2. Technical Architecture
+## Module ownership
 
-### 2.1 Build System & Modularization
-The project uses **Vite** for modern development and optimized production builds. The codebase is fully modularized using **ES Modules (ESM)**, with logic split into specialized files in the `js/` directory:
-- `main.js`: Entry point.
-- `state.js`: Global state management, simple/advanced mode persistence, and synchronization.
-- `dsp.js`: Core audio processing logic.
-- `ui.js`: DOM manipulation and layout handling.
-- `preview.js`: Audio playback and A/B comparison.
-- `encoders.js`: OGG/MP3/WAV export wrappers.
-- `utils.js`: Helper functions.
+| Module | Current responsibility |
+| --- | --- |
+| `js/main.js` | UI import, manual SW registration and non-destructive update notification |
+| `js/ui.js` | DOM bindings, parameters, presets, keyboard, modal and layout |
+| `js/state.js` | Mutable state, localStorage, URL hash, undo/redo |
+| `js/queue.js` | Queue, decode, offline filtering, worker orchestration, downloads |
+| `js/dsp.js` | Offline DSP, normalization, metrics and filter helpers |
+| `js/dsp.worker.js` | Bounded worker DSP and independent OGG/WAV/MP3 encoders |
+| `public/dsp-processor.js` | Bounded AudioWorklet compatibility processor |
+| `js/dsp-processor.js` | Source copy of the compatibility processor |
+| `js/dsp-core.js` | Pure offline DSP, linked normalization and WAV/PCM helpers |
+| `js/preview.js` | Offline parity preview graph, A/B, spectrum and measured metrics |
+| `js/encoders.js` | Deprecated reference; not imported by the application |
+| `js/utils.js` | Logging, badges, toasts and formatting |
 
-### 2.2 Engine Philosophy: "Zero-Allocation"
-The core DSP engine follows a **zero-allocation** style, performing buffer mutations in-place on `Float32Array` objects. This minimizes Garbage Collection (GC) overhead during heavy batch processing.
+## Current audio paths
 
-### 2.2 Audio Pipeline
-The processing pipeline leverages the **Web Audio API**'s `OfflineAudioContext` for faster-than-realtime rendering.
+Export: file -> decode -> OfflineAudioContext speed/resampling/channel mix ->
+HPF/LPF/bass -> worker-compatible per-channel DSP with linked normalization -> OGG,
+WAV and MP3. Preview uses the same offline render path for the selected output rate,
+speed, channel mode, filters and DSP, then routes dry/wet buffers through a monitor
+crossfade. The AudioWorklet files remain bounded compatibility code for future low-
+latency use; the product preview intentionally does not use a divergent live path.
 
-**Data Flow:**
-1. **Decode**: `AudioContext.decodeAudioData` converts input files to raw PCM.
-2. **Filter Chain**: A sequence of `BiquadFilterNode` (HPF, LPF, Bass Boost) applied via `OfflineAudioContext`.
-3. **Resample**: The `OfflineAudioContext` handles resampling to the target frequency (e.g., 22050Hz).
-4. **DSP Stage (In-Place)**:
-   - **Noise Floor**: Injecting low-level white noise.
-   - **DC Offset Removal**: Centering the waveform.
-   - **Initial Normalization**: Scaling to 1.0 peak for consistent crushing.
-   - **Crush Mode (Optional)**:
-     - **Soft Expander**: Enhances low-level detail before crushing.
-     - **Triangular Dither**: Minimizes quantization distortion artifacts.
-     - **Quantization**: Rounding to target bit depth (1–16 bit).
-     - **Anti-Aliasing**: Adjacent-sample averaging to reduce foldback noise.
-   - **Saturation**: `Math.tanh(x * grit)` for warm analog-style clipping.
-5. **Post-Process**: Optional peak normalization to 0 dBFS.
-6. **Encode**: Converting processed PCM to OGG, MP3, or WAV.
+The contract is deterministic for a fixed seed, keeps channels linked when normalizing,
+does not add gain when Crush is OFF, and measures the actual dry/wet render buffers.
+No zero-latency or whole-pipeline zero-allocation guarantee is justified: decoding,
+rendering, copies and encoders allocate memory.
 
-## 3. UI/UX Design System: "Cloud Dancer"
+## Formats and state
 
-The interface follows a **Flexible Bento Grid** layout, optimized for a left-to-right processing workflow.
+WAV stores 8-bit unsigned PCM for effect depths 1–8 and 16-bit signed PCM for 9–16.
+Effect depth is not storage depth. MP3 requests 128 kbps; OGG uses quality 0. All
+three codecs are currently attempted per file. See [formulas](docs/audit/2026-09-10/AUDIO_AND_FORMULAS.md).
 
-### 3.1 Core Palette (V2.1 Purple System)
-- **Background**: `#f2f0eb` (Cloud Dancer) - warm, off-white neutral.
-- **Surface/Cards**: `#ffffff` (Pure White).
-- **Primary Accent**: `#7c69e3` (Soft Purple) - used for primary actions like "CRUNCH".
-- **Secondary Accent**: `#ff85a1` (Vibrant Pink) - used for toggle states and comparisons.
-- **Secondary Dark**: `#c9184a` (Deep Cherry) - used for high-contrast labels and "STOP" states.
-- **Functional Accents**: 
-  - Cyan (`#b2f5ea`): Active "Live" states, PWA status.
-  - Yellow (`#fef3c7`): Idle/Waiting states.
-  - Mint (`#c6f6d5`): Normalization/Positive toggles.
+State precedence is validated defaults < saved state < explicit URL values. Hash parsing
+is side-effect free; startup synchronizes once, then persists. Undo/redo restores every
+field without applying Simple presets over Advanced values, and mode snapshots include
+speed. Each batch freezes one validated snapshot before any async work.
 
-### 3.2 Typography
-- **Primary (UI/Headings)**: `Outfit` (Sans-serif) - modern and highly legible.
-- **Technical (Logs/Metadata)**: `Fira Code` (Monospace) - emphasizes technical accuracy.
+## Figarist visual contract
 
-### 3.3 Layout Constraints
-- **Bento Gap**: `20px` (`--hub-gap`)
-- **Corner Radius**: `20px` (`--card-radius`)
-- **Desktop Grid**: Resizable 3-column layout (`var(--col-left) 6px var(--col-center) 6px var(--col-right)`).
-- **Resizers**: Full-height interactive handles with Windows-style dragging and visual handles.
-- **Mobile Stack**: Transitions into a vertical stack with a sticky header.
+The reference is [Figarist Ukrainian home](https://figarist.github.io/uk/), observed
+live on 2026-09-10. Current application CSS already shares its main tokens:
 
-### 3.4 Simple Mode Dashboard & Widgets
-- **Mode Toggle Tabs**: A rounded pill button container (`SIMPLE` / `ADVANCED`) positioned at the top of the parameter controls. Uses transition animations and shadow highlights for the active state.
-- **Bento-style Bento Grid Adaptation**: In Simple Mode, the 11 technical cards are hidden and replaced with a wide, single-card layout (`#group-simple-quality`) that spans both columns.
-- **Pips & Snap Alignment**: Quality slider snaps cleanly to discrete labels (TINY, LOW, MEDIUM, HIGH) representing standard target hardware presets.
-- **Estimated Savings Card**: Displays live original vs estimated file sizes. Employs a pulsing badge style (`.badge--pulse-green`) when savings are significant.
+| Token | Value |
+| --- | --- |
+| Background / card / warm card | `#f2f0eb` / `#ffffff` / `#faf8f4` |
+| Primary / secondary / muted text | `#1a1a2e` / `#4a4a6a` / `#68688c` |
+| Green / green text | `#b5e853` / `#3f6518` |
+| Blue / pink / plum | `#a2c2e1` / `#f5c2cc` / `#6b3fa0` |
+| Cyan / yellow / persimmon | `#4ecdc4` / `#f7e04a` / `#e8603c` |
+| Radius / padding / gap | `20px` / `24px` / `20px` |
+| Body type | System UI, Segoe UI, Noto Sans, sans-serif |
 
+Use warm surfaces, restrained shadows, dark primary actions and readable descriptive
+copy. Monospace belongs in measurements/logs. Preserve the tool's workflow rather than
+copying the portfolio landing-page structure. The former purple/Outfit description
+is superseded by this observed system.
 
-## 4. Motion & Interaction
+## Accessibility and runtime constraints
 
-### 4.1 Transitions
-- **Panel Entry**: Y-axis slide-up (200-400ms) with staggered delays for each Bento panel.
-- **Log Streaming**: New entries slide in from the bottom with a brief brightness highlight.
-- **Resizer Handles**: Subtle expansion and glow on hover for intuitive layout customization.
+Keep labels, visible focus, reduced motion and live status messages. Aim for comfortable
+44px touch areas; audit WCAG separately rather than claiming certification. Require a
+true one-column mobile grid and shortcuts that respect focus and dialogs. See U01–U03.
 
-### 4.2 Feedback Systems
-- **Header Progress**: A linear, glowing progress bar integrated into the very top of the header.
-- **Waveform Glow**: The spectral visualizer pulses with a purple glow animation when audio is processing or playing.
-- **A/B Comparison**: Instantaneous toggle between raw and processed signals with synchronized playback.
-- **Stabilized Console**: The log window has a fixed relative height (`50vh`) to prevent layout jumping during processing.
-
-### 4.3 Drag UX
-- **Selection Blocking**: Globally disabling `-webkit-user-select` during active resizer dragging or slider interaction to prevent visual noise.
-- **Custom Cursor**: Context-aware cursor switching (`col-resize`) during layout customization.
-
-## 5. Professional Workflow Features
-- **Deep Linking**: All parameters are encodable into the URL hash for preset sharing.
-- **Batch Processing**: Parallel file handling with ZIP export via `JSZip`.
-- **Layout Persistence**: Custom panel widths are saved to `localStorage`.
-- **PWA & Offline**: Managed via `vite-plugin-pwa`. It automatically generates a service worker that caches all critical assets, including heavy encoder libraries (`.js` and `.mem` files), ensuring reliability in zero-connectivity environments.
-- **Cross-Platform**: Optimized for both high-resolution desktops and touch-friendly mobile devices.
-
-## 6. Technical Constraints
-- **Zero-Allocation DSP**: responsive interface during heavy mutations.
-- **Touch Targets**: Minimum hit area of `44px` for all interactive elements.
-- **Keyboard Shortcuts**: `Space` (Preview), `Enter` (Crunch), `C` (A/B Toggle), `N` (Live Update).
+Vite emits hashed assets, a classic worker and generated SW. Encoder scripts and `.mem`
+are in the inspected precache. A configured 512MiB heap is not measured resident RAM;
+profile constrained devices. Worker cancellation/failure isolation, safe SW updates and
+one manifest/registration owner are implemented, but constrained-device and deployed
+runtime behavior still require separate validation. Desktop/web base paths also require
+separate validation.
