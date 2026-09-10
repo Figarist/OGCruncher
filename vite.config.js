@@ -2,8 +2,8 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  // Project root is now the actual root
-  base: './', 
+  // GitHub Pages serves this project from /OGCruncher/.
+  base: '/OGCruncher/',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
@@ -19,16 +19,13 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: [
-        'favicon.ico', 
-        'robots.txt'
-      ],
+      includeAssets: ['robots.txt'],
       manifest: {
         name: 'OGCruncher',
         short_name: 'OGCruncher',
-        description: 'Professional Audio Bit-Crusher & Compressor',
-        theme_color: '#0a0a0f',
-        background_color: '#0a0a0f',
+        description: 'A local browser audio bit-crusher and lo-fi converter by Ihor Sivochka.',
+        theme_color: '#f2f0eb',
+        background_color: '#f2f0eb',
         display: 'standalone',
         icons: [
           {
@@ -48,22 +45,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,mp3,mem}'],
         // Increase the size limit for cached files (OggVorbisEncoder is ~350kb, .mem is ~550kb)
         maximumFileSizeToCacheInBytes: 5000000, 
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          }
-        ]
+        runtimeCaching: []
       }
     })
   ]

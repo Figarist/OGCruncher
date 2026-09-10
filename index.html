@@ -30,62 +30,11 @@
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="theme-color" content="#f2f0eb" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <link rel="stylesheet" href="style.css" />
-  <style>
-    .metrics-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      padding: 6px 10px;
-      background: var(--surface-raised, rgba(255,255,255,0.04));
-      border-radius: 6px;
-      margin-top: 6px;
-      font-family: var(--font-mono);
-      font-size: 10px;
-    }
-    .metrics-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .metrics-label {
-      color: var(--text-muted, rgba(255,255,255,0.4));
-      width: 30px;
-      flex-shrink: 0;
-    }
-    .metrics-val {
-      min-width: 52px;
-      text-align: right;
-      font-size: 10px;
-      letter-spacing: 0.02em;
-    }
-    .metrics-val--orig  { color: rgba(178, 245, 234, 0.8); }  /* same green as original spectrum */
-    .metrics-val--crunch { color: rgba(124, 105, 227, 0.9); } /* same purple as crunched spectrum */
-    .metrics-arrow { color: var(--text-muted, rgba(255,255,255,0.3)); }
-
-    /* PWA Install Button */
-    .badge--install {
-      background: rgba(124, 105, 227, 0.25);
-      border-color: rgba(124, 105, 227, 0.6);
-      color: rgb(178, 165, 255);
-      transition: background 0.2s, transform 0.1s;
-    }
-    .badge--install:hover {
-      background: rgba(124, 105, 227, 0.4);
-      transform: scale(1.04);
-    }
-    .badge--pulse {
-      animation: pulse-install 2s ease-in-out infinite;
-    }
-    @keyframes pulse-install {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(124, 105, 227, 0.4); }
-      50%       { box-shadow: 0 0 0 5px rgba(124, 105, 227, 0); }
-    }
-  </style>
 </head>
 <body>
 
@@ -95,23 +44,38 @@
       <div id="header-progress-fill" class="header-progress-fill"></div>
     </div>
     <div class="header-inner">
-      <div class="logo-block">
-        <img src="images/logo.svg" class="logo-img" alt="OGCruncher Logo" aria-hidden="true">
-        <div class="logo-text">
-          <h1 class="logo-title">OGCruncher</h1>
-          <span class="logo-sub">free online audio bit-crusher · by figarist</span>
+      <a class="brand-link" href="https://figarist.github.io/" target="_blank" rel="noopener noreferrer" aria-label="Back to Figarist">
+        <div class="logo-block">
+          <img src="images/logo.svg" class="logo-img" alt="" aria-hidden="true">
+          <div class="logo-text">
+            <h1 class="logo-title">OGCruncher</h1>
+            <span class="logo-sub">audio tool by Ihor</span>
+          </div>
         </div>
+      </a>
+      <div class="header-context" aria-label="OGCruncher description">
+        <span class="header-context__kicker">IN-BROWSER AUDIO TOOL</span>
+        <span class="header-context__copy">Crunch audio locally, then take it to your game.</span>
       </div>
       <div class="header-badges">
-        <span class="badge badge--blue" id="badge-free">FREE & OFFLINE</span>
+        <span class="badge badge--blue" id="badge-free">LOCAL / OFFLINE</span>
         <span class="badge badge--green" id="badge-pwa">PWA READY</span>
         <span class="badge badge--amber" id="badge-status">IDLE</span>
-        <button id="btn-info" class="btn btn--ghost btn--xs badge" style="border-radius:99px; padding: 3px 8px; font-weight:700;" title="About OGCruncher">?</button>
+        <button id="btn-info" class="btn btn--ghost btn--xs header-about" title="About OGCruncher">ABOUT</button>
+        <a class="header-route" href="https://figarist.github.io/" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
       </div>
     </div>
     <!-- scanline decoration -->
     <div class="header-scanline" aria-hidden="true"></div>
   </header>
+
+  <div class="tool-intro" aria-label="OGCruncher status">
+    <div>
+      <span class="tool-intro__kicker">A SMALL TOOL FOR BIG SOUNDS</span>
+      <p>Shape, preview and export game audio without leaving your browser.</p>
+    </div>
+    <span class="tool-intro__privacy"><span class="status-dot" aria-hidden="true"></span> Files stay in this browser</span>
+  </div>
 
   <!-- ══════════════ MAIN LAYOUT ══════════════ -->
   <main class="app-main" role="main">
@@ -219,7 +183,7 @@
       <div class="panel-label" aria-hidden="true">[ PARAMETERS ]</div>
 
       <!-- Mode selector toggle -->
-      <div class="mode-selector-wrapper">
+      <div class="mode-selector-wrapper" id="mode-selector" data-mode="simple" role="group" aria-label="Processing mode">
         <button id="btn-mode-simple" class="btn btn--mode-tab active" aria-label="Switch to Simple mode">SIMPLE</button>
         <button id="btn-mode-advanced" class="btn btn--mode-tab" aria-label="Switch to Advanced mode">ADVANCED</button>
       </div>
@@ -592,7 +556,9 @@
 
   <!-- ══════════════ FOOTER ══════════════ -->
   <footer class="app-footer" role="contentinfo">
-    <a href="https://figarist.github.io" class="footer-link" target="_blank" rel="noopener noreferrer">figarist</a>
+    <span class="footer-note">Made by Ihor Sivochka for game developers and curious people.</span>
+    <span class="footer-sep">·</span>
+    <a href="https://figarist.github.io" class="footer-link" target="_blank" rel="noopener noreferrer">Figarist</a>
     <span class="footer-sep">·</span>
     <a href="https://github.com/figarist/OGCruncher" class="footer-link" target="_blank" rel="noopener noreferrer">GitHub</a>
     <span class="footer-sep">·</span>
@@ -605,13 +571,13 @@
   <!-- ══════════════ SCRIPTS ══════════════ -->
   <!-- Encoders loaded only in Web Worker (dsp.worker.js) via importScripts -->
   <!-- ══════════════ INFO MODAL ══════════════ -->
-  <div id="modal-info" class="modal-overlay" hidden>
+  <div id="modal-info" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-info-title" hidden>
     <div class="modal-content bento-card">
       <div class="modal-header">
-        <h2 class="modal-title">ABOUT OGCRUNCHER</h2>
+        <h2 id="modal-info-title" class="modal-title">ABOUT OGCRUNCHER</h2>
       </div>
       <div class="modal-body">
-        <p>OGCruncher is a 100% free, professional in-browser audio bit-crusher and compressor. It transforms high-quality audio into gritty, lo-fi samples optimized for game development, Wear OS assets, or retro-style projects. Adjust bit depth, sample rate, and saturation to achieve the perfect vintage crunch offline with zero limits.</p>
+        <p>OGCruncher is a small browser audio tool by Ihor Sivochka. Shape high-quality audio into gritty, lo-fi samples for games, Wear OS assets and retro projects. Files are processed locally in your browser.</p>
       </div>
       <div class="modal-footer">
         <button id="btn-info-ok" class="btn btn--primary" style="width:100%">UNDERSTOOD</button>
