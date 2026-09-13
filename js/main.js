@@ -4,8 +4,17 @@
 
 import './ui.js';
 import { log, setBadge } from './utils.js';
+import { state } from './state.js';
+import { createServiceWorkerUpdateController } from './sw-update.js';
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  const updateController = createServiceWorkerUpdateController({
+    window,
+    navigator,
+    document,
+    getState: () => state,
+    log,
+  });
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
@@ -15,14 +24,16 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
         if (active) log('Offline cache is ready for the current application revision.', 'ok');
       };
       if (registration.active) markReady();
+      if (registration.waiting && navigator.serviceWorker.controller) {
+        updateController.announceAvailable(registration);
+      }
       registration.addEventListener('updatefound', () => {
         const installing = registration.installing;
         if (!installing) return;
         installing.addEventListener('statechange', () => {
           if (installing.state === 'installed') {
             if (navigator.serviceWorker.controller) {
-              window.dispatchEvent(new CustomEvent('og-update-available', { detail: registration }));
-              log('A new version is cached. Reload when the queue and preview are idle.', 'warn');
+              updateController.announceAvailable(registration);
             } else markReady();
           }
         });
@@ -33,11 +44,6 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     }
   });
 
-  // A controller change is observed only for status. It never reloads the page:
-  // queue files and output blobs are intentionally in-memory and must not vanish.
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    log('Service Worker controller changed. Reload is left to the user.', 'sys');
-  });
 } else if (import.meta.env.PROD) {
   setBadge('WEB ONLY', 'badge--amber');
 }

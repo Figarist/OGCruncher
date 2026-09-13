@@ -29,7 +29,6 @@
   <title>OGCruncher — Free Online Audio Bit-Crusher & OGG Compressor</title>
 
   <!-- PWA -->
-  <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
   <meta name="theme-color" content="#f2f0eb" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -585,6 +584,15 @@
 
   <!-- ══════════════ NOTIFICATION TOAST ══════════════ -->
   <div id="toast" class="toast" role="status" aria-live="assertive" aria-atomic="true"></div>
+
+  <!-- ══════════════ SAFE SERVICE-WORKER UPDATE NOTICE ══════════════ -->
+  <aside id="sw-update-notice" class="sw-update-notice" role="status" aria-live="polite" hidden>
+    <div class="sw-update-copy">
+      <strong>UPDATE READY</strong>
+      <span id="sw-update-message">A new version is waiting.</span>
+    </div>
+    <button id="btn-sw-update" type="button" class="btn btn--primary btn--xs">ACTIVATE &amp; RELOAD</button>
+  </aside>
 
   <!-- ══════════════ SCRIPTS ══════════════ -->
   <!-- Encoders loaded only in Web Worker (dsp.worker.js) via importScripts -->
