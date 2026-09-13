@@ -1,9 +1,11 @@
 # OGCruncher architecture and design contract
 
-Updated 2026-09-10. The baseline audit was recorded at
+Updated 2026-09-13. The baseline audit was recorded at
 `fc0209cd27a3ffa7562955bac22cf272eb740f39`; current implementation evidence is in
 the [remediation status](docs/remediation/IMPLEMENTATION_STATUS.md) and
-[verification record](docs/remediation/VERIFICATION.md).
+[verification record](docs/remediation/VERIFICATION.md). Phase-2 evidence is in
+[docs/remediation/phase-2/STATUS.md](docs/remediation/phase-2/STATUS.md) and
+[docs/remediation/phase-2/VERIFICATION.md](docs/remediation/phase-2/VERIFICATION.md).
 
 ## Module ownership
 
@@ -12,7 +14,7 @@ the [remediation status](docs/remediation/IMPLEMENTATION_STATUS.md) and
 | `js/main.js` | UI import, manual SW registration and non-destructive update notification |
 | `js/ui.js` | DOM bindings, parameters, presets, keyboard, modal and layout |
 | `js/state.js` | Mutable state, localStorage, URL hash, undo/redo |
-| `js/queue.js` | Queue, decode, offline filtering, worker orchestration, downloads |
+| `js/queue.js` | Queue, metadata analysis, decode/offline filtering, generation-safe worker orchestration, downloads |
 | `js/dsp.js` | Offline DSP, normalization, metrics and filter helpers |
 | `js/dsp.worker.js` | Bounded worker DSP and independent OGG/WAV/MP3 encoders |
 | `public/dsp-processor.js` | Bounded AudioWorklet compatibility processor |
@@ -28,8 +30,12 @@ Export: file -> decode -> OfflineAudioContext speed/resampling/channel mix ->
 HPF/LPF/bass -> worker-compatible per-channel DSP with linked normalization -> OGG,
 WAV and MP3. Preview uses the same offline render path for the selected output rate,
 speed, channel mode, filters and DSP, then routes dry/wet buffers through a monitor
-crossfade. The AudioWorklet files remain bounded compatibility code for future low-
-latency use; the product preview intentionally does not use a divergent live path.
+crossfade. Source replacement and A/B branch selection are separate gain concerns:
+both source buffers remain available, branch gains select the monitor with a short
+ramp, and analysers observe each source before branch muting. Live updates use a
+latest-request-wins revision and bounded in-flight rendering. The AudioWorklet files
+remain bounded compatibility code for future low-latency use; the product preview
+intentionally does not use a divergent live path.
 
 The contract is deterministic for a fixed seed, keeps channels linked when normalizing,
 does not add gain when Crush is OFF, and measures the actual dry/wet render buffers.
@@ -75,7 +81,7 @@ true one-column mobile grid and shortcuts that respect focus and dialogs. See U0
 
 Vite emits hashed assets, a classic worker and generated SW. Encoder scripts and `.mem`
 are in the inspected precache. A configured 512MiB heap is not measured resident RAM;
-profile constrained devices. Worker cancellation/failure isolation, safe SW updates and
+profile constrained devices. Worker cancellation/failure isolation, metadata cleanup, safe SW updates and
 one manifest/registration owner are implemented, but constrained-device and deployed
 runtime behavior still require separate validation. Desktop/web base paths also require
 separate validation.

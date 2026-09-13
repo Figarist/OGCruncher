@@ -15,6 +15,10 @@ This is a creative processor, not currently a transparent audio converter.
 - [Verification record](docs/audit/2026-09-10/VERIFICATION.md).
 - [Remediation status](docs/remediation/IMPLEMENTATION_STATUS.md).
 - [Post-remediation verification](docs/remediation/VERIFICATION.md).
+- [Phase-2 remediation status](docs/remediation/phase-2/STATUS.md).
+- [Phase-2 verification](docs/remediation/phase-2/VERIFICATION.md).
+- [Release-readiness status](docs/release-readiness/STATUS.md).
+- [Release-readiness verification](docs/release-readiness/VERIFICATION.md).
 - [Current numeric results](docs/remediation/numeric-results-2026-09-10.json).
 - [Architecture and design contract](DESIGN.md).
 - [Prioritized improvements](PROPOSALS.md).
@@ -25,9 +29,11 @@ Simple quality tiers and Advanced controls cover effect depth, rate, saturation,
 noise, speed/pitch, HPF, LPF and bass EQ. Preview and export use the same offline
 render contract for filters, channel selection and DSP; A/B switching and spectrum
 display remain available. Batch processing is sequential, freezes one validated
-snapshot, and encodes OGG/WAV/MP3 independently in a classic Web Worker. Each result
-has an individual download with an honest per-format estimate. Drag-to-DAW is
-experimental. PWA output and a Neutralino configuration are included.
+snapshot, and encodes OGG/WAV/MP3 independently in a classic Web Worker. Cancellation
+is logical and generation-safe across read/decode/render/worker phases; partial format
+output is retained and labelled. Each result has an individual download with an honest
+per-format estimate. Drag-to-DAW is experimental. PWA output and a Neutralino
+configuration are included.
 
 Reload, share-link parsing, undo/redo, Simple/Advanced snapshots, filename rendering,
 PCM WAV packing, channel-linked normalization, quiet-signal handling, batch locking,
@@ -36,8 +42,10 @@ working tree. See the [remediation status](docs/remediation/IMPLEMENTATION_STATU
 and [verification record](docs/remediation/VERIFICATION.md) for exact evidence levels.
 
 Known limitations: lossy codec round-trips, human listening quality, full keyboard and
-screen-reader conformance, cross-browser/mobile-device behavior, failure injection,
-cancel/retry profiling and deployed/Neutralino runtime behavior are not fully verified.
+screen-reader conformance, cross-browser/mobile-device behavior, browser codec-failure
+injection, cancel/retry profiling and deployed/Neutralino runtime behavior are not fully
+verified. The phase-2 worker/core result is behavioral parity coverage; the DSP source
+is not yet unified.
 ZIP export, waveform seeking, LUFS metering and full Ukrainian localization are not
 implemented. Queue files and output blobs remain in memory and disappear on reload.
 
@@ -60,7 +68,7 @@ node scripts/regression.cjs
 node scripts/audit-numerics.cjs
 ```
 
-`npm test` runs the deterministic regression assertions. The audit script keeps the
+`npm test` runs the original and phase-2 deterministic regression assertions. The audit script keeps the
 historical measurements separate from current-source measurements; it does not listen
 to browser audio or perform lossy codec round-trips.
 
