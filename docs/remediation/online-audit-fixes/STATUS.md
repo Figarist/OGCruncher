@@ -1,5 +1,10 @@
 # Online audit remediation status
 
+> Subsequent update: the remediation commits were pushed and deployed on
+> 2026-09-13. See [production verification](../../deployment/2026-09-13.md) for
+> current finding dispositions and the remaining cached-client migration caveat.
+> The local-only scope statements below describe the original remediation task.
+
 2026-09-13 · local remediation in `D:\GitHub\OGCruncher`.
 The verified source baseline was `master` at `84da67a`, with local `master` two
 commits ahead of `origin/master` at `70a63f7`. No push, deployment, release,

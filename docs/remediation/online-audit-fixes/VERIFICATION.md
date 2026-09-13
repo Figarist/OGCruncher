@@ -75,3 +75,9 @@ large-file memory profiling, and lossy perceptual quality remain outside this ta
 
 The historical audit is preserved at
 [docs/online-audit/2026-09-13/README.md](../../online-audit/2026-09-13/README.md).
+# Subsequent deployment evidence
+
+The remediation was pushed and deployed on 2026-09-13. See
+[production verification](../../deployment/2026-09-13.md) for fresh gates,
+online smoke results and the old-cache migration limitation. The original local
+verification record below is retained as historical evidence.

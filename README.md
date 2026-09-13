@@ -8,6 +8,9 @@ This is a creative processor, not currently a transparent audio converter.
 
 ## Documentation
 
+- [Production deployment and verification, 2026-09-13](docs/deployment/2026-09-13.md).
+- [Online audit](docs/online-audit/2026-09-13/README.md).
+- [Online audit fixes](docs/remediation/online-audit-fixes/STATUS.md).
 - [Professional audit, 2026-09-10](docs/audit/2026-09-10/README.md).
 - [Detailed bug register](docs/audit/2026-09-10/BUGS.md).
 - [Audio and formulas](docs/audit/2026-09-10/AUDIO_AND_FORMULAS.md).
@@ -37,8 +40,10 @@ configuration are included.
 
 Reload, share-link parsing, undo/redo, Simple/Advanced snapshots, filename rendering,
 PCM WAV packing, channel-linked normalization, quiet-signal handling, batch locking,
-resource cleanup and prompt service-worker updates are implemented in the current
-working tree. See the [remediation status](docs/remediation/IMPLEMENTATION_STATUS.md)
+resource cleanup and explicit, state-aware service-worker updates are implemented
+and deployed. Existing cached-client adoption still needs migration verification.
+See the [deployment evidence](docs/deployment/2026-09-13.md),
+[remediation status](docs/remediation/IMPLEMENTATION_STATUS.md)
 and [verification record](docs/remediation/VERIFICATION.md) for exact evidence levels.
 
 Known limitations: lossy codec round-trips, human listening quality, full keyboard and
