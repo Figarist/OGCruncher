@@ -18,8 +18,9 @@ export default defineConfig({
   },
   plugins: [
     VitePWA({
-    // Registration is owned by js/main.js. Prompt-style updates avoid replacing
-    // a page that owns in-memory queue files and output Blob URLs.
+    // Registration is owned by js/main.js and update activation by js/sw-update.js.
+    // Prompt-style updates avoid replacing a page that owns in-memory queue files
+    // and output Blob URLs.
     registerType: 'prompt',
     injectRegister: null,
       includeAssets: ['robots.txt'],

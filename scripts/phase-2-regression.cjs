@@ -407,18 +407,32 @@ async function testMetadataStatesAndCleanup() {
   pending[1].resolve(Promise.reject(new Error('corrupt fixture')));
   await flushMicrotasks();
   assert.equal(vm.runInContext('metadata.get(2).status', context), 'error', 'corrupt metadata has an explicit error state');
-  assert.equal(elements.get('savings-pct-badge').textContent, 'UNAVAILABLE', 'metadata failure does not remain ANALYZING');
+  assert.equal(elements.get('savings-pct-badge').textContent, 'PARTIAL', 'mixed metadata failure does not remain ANALYZING');
+  assert.notEqual(elements.get('savings-estimated-wav').textContent, '—', 'valid metadata keeps its estimate in a mixed queue');
   assert.equal(contextsClosed, 2, 'metadata contexts close on success and failure');
+
+  state.files.delete(1);
+  context.updateSavingsEstimate();
+  assert.equal(elements.get('savings-pct-badge').textContent, 'UNAVAILABLE', 'all-invalid metadata is explicitly unavailable');
 
   const removedFile = { name: 'removed.wav', size: 14, type: 'audio/wav', arrayBuffer: async () => new ArrayBuffer(14) };
   state.files.set(3, removedFile);
   context.updateSavingsEstimate();
   assert.equal(contextsCreated, 3, 'removed file starts metadata analysis');
   await flushMicrotasks();
-  context.clearQueue();
+  context.removeFile(3);
   pending[2].resolve({ duration: 1, numberOfChannels: 1, sampleRate: 44100 });
   await flushMicrotasks();
-  assert.equal(vm.runInContext('metadata.size', context), 0, 'clear prevents late metadata from returning');
+  assert.equal(vm.runInContext('metadata.has(3)', context), false, 'remove prevents late metadata from returning');
+
+  state.files.set(4, { name: 'clear-me.wav', size: 15, type: 'audio/wav', arrayBuffer: async () => new ArrayBuffer(15) });
+  context.updateSavingsEstimate();
+  await flushMicrotasks();
+  context.clearQueue();
+  pending[3].resolve({ duration: 1, numberOfChannels: 1, sampleRate: 44100 });
+  await flushMicrotasks();
+  assert.equal(vm.runInContext('metadata.size', context), 0, 'clear removes pending metadata');
+  assert.equal(contextsClosed, 4, 'remove and clear close every metadata context in finally');
   assert.equal(elements.get('savings-estimate').style.display, 'none', 'clear hides stale estimates');
 }
 
@@ -433,6 +447,48 @@ async function testOutputFilenameContract() {
   assert.match(filename, /_crunched_12bit_22050hz\.wav$/);
   assert.ok(filename.length <= 185, 'long output filename is bounded');
   assert.equal(filename.includes('<'), false, 'unsafe filename characters are sanitized');
+}
+
+function testQueueIdentityAndUniqueOutputs() {
+  const elements = new Map();
+  const queue = genericElement();
+  const toasts = [];
+  const state = {
+    files: new Map(), nextId: 1, processing: false, playbackRate: 1, stereo: false,
+    sampleRate: 24000, bitDepth: 8, crushMode: false, dither: false, grit: 1, noise: 0,
+    normalize: false,
+  };
+  const context = loadModule('js/queue.js', {
+    state,
+    getStateSnapshot: () => ({ ...state }),
+    window: {},
+    document: {
+      getElementById: () => null,
+      createElement: () => genericElement(),
+    },
+    log() {},
+    showToast: (...args) => toasts.push(args),
+    formatBytes: value => `${value}B`,
+    formatSizeChange: () => '0%',
+    setBadge() {},
+    buildFilterChain() {},
+    safeOfflineCtx() {},
+    hashSeed: () => 1,
+    stopPreview() {},
+  });
+  context.initQueue({ fileQueue: queue, queueHeader: genericElement(), btnProcess: genericElement(), btnPreview: genericElement() });
+  const first = { name: 'same.wav', size: 96044, type: 'audio/wav' };
+  const second = { name: 'same.wav', size: 96044, type: 'audio/wav' };
+  context.addFiles([first, second]);
+  assert.equal(state.files.size, 2, 'different same-name/same-size File objects both enter the queue');
+  assert.deepEqual([...state.files.keys()], [1, 2], 'queue IDs are independent of file names');
+  context.addFiles([first]);
+  assert.equal(state.files.size, 2, 'the exact same File object is not silently duplicated');
+  assert.match(toasts.at(-1)[0], /exact duplicate/i, 'exact duplicate rule is visible to the user');
+
+  const firstOutput = context.getOutputFilename(first.name, 'wav', 8, 24000);
+  const secondOutput = context.getOutputFilename(second.name, 'wav', 8, 24000, '-2');
+  assert.notEqual(firstOutput, secondOutput, 'same-name outputs receive a collision-safe suffix');
 }
 
 function genericElement() {
@@ -505,7 +561,8 @@ function createQueueHarness({ autoCompleteWorker = false, workerErrors = [] } = 
     createElement: () => genericElement(),
   };
   class TestURL extends URL {}
-  TestURL.createObjectURL = () => `blob:${workerProcessCount}`;
+  let nextObjectUrl = 0;
+  TestURL.createObjectURL = () => `blob:${++nextObjectUrl}`;
   TestURL.revokeObjectURL = () => {};
   const dom = {
     progressWrap: genericElement(), btnProcess: genericElement(), btnProcessLbl: genericElement(),
@@ -622,6 +679,20 @@ async function testPartialQueueSummary() {
   assert.equal(fallback[1], `audio/wav:${wavLink.download}:${wavLink.href}`, 'fallback DownloadURL preserves MIME and filename');
 }
 
+async function testDuplicateQueueResults() {
+  const harness = createQueueHarness({ autoCompleteWorker: true });
+  const first = { name: 'same.wav', size: 96, type: 'audio/wav', arrayBuffer: async () => new ArrayBuffer(96) };
+  const second = { name: 'same.wav', size: 96, type: 'audio/wav', arrayBuffer: async () => new ArrayBuffer(96) };
+  harness.context.addFiles([first, second]);
+  assert.equal(harness.state.files.size, 2, 'same-name/same-size fixtures are both queued');
+  await harness.context.startProcessing(() => {});
+  assert.match(harness.dom.batchSummary.textContent, /Completed: 2 full/);
+  const outputNames = harness.dom.resultsArea.children.map(result => result.children
+    .find(child => child.className === 'result-links').children[0].download);
+  assert.equal(new Set(outputNames).size, 2, 'each queued entry produces a distinct output filename');
+  assert.match(outputNames[1], /-2_crunched_/);
+}
+
 function testProcessingControlLock() {
   const source = read('js/ui.js');
   assert.match(source, /btnPreview\.disabled = !enabled && !btnPreview\.classList\.contains\('playing'\)/,
@@ -630,15 +701,95 @@ function testProcessingControlLock() {
     'processing disables A\/B branch switching');
 }
 
+function testServiceWorkerUpdateSafety() {
+  const listeners = new Map();
+  const notice = { hidden: true };
+  const message = { textContent: '' };
+  const button = {
+    disabled: false, title: '', textContent: 'ACTIVATE & RELOAD', handlers: new Map(),
+    addEventListener(type, callback) { this.handlers.set(type, callback); },
+    click() { this.handlers.get('click')?.(); },
+  };
+  let previewPlaying = false;
+  const preview = { classList: { contains: name => name === 'playing' && previewPlaying } };
+  const results = { children: [] };
+  const elements = new Map([
+    ['sw-update-notice', notice], ['sw-update-message', message], ['btn-sw-update', button],
+    ['btn-preview', preview], ['results-area', results],
+  ]);
+  const state = { files: new Map(), processing: false };
+  let reloads = 0;
+  const worker = { messages: [], postMessage(message) { this.messages.push(message); } };
+  const pageWindow = {
+    location: { reload() { reloads++; } },
+    addEventListener(type, callback) {
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(callback);
+    },
+    dispatchEvent(event) { (listeners.get(event.type) || []).forEach(callback => callback(event)); },
+  };
+  const serviceWorker = {
+    controller: {},
+    addEventListener(type, callback) { listeners.set(`sw:${type}`, [callback]); },
+  };
+  const dependencies = {
+    window: pageWindow,
+    navigator: { serviceWorker },
+    document: { getElementById: id => elements.get(id) },
+    getState: () => state,
+    log() {},
+  };
+  const context = loadModule('js/sw-update.js', dependencies);
+  const update = context.createServiceWorkerUpdateController(dependencies);
+  update.announceAvailable({ waiting: worker });
+  assert.equal(notice.hidden, false, 'already waiting worker shows a persistent notice');
+
+  const blockedCases = [
+    ['active batch', () => { state.processing = true; }],
+    ['preview', () => { state.processing = false; previewPlaying = true; }],
+    ['queue', () => { previewPlaying = false; state.files.set(1, { name: 'queued.wav' }); }],
+    ['ready results', () => { state.files.clear(); results.children.push({}); }],
+  ];
+  for (const [label, setup] of blockedCases) {
+    state.processing = false;
+    state.files.clear();
+    previewPlaying = false;
+    results.children.length = 0;
+    setup();
+    pageWindow.dispatchEvent({ type: 'og-audio-state-change' });
+    assert.equal(button.disabled, true, `${label} blocks update activation`);
+    button.click();
+    assert.equal(worker.messages.length, 0, `${label} does not activate the waiting worker`);
+  }
+
+  state.processing = false;
+  state.files.clear();
+  previewPlaying = false;
+  results.children.length = 0;
+  pageWindow.dispatchEvent({ type: 'og-audio-state-change' });
+  assert.equal(button.disabled, false, 'empty state enables explicit update activation');
+  button.click();
+  assert.equal(worker.messages.length, 1, 'activation is requested only by the user');
+  assert.equal(worker.messages[0].type, 'SKIP_WAITING', 'activation uses the service-worker skip-waiting message');
+  assert.equal(reloads, 0, 'requesting activation does not reload before controller change');
+  listeners.get('sw:controllerchange')[0]();
+  assert.equal(reloads, 1, 'reload follows the user-approved worker activation');
+  listeners.get('sw:controllerchange')[0]();
+  assert.equal(reloads, 1, 'controllerchange does not cause a second reload');
+}
+
 async function main() {
   testABSignalPath();
   await testLatestPreviewUpdateWins();
   await testWorkerParityAndPartialFailures();
   await testMetadataStatesAndCleanup();
   await testOutputFilenameContract();
+  testQueueIdentityAndUniqueOutputs();
   testProcessingControlLock();
+  testServiceWorkerUpdateSafety();
   await testCancellationAndRetry();
   await testPartialQueueSummary();
+  await testDuplicateQueueResults();
   console.log('OGCruncher phase-2 regression checks passed.');
 }
 

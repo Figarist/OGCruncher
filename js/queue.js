@@ -41,6 +41,12 @@ export function initQueue(dom) {
   _dom = dom;
 }
 
+function notifyAudioStateChanged() {
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event !== 'undefined') {
+    window.dispatchEvent(new Event('og-audio-state-change'));
+  }
+}
+
 function revokeAllBlobs() {
   blobRegistry.forEach((_, url) => URL.revokeObjectURL(url));
   blobRegistry.clear();
@@ -69,22 +75,42 @@ function mimeForExtension(extension) {
 }
 
 /** One bounded filename contract for downloads, drag Files and result links. */
-export function getOutputFilename(fileName, extension, bitDepth, sampleRate) {
+export function getOutputFilename(fileName, extension, bitDepth, sampleRate, disambiguator = '') {
   const ext = String(extension || 'bin').replace(/^\.+/, '').toLowerCase();
   const suffix = `_crunched_${Math.round(Number(bitDepth) || 0)}bit_${Math.round(Number(sampleRate) || 0)}hz`;
-  const maxStemLength = Math.max(16, 180 - suffix.length);
-  return `${safeFilenameStem(fileName).slice(0, maxStemLength)}${suffix}.${ext}`;
+  const safeDisambiguator = String(disambiguator || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  const maxStemLength = Math.max(16, 180 - suffix.length - safeDisambiguator.length);
+  return `${safeFilenameStem(fileName).slice(0, maxStemLength)}${safeDisambiguator}${suffix}.${ext}`;
+}
+
+function allocateOutputFilenames(fileName, bitDepth, sampleRate, usedNames) {
+  const extensions = ['ogg', 'wav', 'mp3'];
+  for (let ordinal = 1; ordinal < 10000; ordinal++) {
+    const disambiguator = ordinal === 1 ? '' : `-${ordinal}`;
+    const filenames = Object.fromEntries(extensions.map(ext => [
+      ext,
+      getOutputFilename(fileName, ext, bitDepth, sampleRate, disambiguator),
+    ]));
+    if (extensions.every(ext => !usedNames.has(filenames[ext]))) {
+      extensions.forEach(ext => usedNames.add(filenames[ext]));
+      return filenames;
+    }
+  }
+  throw new Error('Could not allocate a unique output filename.');
 }
 
 export function addFiles(files) {
   if (state.processing) return;
-  const existing = new Set([...state.files.values()].map(file => `${file.name}::${file.size}`));
   let added = 0;
+  let duplicateReferences = 0;
   for (const file of files || []) {
     if (!isAudioFile(file)) continue;
-    const key = `${file.name}::${file.size}`;
-    if (existing.has(key)) continue;
-    existing.add(key);
+    // Name and size are not content identity. Keep separately selected entries,
+    // while avoiding an exact same File object being added twice by one caller.
+    if ([...state.files.values()].some(existingFile => existingFile === file)) {
+      duplicateReferences++;
+      continue;
+    }
     const id = state.nextId++;
     state.files.set(id, file);
     renderQueueItem(id, file);
@@ -94,6 +120,13 @@ export function addFiles(files) {
     updateQueueUI();
     log(`${added} file(s) added. Queue: ${state.files.size} total.`, 'sys');
   }
+  if (duplicateReferences) {
+    const noun = duplicateReferences === 1 ? 'file was' : 'files were';
+    const message = `${duplicateReferences} exact duplicate ${noun} already queued and not added again. Re-selected files remain separate unless they are the same File object.`;
+    log(message, 'warn');
+    showToast(message, 'info');
+  }
+  if (added || duplicateReferences) notifyAudioStateChanged();
 }
 
 export function clearQueue() {
@@ -101,6 +134,7 @@ export function clearQueue() {
   stopPreview();
   metadataGeneration++;
   while (metadataQueue.length) metadataQueue.shift().resolve({ status: 'cancelled' });
+  metadata.forEach(entry => { entry.cancelled = true; });
   state.files.clear();
   metadata.clear();
   if (_dom.fileQueue) while (_dom.fileQueue.firstChild) _dom.fileQueue.removeChild(_dom.fileQueue.firstChild);
@@ -108,6 +142,7 @@ export function clearQueue() {
   if (_dom.batchSummary) _dom.batchSummary.textContent = '';
   updateQueueUI();
   log('Queue cleared.', 'sys');
+  notifyAudioStateChanged();
 }
 
 function updateQueueUI() {
@@ -121,6 +156,7 @@ function updateQueueUI() {
 function isCurrentMetadata(id, file, entry) {
   return metadata.get(id) === entry
     && state.files.get(id) === file
+    && !entry.cancelled
     && entry.generation === metadataGeneration;
 }
 
@@ -207,6 +243,8 @@ export function updateSavingsEstimate() {
   let oggHigh = 0;
   let pending = false;
   let metadataError = false;
+  let knownOriginal = 0;
+  let validCount = 0;
 
   state.files.forEach((file, id) => {
     original += file.size;
@@ -215,6 +253,8 @@ export function updateSavingsEstimate() {
     if (entry.status === 'error') { metadataError = true; return; }
     const info = entry.info;
     if (!info) { pending = true; return; }
+    knownOriginal += file.size;
+    validCount++;
     const duration = info.duration / Math.max(.001, state.playbackRate);
     const channels = state.stereo ? Math.min(info.channels, 2) : 1;
     const rate = state.sampleRate;
@@ -245,7 +285,7 @@ export function updateSavingsEstimate() {
     return;
   }
 
-  if (metadataError) {
+  if (metadataError && !validCount) {
     [wavEl, oggEl, mp3El, wavPct, oggPct, mp3Pct].forEach(element => setEstimateValue(element, '—'));
     if (badge) { badge.textContent = 'UNAVAILABLE'; badge.className = 'badge badge--red'; }
     return;
@@ -254,10 +294,37 @@ export function updateSavingsEstimate() {
   setEstimateValue(wavEl, formatBytes(wav));
   setEstimateValue(oggEl, `${formatBytes(oggLow)}–${formatBytes(oggHigh)}`);
   setEstimateValue(mp3El, formatBytes(mp3));
-  setEstimateValue(wavPct, percentChange(wav, original));
-  setEstimateValue(oggPct, `${percentChange(oggLow, original)}…${percentChange(oggHigh, original)}`);
-  setEstimateValue(mp3Pct, percentChange(mp3, original));
-  if (badge) { badge.textContent = 'PER-FORMAT'; badge.className = 'badge badge--blue'; }
+  const estimateInput = metadataError ? knownOriginal : original;
+  setEstimateValue(wavPct, percentChange(wav, estimateInput));
+  setEstimateValue(oggPct, `${percentChange(oggLow, estimateInput)}…${percentChange(oggHigh, estimateInput)}`);
+  setEstimateValue(mp3Pct, percentChange(mp3, estimateInput));
+  if (badge) {
+    badge.textContent = metadataError ? 'PARTIAL' : 'PER-FORMAT';
+    badge.className = metadataError ? 'badge badge--amber' : 'badge badge--blue';
+  }
+}
+
+function cancelMetadataEntry(id) {
+  const entry = metadata.get(id);
+  if (!entry) return;
+  entry.cancelled = true;
+  metadata.delete(id);
+  for (let index = metadataQueue.length - 1; index >= 0; index--) {
+    if (metadataQueue[index].entry === entry) {
+      metadataQueue.splice(index, 1)[0].resolve({ status: 'cancelled' });
+    }
+  }
+}
+
+export function removeFile(id) {
+  if (state.processing) return;
+  const element = document.getElementById(`queue-item-${id}`);
+  state.files.delete(id);
+  cancelMetadataEntry(id);
+  element?.remove();
+  stopPreview();
+  updateQueueUI();
+  notifyAudioStateChanged();
 }
 
 function renderQueueItem(id, file) {
@@ -267,10 +334,7 @@ function renderQueueItem(id, file) {
   const size = document.createElement('span'); size.className = 'queue-item-meta'; size.textContent = formatBytes(file.size);
   const status = document.createElement('span'); status.className = 'queue-item-status'; status.id = `status-${id}`; status.textContent = 'WAITING';
   const remove = document.createElement('button'); remove.className = 'btn-remove'; remove.type = 'button'; remove.title = 'Remove from queue'; remove.setAttribute('aria-label', `Remove ${file.name} from queue`); remove.textContent = '✕';
-  remove.addEventListener('click', () => {
-    if (state.processing) return;
-    state.files.delete(id); metadata.delete(id); li.remove(); stopPreview(); updateQueueUI();
-  });
+  remove.addEventListener('click', () => removeFile(id));
   li.append(name, size, status, remove);
   _dom.fileQueue?.appendChild(li);
 }
@@ -308,6 +372,7 @@ export async function startProcessing(setProgress) {
   const snapshot = getStateSnapshot();
   const jobs = Array.from(state.files.entries());
   let attempted = 0, succeeded = 0, partial = 0, failed = 0, cancelled = 0;
+  const usedOutputNames = new Set();
   clearResults();
   _dom.progressWrap.hidden = false;
   _dom.btnProcess.disabled = true;
@@ -321,7 +386,7 @@ export async function startProcessing(setProgress) {
       if (!isCurrentJob(job)) break;
       const [id, file] = jobs[index];
       attempted++;
-      const outcome = await processFile(file, id, setProgress, index, jobs.length, snapshot, job);
+      const outcome = await processFile(file, id, setProgress, index, jobs.length, snapshot, job, usedOutputNames);
       if (outcome.status === 'success') { renderResult(outcome.result); succeeded++; }
       else if (outcome.status === 'partial') { renderResult(outcome.result); partial++; }
       else if (outcome.status === 'cancelled') { cancelled++; break; }
@@ -351,6 +416,7 @@ export async function startProcessing(setProgress) {
     } else if (succeeded) {
       setBadge('DONE', 'badge--green'); showToast(`✅ ${succeeded} file(s) crunched.`, 'ok');
     } else setBadge('IDLE', 'badge--amber');
+    notifyAudioStateChanged();
   }
 }
 
@@ -362,7 +428,7 @@ function assertCurrentJob(job) {
   if (!isCurrentJob(job)) throw new ProcessingCancelled();
 }
 
-async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot, job) {
+async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot, job, usedOutputNames) {
   setItemState(id, 'processing', `PROCESSING ${fileIndex + 1}/${fileTotal}`);
   log(`Processing ${file.name} (${fileIndex + 1}/${fileTotal})`, 'accent');
   try {
@@ -431,13 +497,14 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot
     assertCurrentJob(job);
     if (result.errors?.length) result.errors.forEach(error => log(`  ${error.format.toUpperCase()} unavailable: ${error.message}`, 'error'));
     const formats = [];
+    const outputFilenames = allocateOutputFilenames(file.name, snapshot.bitDepth, actualRate, usedOutputNames);
     for (const ext of ['ogg', 'wav', 'mp3']) {
       const buffer = result.formats?.[ext];
       if (!(buffer instanceof ArrayBuffer)) continue;
       const type = mimeForExtension(ext);
       const blob = new Blob([buffer], { type });
       const url = URL.createObjectURL(blob);
-      const filename = getOutputFilename(file.name, ext, snapshot.bitDepth, actualRate);
+      const filename = outputFilenames[ext];
       formats.push({ ext, filename, mime: type, url, blob, size: formatBytes(blob.size), change: formatSizeChange(blob.size, file.size) });
       blobRegistry.set(url, new File([blob], filename, { type }));
     }

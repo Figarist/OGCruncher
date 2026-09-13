@@ -521,6 +521,12 @@ input[type="range"].slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0
 .toast--ok { color: var(--accent-green-text); border-color: rgba(122,184,36,.40); background: #f5fbe9; }
 .toast--error { color: #a33a2a; border-color: rgba(232,96,60,.38); background: #fff4f0; }
 .toast--info { color: var(--accent-plum); border-color: rgba(107,63,160,.28); background: #faf7ff; }
+.sw-update-notice { position: fixed; right: max(18px, var(--safe-bottom)); bottom: calc(18px + var(--safe-bottom)); z-index: 9998; display: flex; align-items: center; gap: 14px; width: min(560px, calc(100vw - 36px)); padding: 12px 14px; border: 1px solid rgba(107,63,160,.28); border-radius: 15px; color: var(--text-primary); background: rgba(250,247,255,.97); box-shadow: var(--shadow-hover); font-family: var(--font-mono); font-size: .67rem; }
+.sw-update-notice[hidden] { display: none; }
+.sw-update-copy { display: grid; gap: 4px; min-width: 0; }
+.sw-update-copy strong { color: var(--accent-plum); font-size: .62rem; letter-spacing: .08em; }
+.sw-update-copy span { line-height: 1.35; }
+.sw-update-notice .btn { flex: 0 0 auto; white-space: nowrap; }
 .modal-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(26,26,46,.25); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); animation: modal-bg-in 220ms ease-out; }
 .modal-content { display: flex; flex-direction: column; gap: 18px; width: min(100%, 500px); padding: clamp(22px, 4vw, 32px); border: 1px solid var(--border-card); border-radius: 22px; background: var(--card-bg); box-shadow: var(--shadow-hover); animation: modal-content-in 320ms var(--t-liquid); }
 .modal-header { padding-bottom: 11px; border-bottom: 1px solid var(--border-light); }
