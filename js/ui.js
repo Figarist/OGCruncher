@@ -8,7 +8,7 @@
 import { state, DEFAULTS, saveState, updateHash, parseHash, readSavedState, sanitizeParams, getStateSnapshot, pushHistory, undo, redo, pauseHistory, pausePersistence, setOnStateChange } from './state.js';
 import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
 import { initQueue, addFiles, clearQueue, cancelProcessing, startProcessing, loadDemoTrack, handleItems, updateSavingsEstimate } from './queue.js';
-import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, updateWorkletParams, setPreviewVolume, updateLiveFilters } from './preview.js';
+import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, invalidatePreviewUpdates, updateWorkletParams, setPreviewVolume, updateLiveFilters } from './preview.js';
 
 const SITE_URL = window.location.origin + window.location.pathname;
 
@@ -851,7 +851,12 @@ function setControlsEnabled(enabled) {
   inputs.forEach(el => {
     if (el) el.disabled = !enabled;
   });
-  
+
+  // Keep an already playing preview stoppable, but never allow processing to
+  // start a second preview or change its A/B branch while the batch is active.
+  if (btnPreview) btnPreview.disabled = !enabled && !btnPreview.classList.contains('playing');
+  if (btnAB) btnAB.disabled = !enabled;
+
   // Disable remove buttons in the queue UI
   const removeBtns = fileQueue.querySelectorAll('.btn-remove');
   removeBtns.forEach(btn => {
@@ -899,6 +904,7 @@ btnLiveUpdate.addEventListener('click', () => {
   log(`live update: ${state.liveUpdate ? 'ON' : 'OFF'}`, 'sys');
   saveState();
   if (state.liveUpdate) requestPreviewUpdate();
+  else invalidatePreviewUpdates();
 });
 
 btnLoadDemo.addEventListener('click', (e) => {

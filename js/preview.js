@@ -32,6 +32,11 @@ let previewFile = null;
 let previewStartTime = 0;
 let updateTimer = null;
 let comparingOriginal = false;
+let previewUpdateRevision = 0;
+let updateInFlight = false;
+let updatePending = false;
+const BRANCH_RAMP_SECONDS = 0.025;
+const SOURCE_CROSSFADE_SECONDS = 0.04;
 
 export function initPreview(dom) {
   _dom = dom;
@@ -70,22 +75,29 @@ function createBranchGraph() {
   monitorGain = ctx.createGain();
   wetAnalyser.fftSize = 2048;
   dryAnalyser.fftSize = 2048;
-  wetBranch.connect(wetAnalyser);
-  dryBranch.connect(dryAnalyser);
-  wetAnalyser.connect(monitorGain);
-  dryAnalyser.connect(monitorGain);
+  // Analysers observe each rendered signal before A/B branch muting. This
+  // keeps Dual View useful while the monitor listens to only one branch.
+  wetAnalyser.connect(wetBranch);
+  dryAnalyser.connect(dryBranch);
+  wetBranch.connect(monitorGain);
+  dryBranch.connect(monitorGain);
   monitorGain.connect(ctx.destination);
   monitorGain.gain.value = clamp(state.previewVolume, 0, 1);
   setABGains(false, 0);
 }
 
+function rampGain(param, value, at, duration = BRANCH_RAMP_SECONDS) {
+  param.cancelScheduledValues(at);
+  param.setValueAtTime(param.value, at);
+  if (duration > 0) param.linearRampToValueAtTime(value, at + duration);
+  else param.setValueAtTime(value, at);
+}
+
 function setABGains(original, at) {
   comparingOriginal = !!original;
   if (!wetBranch || !dryBranch) return;
-  wetBranch.gain.cancelScheduledValues(at);
-  dryBranch.gain.cancelScheduledValues(at);
-  wetBranch.gain.setValueAtTime(original ? 0 : 1, at);
-  dryBranch.gain.setValueAtTime(original ? 1 : 0, at);
+  rampGain(wetBranch.gain, original ? 0 : 1, at);
+  rampGain(dryBranch.gain, original ? 1 : 0, at);
 }
 
 function disconnect(node) {
@@ -127,7 +139,7 @@ function clearBuffers() {
   previewFile = null;
 }
 
-async function renderBuffers(decoded, params, file, currentSession) {
+async function renderBuffers(decoded, params, file, isCurrent) {
   const targetRate = clamp(params.sampleRate, 4000, 48000);
   const channels = outputChannels(decoded, params);
   const renderParams = {
@@ -135,14 +147,14 @@ async function renderBuffers(decoded, params, file, currentSession) {
     playbackRate: params.playbackRate,
   };
   const dry = await renderFilteredBuffer(decoded, renderParams, channels);
-  if (currentSession !== sessionId) return null;
+  if (!isCurrent()) return null;
   const filtered = await renderFilteredBuffer(decoded, {
     ...renderParams,
     hpf: params.hpf,
     lpf: params.lpf,
     bass: params.bass,
   }, channels);
-  if (currentSession !== sessionId) return null;
+  if (!isCurrent()) return null;
 
   const wetChannels = Array.from({ length: filtered.numberOfChannels }, (_, index) =>
     new Float32Array(filtered.getChannelData(index)));
@@ -163,8 +175,6 @@ function installSources(wetBuffer, dryBuffer, startOffset = 0, crossfade = false
   const oldWetGain = wetSourceGain;
   const oldDryGain = drySourceGain;
   const now = ctx.currentTime;
-  const wetLevel = comparingOriginal ? 0 : 1;
-  const dryLevel = comparingOriginal ? 1 : 0;
 
   wetSource = ctx.createBufferSource();
   drySource = ctx.createBufferSource();
@@ -174,10 +184,12 @@ function installSources(wetBuffer, dryBuffer, startOffset = 0, crossfade = false
   drySource.loop = true;
   wetSourceGain = ctx.createGain();
   drySourceGain = ctx.createGain();
-  wetSourceGain.gain.value = crossfade ? 0 : wetLevel;
-  drySourceGain.gain.value = crossfade ? 0 : dryLevel;
-  wetSource.connect(wetSourceGain); wetSourceGain.connect(wetBranch);
-  drySource.connect(drySourceGain); drySourceGain.connect(dryBranch);
+  // Source gains own only source replacement. Both new sources become fully
+  // available; A/B selection is owned exclusively by branch gains.
+  wetSourceGain.gain.value = crossfade ? 0 : 1;
+  drySourceGain.gain.value = crossfade ? 0 : 1;
+  wetSource.connect(wetSourceGain); wetSourceGain.connect(wetAnalyser);
+  drySource.connect(drySourceGain); drySourceGain.connect(dryAnalyser);
 
   const duration = Math.max(wetBuffer.duration, 1 / wetBuffer.sampleRate);
   const offset = ((startOffset % duration) + duration) % duration;
@@ -186,9 +198,9 @@ function installSources(wetBuffer, dryBuffer, startOffset = 0, crossfade = false
   previewStartTime = now - offset;
 
   if (crossfade) {
-    const end = now + 0.04;
-    wetSourceGain.gain.linearRampToValueAtTime(wetLevel, end);
-    drySourceGain.gain.linearRampToValueAtTime(dryLevel, end);
+    const end = now + SOURCE_CROSSFADE_SECONDS;
+    wetSourceGain.gain.linearRampToValueAtTime(1, end);
+    drySourceGain.gain.linearRampToValueAtTime(1, end);
     if (oldWetGain) { oldWetGain.gain.cancelScheduledValues(now); oldWetGain.gain.setValueAtTime(1, now); oldWetGain.gain.linearRampToValueAtTime(0, end); }
     if (oldDryGain) { oldDryGain.gain.cancelScheduledValues(now); oldDryGain.gain.setValueAtTime(1, now); oldDryGain.gain.linearRampToValueAtTime(0, end); }
     window.setTimeout(() => { stopSource(oldWet); stopSource(oldDry); disconnect(oldWetGain); disconnect(oldDryGain); }, 90);
@@ -211,7 +223,7 @@ async function startPreview() {
     const decoded = await ctx.decodeAudioData(raw.slice(0));
     if (mySession !== sessionId) return;
     const params = { ...state };
-    const rendered = await renderBuffers(decoded, params, file, mySession);
+    const rendered = await renderBuffers(decoded, params, file, () => mySession === sessionId);
     if (!rendered || mySession !== sessionId) return;
 
     cleanupGraph();
@@ -251,6 +263,9 @@ export async function togglePreview() {
 
 export function stopPreview() {
   sessionId++;
+  previewUpdateRevision++;
+  updateInFlight = false;
+  updatePending = false;
   clearTimeout(updateTimer);
   updateTimer = null;
   cleanupGraph();
@@ -275,28 +290,71 @@ export function toggleAB() {
 }
 
 export function requestPreviewUpdate() {
-  if (!_dom.btnPreview?.classList.contains('playing') || !previewDecoded || !state.liveUpdate) return;
+  if (!_dom.btnPreview?.classList.contains('playing') || !previewDecoded) return;
+  if (!state.liveUpdate) {
+    invalidatePreviewUpdates();
+    return;
+  }
   clearTimeout(updateTimer);
   const mySession = sessionId;
+  const myRevision = ++previewUpdateRevision;
   const params = { ...state };
   const file = previewFile;
-  updateTimer = window.setTimeout(async () => {
-    if (mySession !== sessionId || !file) return;
-    try {
-      const oldDuration = previewWet?.duration || 1;
-      const elapsed = (currentContext().currentTime - previewStartTime) % oldDuration;
-      const rendered = await renderBuffers(previewDecoded, params, file, mySession);
-      if (!rendered || mySession !== sessionId) return;
-      const fraction = oldDuration > 0 ? elapsed / oldDuration : 0;
-      previewWet = rendered.wet;
-      previewDry = rendered.dry;
-      installSources(previewWet, previewDry, fraction * rendered.wet.duration, true);
-      updateMetricsPanel();
-      log('Live update applied with a short complementary crossfade.', 'sys');
-    } catch (error) {
-      log(`Preview update failed; current preview retained: ${error.message || String(error)}`, 'error');
+  updateTimer = window.setTimeout(() => {
+    updateTimer = null;
+    if (mySession !== sessionId || myRevision !== previewUpdateRevision || !file) return;
+    if (updateInFlight) {
+      updatePending = true;
+      return;
     }
+    updateInFlight = true;
+    void applyPreviewUpdate(mySession, myRevision, params, file).catch(error => {
+      if (mySession === sessionId && myRevision === previewUpdateRevision && state.liveUpdate) {
+        log(`Preview update failed; current preview retained: ${error.message || String(error)}`, 'error');
+      }
+    });
   }, 100);
+}
+
+async function applyPreviewUpdate(mySession, myRevision, params, file) {
+  try {
+    const ctx = currentContext();
+    const renderStartedAt = ctx.currentTime;
+    const oldDuration = previewWet?.duration || 1;
+    const rendered = await renderBuffers(previewDecoded, params, file,
+      () => mySession === sessionId && myRevision === previewUpdateRevision && state.liveUpdate);
+    if (!rendered || mySession !== sessionId || myRevision !== previewUpdateRevision || !state.liveUpdate) return;
+
+    // Read the playhead at apply time. AudioContext time advances while an
+    // offline render is in flight, so measuring only before render makes a
+    // slow update jump backwards. Mapping the current phase to the new buffer
+    // also preserves position when playbackRate changes its rendered duration.
+    const elapsed = (ctx.currentTime - previewStartTime) % oldDuration;
+    const fraction = oldDuration > 0 ? Math.max(0, elapsed / oldDuration) : 0;
+    previewWet = rendered.wet;
+    previewDry = rendered.dry;
+    installSources(previewWet, previewDry, fraction * rendered.wet.duration, true);
+    updateMetricsPanel();
+    log(`Live update applied with a short complementary crossfade (${Math.round((ctx.currentTime - renderStartedAt) * 1000)}ms render).`, 'sys');
+  } finally {
+    updateInFlight = false;
+    if (mySession === sessionId && myRevision === previewUpdateRevision && updatePending && state.liveUpdate) {
+      updatePending = false;
+      requestPreviewUpdate();
+    } else if (mySession === sessionId && myRevision !== previewUpdateRevision && state.liveUpdate) {
+      updatePending = false;
+      requestPreviewUpdate();
+    } else if (mySession !== sessionId || !state.liveUpdate) {
+      updatePending = false;
+    }
+  }
+}
+
+export function invalidatePreviewUpdates() {
+  previewUpdateRevision++;
+  updatePending = false;
+  clearTimeout(updateTimer);
+  updateTimer = null;
 }
 
 // Kept as a compatibility hook for the UI controller. Filters are rendered in

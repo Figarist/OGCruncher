@@ -14,10 +14,23 @@ let _dom = {};
 let worker = null;
 let activeReject = null;
 let cancelRequested = false;
+let processingGeneration = 0;
+let activeJob = null;
 let clippingBatchCount = 0;
 let estimateRevision = 0;
 const metadata = new Map();
 const blobRegistry = new Map();
+const metadataQueue = [];
+let metadataActive = 0;
+let metadataGeneration = 0;
+const METADATA_CONCURRENCY = 2;
+
+class ProcessingCancelled extends Error {
+  constructor() {
+    super('Processing cancelled by user.');
+    this.name = 'ProcessingCancelled';
+  }
+}
 
 function getWorker() {
   if (!worker) worker = new Worker(new URL('./dsp.worker.js', import.meta.url));
@@ -45,6 +58,24 @@ function isAudioFile(file) {
   return file && (String(file.type || '').startsWith('audio/') || /\.(wav|mp3|flac|ogg|aiff?|m4a|aac)$/i.test(file.name));
 }
 
+function safeFilenameStem(fileName) {
+  const source = String(fileName || 'output').replace(/\.[^.]+$/, '');
+  const safe = source.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/[ .]+$/g, '');
+  return safe || 'output';
+}
+
+function mimeForExtension(extension) {
+  return extension === 'mp3' ? 'audio/mpeg' : extension === 'wav' ? 'audio/wav' : extension === 'ogg' ? 'audio/ogg' : 'application/octet-stream';
+}
+
+/** One bounded filename contract for downloads, drag Files and result links. */
+export function getOutputFilename(fileName, extension, bitDepth, sampleRate) {
+  const ext = String(extension || 'bin').replace(/^\.+/, '').toLowerCase();
+  const suffix = `_crunched_${Math.round(Number(bitDepth) || 0)}bit_${Math.round(Number(sampleRate) || 0)}hz`;
+  const maxStemLength = Math.max(16, 180 - suffix.length);
+  return `${safeFilenameStem(fileName).slice(0, maxStemLength)}${suffix}.${ext}`;
+}
+
 export function addFiles(files) {
   if (state.processing) return;
   const existing = new Set([...state.files.values()].map(file => `${file.name}::${file.size}`));
@@ -68,6 +99,8 @@ export function addFiles(files) {
 export function clearQueue() {
   if (state.processing) return;
   stopPreview();
+  metadataGeneration++;
+  while (metadataQueue.length) metadataQueue.shift().resolve({ status: 'cancelled' });
   state.files.clear();
   metadata.clear();
   if (_dom.fileQueue) while (_dom.fileQueue.firstChild) _dom.fileQueue.removeChild(_dom.fileQueue.firstChild);
@@ -85,20 +118,62 @@ function updateQueueUI() {
   updateSavingsEstimate();
 }
 
-async function decodeMetadata(id, file, revision) {
-  if (metadata.has(id)) return;
+function isCurrentMetadata(id, file, entry) {
+  return metadata.get(id) === entry
+    && state.files.get(id) === file
+    && entry.generation === metadataGeneration;
+}
+
+function pumpMetadataAnalysis() {
+  while (metadataActive < METADATA_CONCURRENCY && metadataQueue.length) {
+    const task = metadataQueue.shift();
+    metadataActive++;
+    analyzeMetadata(task).catch(() => {
+      // analyzeMetadata records the failure and resolves the task promise;
+      // this guard prevents a browser rejection from becoming unhandled.
+    });
+  }
+}
+
+async function analyzeMetadata(task) {
+  const { id, file, entry, resolve } = task;
+  let ctx = null;
   try {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    if (!AudioContextClass) throw new Error('Web Audio is not supported.');
+    ctx = new AudioContextClass();
     const decoded = await ctx.decodeAudioData((await file.arrayBuffer()).slice(0));
-    metadata.set(id, { duration: decoded.duration, channels: decoded.numberOfChannels, sampleRate: decoded.sampleRate });
-    await ctx.close();
-    if (revision === estimateRevision) updateSavingsEstimate();
+    if (isCurrentMetadata(id, file, entry)) {
+      entry.status = 'success';
+      entry.info = { duration: decoded.duration, channels: decoded.numberOfChannels, sampleRate: decoded.sampleRate };
+    }
   } catch (error) {
-    metadata.set(id, null);
-    if (revision === estimateRevision) updateSavingsEstimate();
+    if (isCurrentMetadata(id, file, entry)) {
+      entry.status = 'error';
+      entry.error = error instanceof Error ? error.message : String(error);
+    }
+  } finally {
+    if (ctx?.close) {
+      try { await ctx.close(); } catch (_) {}
+    }
+    metadataActive--;
+    resolve(entry);
+    if (state.files.size && isCurrentMetadata(id, file, entry)) updateSavingsEstimate();
+    pumpMetadataAnalysis();
   }
+}
+
+function decodeMetadata(id, file) {
+  const existing = metadata.get(id);
+  if (existing?.file === file) return existing.promise;
+
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  const entry = { file, generation: metadataGeneration, status: 'pending', promise };
+  metadata.set(id, entry);
+  metadataQueue.push({ id, file, entry, resolve });
+  pumpMetadataAnalysis();
+  return promise;
 }
 
 function wavEstimate(duration, sampleRate, channels, bitDepth) {
@@ -124,18 +199,22 @@ export function updateSavingsEstimate() {
   if (!container) return;
   if (!state.files.size) { container.style.display = 'none'; return; }
   container.style.display = 'block';
-  const revision = ++estimateRevision;
+  ++estimateRevision;
   let original = 0;
   let wav = 0;
   let mp3 = 0;
   let oggLow = 0;
   let oggHigh = 0;
-  let complete = true;
+  let pending = false;
+  let metadataError = false;
 
   state.files.forEach((file, id) => {
     original += file.size;
-    const info = metadata.get(id);
-    if (!info) { complete = false; return; }
+    const entry = metadata.get(id);
+    if (!entry || entry.status === 'pending') { pending = true; return; }
+    if (entry.status === 'error') { metadataError = true; return; }
+    const info = entry.info;
+    if (!info) { pending = true; return; }
     const duration = info.duration / Math.max(.001, state.playbackRate);
     const channels = state.stereo ? Math.min(info.channels, 2) : 1;
     const rate = state.sampleRate;
@@ -156,10 +235,19 @@ export function updateSavingsEstimate() {
   const badge = document.getElementById('savings-pct-badge');
   setEstimateValue(originalEl, formatBytes(original));
 
-  if (!complete) {
+  if (pending) {
     [wavEl, oggEl, mp3El, wavPct, oggPct, mp3Pct].forEach(element => setEstimateValue(element, '—'));
     if (badge) { badge.textContent = 'ANALYZING…'; badge.className = 'badge badge--amber'; }
-    state.files.forEach((file, id) => { if (!metadata.has(id)) decodeMetadata(id, file, revision); });
+    state.files.forEach((file, id) => {
+      const entry = metadata.get(id);
+      if (!entry) decodeMetadata(id, file);
+    });
+    return;
+  }
+
+  if (metadataError) {
+    [wavEl, oggEl, mp3El, wavPct, oggPct, mp3Pct].forEach(element => setEstimateValue(element, '—'));
+    if (badge) { badge.textContent = 'UNAVAILABLE'; badge.className = 'badge badge--red'; }
     return;
   }
 
@@ -197,21 +285,29 @@ function setItemState(id, type, text) {
 export function cancelProcessing() {
   if (!state.processing) return;
   cancelRequested = true;
+  if (activeJob) activeJob.cancelled = true;
+  processingGeneration++;
   if (worker) {
     try { worker.postMessage({ type: 'cancel' }); } catch (_) {}
     worker.terminate(); worker = null;
   }
-  if (activeReject) activeReject(new Error('Processing cancelled by user.'));
+  if (activeReject) {
+    const reject = activeReject;
+    activeReject = null;
+    reject(new ProcessingCancelled());
+  }
 }
 
 export async function startProcessing(setProgress) {
   if (state.processing || !state.files.size) return;
   state.processing = true;
   cancelRequested = false;
+  const job = { generation: ++processingGeneration, cancelled: false };
+  activeJob = job;
   clippingBatchCount = 0;
   const snapshot = getStateSnapshot();
   const jobs = Array.from(state.files.entries());
-  let attempted = 0, succeeded = 0, failed = 0;
+  let attempted = 0, succeeded = 0, partial = 0, failed = 0, cancelled = 0;
   clearResults();
   _dom.progressWrap.hidden = false;
   _dom.btnProcess.disabled = true;
@@ -222,14 +318,19 @@ export async function startProcessing(setProgress) {
 
   try {
     for (let index = 0; index < jobs.length; index++) {
-      if (cancelRequested) break;
+      if (!isCurrentJob(job)) break;
       const [id, file] = jobs[index];
       attempted++;
-      const result = await processFile(file, id, setProgress, index, jobs.length, snapshot);
-      if (result) { renderResult(result); succeeded++; }
+      const outcome = await processFile(file, id, setProgress, index, jobs.length, snapshot, job);
+      if (outcome.status === 'success') { renderResult(outcome.result); succeeded++; }
+      else if (outcome.status === 'partial') { renderResult(outcome.result); partial++; }
+      else if (outcome.status === 'cancelled') { cancelled++; break; }
       else failed++;
     }
   } finally {
+    const wasCancelled = job.cancelled || cancelRequested;
+    const notAttempted = Math.max(0, jobs.length - attempted);
+    if (activeJob === job) activeJob = null;
     state.processing = false;
     activeReject = null;
     if (worker) { worker.terminate(); worker = null; }
@@ -237,34 +338,51 @@ export async function startProcessing(setProgress) {
     if (_dom.btnCancel) _dom.btnCancel.hidden = true;
     _dom.btnProcess.disabled = state.files.size === 0;
     _dom.btnProcessLbl.textContent = 'CRUNCH';
-    const cancelled = cancelRequested;
-    const summary = cancelled
-      ? `Cancelled after ${succeeded} success(es); ${Math.max(0, attempted - succeeded)} unfinished.`
-      : `Batch complete: ${attempted} attempted, ${succeeded} succeeded, ${failed} failed.`;
+    if (wasCancelled && cancelled === 0 && attempted > succeeded + partial + failed) cancelled = 1;
+    const summary = `Completed: ${succeeded} full, ${partial} partial; failed: ${failed}; cancelled: ${cancelled}; not attempted: ${notAttempted}.`;
     if (_dom.batchSummary) _dom.batchSummary.textContent = summary;
-    setProgress(cancelled ? 0 : 100, summary);
-    log(summary, failed || cancelled ? 'error' : 'ok');
+    setProgress(wasCancelled ? 0 : 100, summary);
+    log(summary, failed || partial || wasCancelled ? 'error' : 'ok');
     if (clippingBatchCount) log(`Clipping detected in ${clippingBatchCount} file(s).`, 'warn');
-    if (failed || cancelled) {
-      setBadge(cancelled ? 'CANCELLED' : 'PARTIAL', 'badge--amber');
-      showToast(cancelled ? 'Processing cancelled.' : `${succeeded} succeeded · ${failed} failed`, 'error');
+    if (wasCancelled) {
+      setBadge('CANCELLED', 'badge--amber'); showToast('Processing cancelled.', 'error');
+    } else if (failed || partial) {
+      setBadge('PARTIAL', 'badge--amber'); showToast(`${succeeded} full · ${partial} partial · ${failed} failed`, 'error');
     } else if (succeeded) {
       setBadge('DONE', 'badge--green'); showToast(`✅ ${succeeded} file(s) crunched.`, 'ok');
     } else setBadge('IDLE', 'badge--amber');
   }
 }
 
-async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot) {
+function isCurrentJob(job) {
+  return activeJob === job && !job.cancelled && processingGeneration === job.generation && state.processing;
+}
+
+function assertCurrentJob(job) {
+  if (!isCurrentJob(job)) throw new ProcessingCancelled();
+}
+
+async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot, job) {
   setItemState(id, 'processing', `PROCESSING ${fileIndex + 1}/${fileTotal}`);
   log(`Processing ${file.name} (${fileIndex + 1}/${fileTotal})`, 'accent');
   try {
+    assertCurrentJob(job);
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) throw new Error('Web Audio is not supported.');
     const decodeCtx = new AudioContextClass();
     let decoded;
-    try { decoded = await decodeCtx.decodeAudioData((await file.arrayBuffer()).slice(0)); }
-    catch (_) { throw new Error('Cannot decode this audio file; it may be unsupported or corrupt.'); }
-    finally { await decodeCtx.close(); }
+    try {
+      const raw = await file.arrayBuffer();
+      assertCurrentJob(job);
+      decoded = await decodeCtx.decodeAudioData(raw.slice(0));
+      assertCurrentJob(job);
+    } catch (error) {
+      if (error instanceof ProcessingCancelled) throw error;
+      throw new Error('Cannot decode this audio file; it may be unsupported or corrupt.');
+    } finally {
+      try { await decodeCtx.close(); } catch (_) {}
+    }
+    assertCurrentJob(job);
 
     const targetChannels = snapshot.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
     const requestedRate = Math.min(Math.max(snapshot.sampleRate, 4000), 48000);
@@ -273,6 +391,7 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot
     const source = offCtx.createBufferSource(); source.buffer = decoded; source.playbackRate.value = snapshot.playbackRate;
     const last = buildFilterChain(offCtx, source, snapshot); last.connect(offCtx.destination); source.start(0);
     const rendered = await offCtx.startRendering();
+    assertCurrentJob(job);
     const channels = Array.from({ length: rendered.numberOfChannels }, (_, ch) => new Float32Array(rendered.getChannelData(ch)));
     const actualRate = rendered.sampleRate;
     log(`  Decoded ${decoded.numberOfChannels}ch → ${rendered.numberOfChannels}ch | ${decoded.sampleRate}Hz → ${actualRate}Hz`, 'sys');
@@ -281,49 +400,70 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot
     const result = await new Promise((resolve, reject) => {
       activeReject = reject;
       const currentWorker = getWorker();
+      let settled = false;
+      const settle = (handler, value) => {
+        if (settled) return;
+        settled = true;
+        handler(value);
+      };
       currentWorker.onmessage = event => {
         const message = event.data || {};
+        if (!isCurrentJob(job)) return;
         if (message.type === 'progress') {
           setProgress((fileIndex / fileTotal + (message.pct / 100) / fileTotal) * 100,
             `File ${fileIndex + 1}/${fileTotal} — ${message.label}`);
-        } else if (message.type === 'done') resolve(message);
-        else if (message.type === 'error') reject(new Error(message.message));
+        } else if (message.type === 'done') settle(resolve, message);
+        else if (message.type === 'error') settle(reject, new Error(message.message));
       };
-      currentWorker.onerror = event => reject(new Error(event.message || 'Worker failed to initialize.'));
-      currentWorker.postMessage({
-        type: 'process', channels, sampleRate: actualRate, fileName: file.name,
-        randomSeed: hashSeed(`${file.name}:${file.size}`),
-        bitDepth: snapshot.bitDepth, crushMode: snapshot.crushMode, dither: snapshot.dither,
-        grit: snapshot.grit, noise: snapshot.noise, normalize: snapshot.normalize,
-      }, channels.map(channel => channel.buffer));
+      currentWorker.onerror = event => settle(reject, new Error(event.message || 'Worker failed to initialize.'));
+      try {
+        currentWorker.postMessage({
+          type: 'process', channels, sampleRate: actualRate, fileName: file.name,
+          randomSeed: hashSeed(`${file.name}:${file.size}`),
+          bitDepth: snapshot.bitDepth, crushMode: snapshot.crushMode, dither: snapshot.dither,
+          grit: snapshot.grit, noise: snapshot.noise, normalize: snapshot.normalize,
+        }, channels.map(channel => channel.buffer));
+      } catch (error) {
+        settle(reject, error);
+      }
     });
     activeReject = null;
+    assertCurrentJob(job);
     if (result.errors?.length) result.errors.forEach(error => log(`  ${error.format.toUpperCase()} unavailable: ${error.message}`, 'error'));
     const formats = [];
     for (const ext of ['ogg', 'wav', 'mp3']) {
       const buffer = result.formats?.[ext];
       if (!(buffer instanceof ArrayBuffer)) continue;
-      const type = ext === 'mp3' ? 'audio/mpeg' : `audio/${ext}`;
+      const type = mimeForExtension(ext);
       const blob = new Blob([buffer], { type });
       const url = URL.createObjectURL(blob);
-      formats.push({ ext, url, blob, size: formatBytes(blob.size), change: formatSizeChange(blob.size, file.size) });
-      blobRegistry.set(url, new File([blob], `${file.name}.${ext}`, { type }));
+      const filename = getOutputFilename(file.name, ext, snapshot.bitDepth, actualRate);
+      formats.push({ ext, filename, mime: type, url, blob, size: formatBytes(blob.size), change: formatSizeChange(blob.size, file.size) });
+      blobRegistry.set(url, new File([blob], filename, { type }));
     }
     if (!formats.length) throw new Error('No output format was produced.');
     if (result.hasClipping) clippingBatchCount++;
-    setItemState(id, result.errors?.length ? 'partial' : 'done', result.errors?.length ? 'PARTIAL' : 'DONE');
+    const isPartial = Boolean(result.errors?.length);
+    setItemState(id, isPartial ? 'partial' : 'done', isPartial ? 'PARTIAL' : 'DONE');
     log(`  Done: ${file.name} [${formats.map(format => `${format.ext.toUpperCase()} ${format.size}`).join(' · ')}]`, 'ok');
     return {
-      name: `${file.name.replace(/\.[^.]+$/, '')}_crunched_${snapshot.bitDepth}bit_${actualRate}hz`,
-      inputSize: file.size,
-      errors: result.errors || [],
-      formats,
+      status: isPartial ? 'partial' : 'success',
+      result: {
+        name: formats[0].filename.replace(/\.[^.]+$/, ''),
+        inputSize: file.size,
+        errors: result.errors || [],
+        formats,
+      },
     };
   } catch (error) {
     activeReject = null;
-    setItemState(id, 'error', cancelRequested ? 'CANCELLED' : 'FAILED');
-    log(`  ${cancelRequested ? 'Cancelled' : 'Error'}: ${file.name}: ${error.message || String(error)}`, 'error');
-    return null;
+    if (error instanceof ProcessingCancelled || job.cancelled || !isCurrentJob(job)) {
+      if (job.cancelled) setItemState(id, 'error', 'CANCELLED');
+      return { status: 'cancelled' };
+    }
+    setItemState(id, 'error', 'FAILED');
+    log(`  Error: ${file.name}: ${error.message || String(error)}`, 'error');
+    return { status: 'failed' };
   }
 }
 
@@ -335,18 +475,31 @@ function renderResult(result) {
   header.append(name, hint);
   const links = document.createElement('div'); links.className = 'result-links';
   result.formats.forEach(format => {
-    const link = document.createElement('a'); link.href = format.url; link.download = `${result.name}.${format.ext}`; link.className = 'btn btn--ghost btn--xs btn-download'; link.draggable = true; link.dataset.url = format.url;
+    const link = document.createElement('a'); link.href = format.url; link.download = format.filename; link.className = 'btn btn--ghost btn--xs btn-download'; link.draggable = true; link.dataset.url = format.url; link.dataset.mime = format.mime;
     const label = document.createElement('span'); label.textContent = `.${format.ext.toUpperCase()}`;
     const size = document.createElement('small'); size.textContent = `${format.size} · ${format.change}`;
     link.append(label, size); link.addEventListener('dragstart', handleDragStart); links.appendChild(link);
   });
-  div.append(header, links); _dom.resultsArea.appendChild(div); _dom.resultsArea.hidden = false;
+  if (result.errors?.length) {
+    const errors = document.createElement('ul');
+    errors.className = 'result-errors';
+    errors.setAttribute('aria-label', 'Unavailable output formats');
+    result.errors.forEach(error => {
+      const item = document.createElement('li');
+      item.textContent = `${String(error.format || 'format').toUpperCase()} unavailable: ${error.message}`;
+      errors.appendChild(item);
+    });
+    div.appendChild(errors);
+  }
+  div.insertBefore(header, div.firstChild);
+  div.insertBefore(links, div.children[1] || null);
+  _dom.resultsArea.appendChild(div); _dom.resultsArea.hidden = false;
 }
 
 function handleDragStart(event) {
   const file = blobRegistry.get(event.currentTarget.dataset.url);
   if (file && event.dataTransfer?.items) { event.dataTransfer.items.add(file); event.dataTransfer.effectAllowed = 'copy'; }
-  else if (event.dataTransfer) event.dataTransfer.setData('DownloadURL', `audio:${event.currentTarget.download}:${event.currentTarget.href}`);
+  else if (event.dataTransfer) event.dataTransfer.setData('DownloadURL', `${event.currentTarget.dataset.mime || 'application/octet-stream'}:${event.currentTarget.download}:${event.currentTarget.href}`);
 }
 
 export async function loadDemoTrack() {
