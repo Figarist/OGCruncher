@@ -341,6 +341,7 @@ input:focus-visible,
 .queue-item-status { color: var(--text-muted); font-size: .59rem; white-space: nowrap; }
 .queue-item-status.status--processing { color: #976b12; }
 .queue-item-status.status--done { color: var(--accent-green-text); }
+.queue-item-status.status--partial { color: #875b08; }
 .queue-item-status.status--error { color: #a33a2a; }
 .btn-remove { flex: 0 0 32px; min-width: 32px; min-height: 32px; padding: 0; border: 1px solid transparent; border-radius: 9px; color: var(--text-muted); background: transparent; cursor: pointer; font-size: .9rem; }
 .btn-remove:hover:not(:disabled) { color: #a33a2a; background: rgba(232, 96, 60, .10); }
@@ -503,6 +504,7 @@ input[type="range"].slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0
 .result-name { min-width: 0; overflow-wrap: anywhere; color: var(--text-primary); font-family: var(--font-mono); font-size: .72rem; font-weight: 600; }
 .daw-hint { color: var(--text-muted); font-family: var(--font-mono); font-size: .56rem; white-space: nowrap; }
 .result-links { display: flex; flex-wrap: wrap; gap: 7px; }
+.result-errors { margin: 0; padding-left: 18px; color: #a33a2a; font-size: .68rem; line-height: 1.35; }
 .btn-download { min-height: 32px; padding: 6px 9px; color: var(--accent-green-text); background: rgba(181,232,83,.32); border-color: rgba(122,184,36,.38); font-family: var(--font-mono); font-size: .59rem; }
 .btn-download:hover:not(:disabled) { color: #fff; background: var(--accent-green-d); }
 
