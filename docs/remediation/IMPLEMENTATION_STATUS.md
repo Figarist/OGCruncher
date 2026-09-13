@@ -13,6 +13,12 @@ the remediation changes listed below. Existing user changes are preserved.
 5. Run numeric regression checks, production/browser checks, review the diff and
    record evidence in [VERIFICATION.md](VERIFICATION.md).
 
+> **Dated follow-up — 2026-09-13:** The historical first-phase status is retained.
+> Phase-2 and release-readiness results are recorded in
+> [docs/remediation/phase-2/STATUS.md](phase-2/STATUS.md) and
+> [docs/release-readiness/STATUS.md](../release-readiness/STATUS.md). Do not read the
+> older `Implemented, not verified` entries as current release evidence.
+
 ## Status vocabulary
 
 - **Verified** means the listed automated, static, or browser evidence passed; it does

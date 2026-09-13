@@ -65,3 +65,11 @@ cache. The demo track was used; no user audio was uploaded externally.
 “Verified” in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) is scoped to the
 evidence named there. It never upgrades a static or synthetic check into live runtime,
 codec, listening, cross-browser, accessibility-certification or deployment evidence.
+
+## Dated release-readiness follow-up — 2026-09-13
+
+This historical record remains unchanged as first-phase evidence. The independent
+release-readiness pass, including phase-2 rechecks, the additional processing-control
+fix, 390px production runtime, raw codec checks, and current residual limits, is recorded
+in [docs/release-readiness/STATUS.md](../release-readiness/STATUS.md) and
+[docs/release-readiness/VERIFICATION.md](../release-readiness/VERIFICATION.md).

@@ -1,6 +1,6 @@
 # Prioritized improvement plan
 
-Updated 2026-09-10. Items marked complete are implemented in the current working tree;
+Updated 2026-09-13. Items marked complete are implemented in the current working tree;
 remaining items are backlog. Evidence and acceptance criteria are in the
 [bug register](docs/audit/2026-09-10/BUGS.md) and the
 [remediation verification](docs/remediation/VERIFICATION.md).
@@ -13,11 +13,11 @@ Effort: S = localized; M = multiple modules; L = architecture/cross-browser work
 | 3 | Mobile grid and keyboard, U01–U02 | Usable controls and native keyboard activation | S | Implemented; target widths and undo/redo checked |
 | 4 | Filename text rendering, S05 | No HTML interpretation of imported names | S | Implemented; hostile-name browser case not run |
 | 5 | PCM and size accounting, A05/F01–F03 | Correct packing, actual duration, per-codec estimates | M | Implemented; regression and demo export checked |
-| 6 | Batch snapshot/failures/blobs, S06–S08 | Reproducible jobs and bounded repeated-run memory | M | Implemented; success/lock path checked, failure injection pending |
+| 6 | Batch snapshot/failures/blobs, S06–S08 | Reproducible jobs and bounded repeated-run memory | M | Implemented; partial codec and cancellation paths covered by deterministic phase-2 tests; browser injection/memory profiling pending |
 | 7 | Safe PWA updates, S09 | Queued work survives until explicit reload | M | Implemented statically; live update timing pending |
 | 8 | Choose formats before encoding | Avoid unnecessary codecs and isolate failures | M | Backlog |
 | 9 | ZIP/download-all and naming templates | Collision-safe batch delivery with settings manifest | M | Backlog |
-| 10 | Per-file progress/cancel/retry | Clear stage and recovery controls | M | Backlog |
+| 10 | Per-file progress/cancel/retry | Clear stage and recovery controls | M | Logical cancellation/retry implemented and deterministic-tested; browser slow-fixture verification pending |
 | 11 | Waveform, seek and loop region | Audition attacks/tails without whole-file looping | L | Backlog |
 | 12 | Select file for preview | Explicit currently playing filename | M | Backlog |
 | 13 | Optional loudness-matched A/B | Fair comparisons without altering export gain | M | Backlog |
@@ -26,7 +26,7 @@ Effort: S = localized; M = multiple modules; L = architecture/cross-browser work
 | 16 | Keyboard help/numeric entry/reset | Discoverable, undoable, accessible controls | M | Backlog |
 | 17 | Encoder quality choices | Supported MP3/OGG settings with honest estimates | M | Backlog |
 | 18 | Named creative presets | Sonic intent without unverified hardware claims | S | Backlog |
-| 19 | Shared DSP and regression tests | Prevent worker/worklet drift | L | Offline core and regression coverage implemented; Worklet parity pending |
+| 19 | Shared DSP and regression tests | Prevent worker/worklet drift | L | Core/actual-worker behavioral parity covered for phase-2 vectors; source unification and Worklet parity pending |
 | 20 | Desktop release smoke matrix | Executable/assets/export validated per OS | L | Backlog |
 
 ## Deferred exploration
