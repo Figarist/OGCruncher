@@ -1,0 +1,39 @@
+{
+  "auditDate": "2026-09-13",
+  "timezone": "Europe/Kyiv",
+  "target": "https://figarist.github.io/OGCruncher/",
+  "reference": "https://figarist.github.io/uk/",
+  "deployedCommit": "70a63f7fff3e81d294612eb6870e2d3b0faf4b91",
+  "localHead": "84da67a16be2c8a5fb01c7bfd7089e54092f7822",
+  "originMaster": "70a63f7fff3e81d294612eb6870e2d3b0faf4b91",
+  "deployment": {
+    "workflowRunId": 34505605897,
+    "runNumber": 93,
+    "deploymentId": 6376910130,
+    "status": "success"
+  },
+  "verdict": "main_path_works_but_not_release_clean",
+  "confirmedFindings": [
+    {"id": "ONLINE-001", "severity": "P1", "category": "deployment"},
+    {"id": "ONLINE-002", "severity": "P1", "category": "pwa_update_state"},
+    {"id": "ONLINE-003", "severity": "P2", "category": "metadata_state"},
+    {"id": "ONLINE-004", "severity": "P1", "category": "input_identity"},
+    {"id": "DEPLOY-001", "severity": "P3", "category": "pwa_metadata"}
+  ],
+  "notVerified": [
+    "clipboard_payload",
+    "FLAC_AIFF_M4A_AAC_matrix",
+    "human_listening",
+    "cross_browser_device_matrix",
+    "automatic_update_loss_during_active_job",
+    "memory_stress_and_long_corpus",
+    "accessibility_conformance_certification"
+  ],
+  "localChecks": {"npmTest": "passed"},
+  "mutations": {
+    "productionSourceChanged": false,
+    "gitCommitPushDeploy": false,
+    "testProfileServiceWorkerActivation": true,
+    "networkAndViewportRestored": true
+  }
+}
