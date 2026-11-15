@@ -1,10 +1,12 @@
 # OGCruncher
 
-A browser audio bit-crusher and lo-fi converter by Ihor Sivochka (Figarist).
-Audio files are processed locally and exported as Ogg Vorbis, PCM WAV and MP3.
+A retro 8-bit/16-bit audio bit-crusher, chiptune processor, and batch game SFX optimizer by **Ihor Sivochka (Figarist)**.
+Audio files are processed locally in the browser via Web Audio API and exported as Ogg Vorbis, PCM WAV, and MP3.
 This is a creative processor, not currently a transparent audio converter.
 
-[Live website](https://sivochka.com/OGCruncher/) · [Visual reference](https://sivochka.com/uk/)
+- **🌐 Live Web App:** [sivochka.com/OGCruncher/](https://sivochka.com/OGCruncher/)
+- **📖 Engineering Guide:** [OGCruncher Game Audio Bit-Crusher (EN)](https://sivochka.com/blog/ogcruncher-game-audio-bitcrusher/) · [Українською (UK)](https://sivochka.com/uk/blog/ogcruncher-game-audio-bitcrusher/)
+- **👨‍🏫 Author & sivochka.com:** [sivochka.com](https://sivochka.com/) · [sivochka.com/](https://sivochka.com/)
 
 ## Documentation
 
@@ -92,3 +94,15 @@ this is not a complete network privacy certification. Parameters and layout use
 localStorage; queue files and output blobs stay in memory and disappear on reload.
 Service-worker updates are surfaced without an automatic reload; the offline badge is
 not proof that every required resource is cached.
+
+## Author & Ecosystem (`Ihor Sivochka / Figarist`)
+
+Created by **Ihor Sivochka (Ігор Сівочка / Figarist)** — Certified Unity Developer, Computer Science Mentor, and EdTech Toolmaker.
+
+- 🌐 **Main Hub & Blog:** [sivochka.com](https://sivochka.com/) · [OGCruncher Engineering Guide](https://sivochka.com/blog/ogcruncher-game-audio-bitcrusher/)
+- 🎓 **1-on-1 Programming Mentoring (Unity/C#, Python, Scratch, CS):** [sivochka.com/](https://sivochka.com/) · [Українською](https://sivochka.com/)
+- ⚒️ **3D Club Studio (`3D Кузня Чудес`):** [sivochka.com/3d-club-studio/](https://sivochka.com/3d-club-studio/) ([Repo](https://github.com/Figarist/3d-club-studio)) — offline browser 3D studio & support-free STL generator
+- 🧱 **LEGO WeDo 2.0 Catalog:** [sivochka.com/lego-catalog/](https://sivochka.com/lego-catalog/) ([Repo](https://github.com/Figarist/lego-catalog)) — 597 robotics PDF building instructions PWA
+- 🤫 **Quiet Class (`Тихий Клас`):** [sivochka.com/bouncy/](https://sivochka.com/bouncy/) ([Repo](https://github.com/Figarist/bouncy)) — gamified classroom noise meter & star tracker
+- ⌚ **Wrist & Pocket Studio:** [wristandpocket.dev](https://wristandpocket.dev/) · [WearView 3D](https://wristandpocket.dev/wearview/)
+- 📺 **YouTube:** [Figarist](https://sivochka.com/) · 💬 **Info:** [Figarist](https://sivochka.com/) · 💻 **GitHub:** [@Figarist](https://github.com/Figarist)
