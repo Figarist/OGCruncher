@@ -4,7 +4,7 @@ A browser audio bit-crusher and lo-fi converter by Ihor Sivochka (Figarist).
 Audio files are processed locally and exported as Ogg Vorbis, PCM WAV and MP3.
 This is a creative processor, not currently a transparent audio converter.
 
-[Live website](https://figarist.github.io/OGCruncher/) · [Visual reference](https://figarist.github.io/uk/)
+[Live website](https://sivochka.com/OGCruncher/) · [Visual reference](https://sivochka.com/uk/)
 
 ## Documentation
 
@@ -32,27 +32,30 @@ Simple quality tiers and Advanced controls cover effect depth, rate, saturation,
 noise, speed/pitch, HPF, LPF and bass EQ. Preview and export use the same offline
 render contract for filters, channel selection and DSP; A/B switching and spectrum
 display remain available. Batch processing is sequential, freezes one validated
-snapshot, and encodes OGG/WAV/MP3 independently in a classic Web Worker. Cancellation
+snapshot, and encodes OGG/WAV/MP3 independently in a reused classic Web Worker (terminated
+only on cancellation or fatal error). Non-finite (`NaN`/`Infinity`) and empty inputs are
+sanitized/guarded, and MP3 resampling uses windowed Lanczos-3 interpolation. Cancellation
 is logical and generation-safe across read/decode/render/worker phases; partial format
-output is retained and labelled. Each result has an individual download with an honest
-per-format estimate. Drag-to-DAW is experimental. PWA output and a Neutralino
-configuration are included.
+output is retained and labelled. Each result has an individual download with a per-format
+size estimate (including MPEG-2.5 `64 kbps` clamping at `<= 12000 Hz`), alongside batch
+`DOWNLOAD ALL (.ZIP)` (`ogcruncher_batch.zip`) and `CLEAR RESULTS` actions. Drag-to-DAW is
+experimental. PWA output and a Neutralino configuration are included.
 
 Reload, share-link parsing, undo/redo, Simple/Advanced snapshots, filename rendering,
 PCM WAV packing, channel-linked normalization, quiet-signal handling, batch locking,
-resource cleanup and explicit, state-aware service-worker updates are implemented
-and deployed. Existing cached-client adoption still needs migration verification.
+resource cleanup and explicit, state-aware service-worker updates are implemented.
+Existing cached-client adoption still needs migration verification.
 See the [deployment evidence](docs/deployment/2026-09-13.md),
 [remediation status](docs/remediation/IMPLEMENTATION_STATUS.md)
-and [verification record](docs/remediation/VERIFICATION.md) for exact evidence levels.
+and [verification record](docs/remediation/VERIFICATION.md) for exact historical evidence levels.
 
 Known limitations: lossy codec round-trips, human listening quality, full keyboard and
 screen-reader conformance, cross-browser/mobile-device behavior, browser codec-failure
 injection, cancel/retry profiling and deployed/Neutralino runtime behavior are not fully
-verified. The phase-2 worker/core result is behavioral parity coverage; the DSP source
-is not yet unified.
-ZIP export, waveform seeking, LUFS metering and full Ukrainian localization are not
-implemented. Queue files and output blobs remain in memory and disappear on reload.
+verified. The phase-2 worker/core result is behavioral parity coverage; `js/dsp-core.js`
+and `js/dsp.worker.js` still duplicate core DSP functions.
+Waveform seeking, LUFS metering and full Ukrainian localization are not implemented.
+Queue files and output blobs remain in memory and disappear on reload.
 
 ## Development
 

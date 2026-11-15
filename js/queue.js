@@ -20,6 +20,8 @@ let clippingBatchCount = 0;
 let estimateRevision = 0;
 const metadata = new Map();
 const blobRegistry = new Map();
+const batchArchiveEntries = [];
+let jszipPromise = null;
 const metadataQueue = [];
 let metadataActive = 0;
 let metadataGeneration = 0;
@@ -39,6 +41,12 @@ function getWorker() {
 
 export function initQueue(dom) {
   _dom = dom;
+  _dom.btnDownloadZip?.addEventListener?.('click', downloadBatchZip);
+  _dom.btnClearResults?.addEventListener?.('click', () => {
+    clearResults();
+    notifyAudioStateChanged();
+    log('Results cleared.', 'sys');
+  });
 }
 
 function notifyAudioStateChanged() {
@@ -54,6 +62,10 @@ function revokeAllBlobs() {
 
 function clearResults() {
   revokeAllBlobs();
+  batchArchiveEntries.length = 0;
+  if (_dom.resultsBatchBar) _dom.resultsBatchBar.hidden = true;
+  if (_dom.btnDownloadZip) _dom.btnDownloadZip.hidden = true;
+  if (_dom.resultsBatchSummary) _dom.resultsBatchSummary.textContent = '0 files ready';
   if (_dom.resultsArea) {
     while (_dom.resultsArea.firstChild) _dom.resultsArea.removeChild(_dom.resultsArea.firstChild);
     _dom.resultsArea.hidden = true;
@@ -83,13 +95,14 @@ export function getOutputFilename(fileName, extension, bitDepth, sampleRate, dis
   return `${safeFilenameStem(fileName).slice(0, maxStemLength)}${safeDisambiguator}${suffix}.${ext}`;
 }
 
-function allocateOutputFilenames(fileName, bitDepth, sampleRate, usedNames) {
+function allocateOutputFilenames(fileName, bitDepth, rateByExt, usedNames) {
   const extensions = ['ogg', 'wav', 'mp3'];
+  const rateFor = ext => typeof rateByExt === 'object' && rateByExt ? (rateByExt[ext] || rateByExt.default) : rateByExt;
   for (let ordinal = 1; ordinal < 10000; ordinal++) {
     const disambiguator = ordinal === 1 ? '' : `-${ordinal}`;
     const filenames = Object.fromEntries(extensions.map(ext => [
       ext,
-      getOutputFilename(fileName, ext, bitDepth, sampleRate, disambiguator),
+      getOutputFilename(fileName, ext, bitDepth, rateFor(ext), disambiguator),
     ]));
     if (extensions.every(ext => !usedNames.has(filenames[ext]))) {
       extensions.forEach(ext => usedNames.add(filenames[ext]));
@@ -212,6 +225,14 @@ function decodeMetadata(id, file) {
   return promise;
 }
 
+const MPEG_SAMPLE_RATES = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000];
+
+function resolveMp3EstimateRate(sampleRate) {
+  const rate = Math.round(Number(sampleRate) || 44100);
+  if (MPEG_SAMPLE_RATES.includes(rate)) return rate;
+  return MPEG_SAMPLE_RATES.find(candidate => candidate >= rate) || 48000;
+}
+
 function wavEstimate(duration, sampleRate, channels, bitDepth) {
   const frames = Math.ceil((duration / Math.max(.001, state.playbackRate)) * sampleRate);
   const containerBits = bitDepth <= 8 ? 8 : 16;
@@ -259,10 +280,14 @@ export function updateSavingsEstimate() {
     const channels = state.stereo ? Math.min(info.channels, 2) : 1;
     const rate = state.sampleRate;
     wav += wavEstimate(info.duration, rate, channels, state.bitDepth);
-    // MP3 is a nominal 128kbps estimate; OGG quality 0 is content-dependent.
-    mp3 += duration * 128000 / 8 + 720;
-    oggLow += duration * (channels === 1 ? 24000 : 40000) / 8;
-    oggHigh += duration * (channels === 1 ? 96000 : 160000) / 8;
+    // MPEG-2.5 (<=12kHz) clamps MP3 bitrate at 64kbps; MPEG-1/2 uses 128kbps.
+    const mp3Rate = resolveMp3EstimateRate(rate);
+    const mp3Bitrate = mp3Rate <= 12000 ? 64000 : 128000;
+    mp3 += duration * mp3Bitrate / 8 + 720;
+    const oggLowKbps = rate <= 16000 ? (channels === 1 ? 16000 : 28000) : (channels === 1 ? 24000 : 40000);
+    const oggHighKbps = rate <= 16000 ? (channels === 1 ? 64000 : 112000) : (channels === 1 ? 96000 : 160000);
+    oggLow += duration * oggLowKbps / 8;
+    oggHigh += duration * oggHighKbps / 8;
   });
 
   const originalEl = document.getElementById('savings-original-size');
@@ -398,7 +423,7 @@ export async function startProcessing(setProgress) {
     if (activeJob === job) activeJob = null;
     state.processing = false;
     activeReject = null;
-    if (worker) { worker.terminate(); worker = null; }
+    if (wasCancelled && worker) { worker.terminate(); worker = null; }
     _dom.progressWrap.hidden = true;
     if (_dom.btnCancel) _dom.btnCancel.hidden = true;
     _dom.btnProcess.disabled = state.files.size === 0;
@@ -450,9 +475,13 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot
     }
     assertCurrentJob(job);
 
+    if (!decoded || decoded.length === 0 || !(decoded.duration > 0)) {
+      throw new Error('Audio file contains no samples.');
+    }
+
     const targetChannels = snapshot.stereo ? Math.min(decoded.numberOfChannels, 2) : 1;
     const requestedRate = Math.min(Math.max(snapshot.sampleRate, 4000), 48000);
-    const targetLength = Math.ceil((decoded.duration / snapshot.playbackRate) * requestedRate);
+    const targetLength = Math.max(1, Math.ceil((decoded.duration / snapshot.playbackRate) * requestedRate));
     const offCtx = safeOfflineCtx(targetChannels, targetLength, requestedRate);
     const source = offCtx.createBufferSource(); source.buffer = decoded; source.playbackRate.value = snapshot.playbackRate;
     const last = buildFilterChain(offCtx, source, snapshot); last.connect(offCtx.destination); source.start(0);
@@ -481,7 +510,10 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot
         } else if (message.type === 'done') settle(resolve, message);
         else if (message.type === 'error') settle(reject, new Error(message.message));
       };
-      currentWorker.onerror = event => settle(reject, new Error(event.message || 'Worker failed to initialize.'));
+      currentWorker.onerror = event => {
+        if (worker === currentWorker) { worker.terminate(); worker = null; }
+        settle(reject, new Error(event.message || 'Worker failed to initialize.'));
+      };
       try {
         currentWorker.postMessage({
           type: 'process', channels, sampleRate: actualRate, fileName: file.name,
@@ -495,9 +527,15 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot
     });
     activeReject = null;
     assertCurrentJob(job);
+    if (result.mp3SampleRate && result.mp3SampleRate !== actualRate) {
+      log(`  MP3 resampled ${actualRate}Hz → ${result.mp3SampleRate}Hz for MPEG compatibility.`, 'sys');
+    }
     if (result.errors?.length) result.errors.forEach(error => log(`  ${error.format.toUpperCase()} unavailable: ${error.message}`, 'error'));
     const formats = [];
-    const outputFilenames = allocateOutputFilenames(file.name, snapshot.bitDepth, actualRate, usedOutputNames);
+    const outputFilenames = allocateOutputFilenames(file.name, snapshot.bitDepth, {
+      default: actualRate,
+      mp3: result.mp3SampleRate || actualRate,
+    }, usedOutputNames);
     for (const ext of ['ogg', 'wav', 'mp3']) {
       const buffer = result.formats?.[ext];
       if (!(buffer instanceof ArrayBuffer)) continue;
@@ -561,6 +599,71 @@ function renderResult(result) {
   div.insertBefore(header, div.firstChild);
   div.insertBefore(links, div.children[1] || null);
   _dom.resultsArea.appendChild(div); _dom.resultsArea.hidden = false;
+
+  result.formats.forEach(format => {
+    if (format.blob) batchArchiveEntries.push({ filename: format.filename, blob: format.blob });
+  });
+  if (_dom.resultsBatchBar && batchArchiveEntries.length >= 1) {
+    _dom.resultsBatchBar.hidden = false;
+    if (_dom.btnDownloadZip) _dom.btnDownloadZip.hidden = batchArchiveEntries.length <= 1;
+    if (_dom.resultsBatchSummary) {
+      const fileWord = batchArchiveEntries.length === 1 ? 'file' : 'files';
+      _dom.resultsBatchSummary.textContent = `${batchArchiveEntries.length} ${fileWord} ready`;
+    }
+  }
+}
+
+function loadJSZip() {
+  if (typeof window !== 'undefined' && typeof window.JSZip === 'function') return Promise.resolve(window.JSZip);
+  if (jszipPromise) return jszipPromise;
+  jszipPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = `${import.meta.env.BASE_URL}jszip.min.js`;
+    script.async = true;
+    script.onload = () => {
+      if (typeof window.JSZip === 'function') resolve(window.JSZip);
+      else { jszipPromise = null; reject(new Error('JSZip failed to initialize.')); }
+    };
+    script.onerror = () => {
+      jszipPromise = null;
+      reject(new Error('Could not load ZIP archiver.'));
+    };
+    (document.head || document.body || document.documentElement).appendChild(script);
+  });
+  return jszipPromise;
+}
+
+async function downloadBatchZip() {
+  if (!batchArchiveEntries.length || !_dom.btnDownloadZip) return;
+  const button = _dom.btnDownloadZip;
+  button.disabled = true;
+  button.textContent = 'PACKING ZIP…';
+  try {
+    const JSZipCtor = await loadJSZip();
+    const zip = new JSZipCtor();
+    batchArchiveEntries.forEach(entry => zip.file(entry.filename, entry.blob));
+    const zipBlob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    });
+    const url = URL.createObjectURL(zipBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'ogcruncher_batch.zip';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    log(`Packed ${batchArchiveEntries.length} output file(s) into ogcruncher_batch.zip.`, 'ok');
+    showToast('📦 ZIP archive downloaded.', 'ok');
+  } catch (error) {
+    log(`ZIP export failed: ${error.message || String(error)}`, 'error');
+    showToast('⚠ Failed to build ZIP archive.', 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'DOWNLOAD ALL (.ZIP)';
+  }
 }
 
 function handleDragStart(event) {
@@ -569,16 +672,22 @@ function handleDragStart(event) {
   else if (event.dataTransfer) event.dataTransfer.setData('DownloadURL', `${event.currentTarget.dataset.mime || 'application/octet-stream'}:${event.currentTarget.download}:${event.currentTarget.href}`);
 }
 
+function setDemoButtonState(disabled, label) {
+  if (_dom.btnLoadDemo) _dom.btnLoadDemo.disabled = disabled;
+  if (_dom.btnLoadDemoLabel) _dom.btnLoadDemoLabel.textContent = label;
+  else if (_dom.btnLoadDemo) _dom.btnLoadDemo.textContent = label;
+}
+
 export async function loadDemoTrack() {
   if (state.processing) return;
-  _dom.btnLoadDemo.disabled = true; _dom.btnLoadDemo.textContent = 'LOADING…';
+  setDemoButtonState(true, 'LOADING…');
   try {
     const response = await fetch(`${import.meta.env.BASE_URL}demo.mp3`);
     if (!response.ok) throw new Error('Demo track not found.');
     const file = new File([await response.blob()], 'demo.mp3', { type: 'audio/mpeg' });
     addFiles([file]); log('Demo track loaded successfully.', 'ok'); showToast('🎵 Demo track loaded.', 'info');
   } catch (error) { log(`Demo track unavailable: ${error.message}`, 'error'); showToast('Demo track unavailable.', 'error'); }
-  finally { _dom.btnLoadDemo.disabled = false; _dom.btnLoadDemo.textContent = 'TRY DEMO TRACK'; }
+  finally { setDemoButtonState(false, 'TRY DEMO TRACK 🎵'); }
 }
 
 async function readAllEntries(reader) {

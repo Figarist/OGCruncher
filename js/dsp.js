@@ -1,6 +1,6 @@
 /**
  * OGCruncher — DSP Engine
- * by figarist · https://figarist.github.io
+ * by figarist · https://sivochka.com
  */
 
 'use strict';
@@ -96,7 +96,7 @@ export async function renderFilteredBuffer(buffer, params, targetChannels) {
   const numChannels = targetChannels || buffer.numberOfChannels;
   const pRate = params.playbackRate || 1.0;
   const targetRate = params.sampleRate || buffer.sampleRate;
-  const targetLength = Math.ceil((buffer.duration / pRate) * targetRate);
+  const targetLength = Math.max(1, Math.ceil((buffer.duration / pRate) * targetRate));
   
   const offCtx = safeOfflineCtx(numChannels, targetLength, targetRate);
   const src = offCtx.createBufferSource();

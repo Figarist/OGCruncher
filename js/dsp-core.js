@@ -6,7 +6,12 @@
 'use strict';
 
 export function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+  const num = Number(value);
+  return Number.isFinite(num) ? Math.min(max, Math.max(min, num)) : min;
+}
+
+function finiteSample(value) {
+  return Number.isFinite(value) ? value : 0;
 }
 
 export function createSeededRandom(seed = 1) {
@@ -46,6 +51,8 @@ export function processDSP(buf, bitDepth = 8, crushMode = true, dither = true,
   const noiseLevel = clamp(finiteOr(noise, 0), 0, 0.05);
   const crush = !!crushMode;
   if (!buf || !buf.length) return false;
+
+  for (let i = 0; i < buf.length; i++) buf[i] = finiteSample(buf[i]);
 
   if (noiseLevel > 0) {
     for (let i = 0; i < buf.length; i++) buf[i] += (random() * 2 - 1) * noiseLevel;

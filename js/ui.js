@@ -1,6 +1,6 @@
 /**
  * OGCruncher — UI Controller
- * by figarist · https://figarist.github.io
+ * by figarist · https://sivochka.com
  */
 
 'use strict';
@@ -8,7 +8,7 @@
 import { state, DEFAULTS, saveState, updateHash, parseHash, readSavedState, sanitizeParams, getStateSnapshot, pushHistory, undo, redo, pauseHistory, pausePersistence, setOnStateChange } from './state.js';
 import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
 import { initQueue, addFiles, clearQueue, cancelProcessing, startProcessing, loadDemoTrack, handleItems, updateSavingsEstimate } from './queue.js';
-import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, invalidatePreviewUpdates, updateWorkletParams, setPreviewVolume, updateLiveFilters } from './preview.js';
+import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, invalidatePreviewUpdates, setPreviewVolume } from './preview.js';
 
 const SITE_URL = window.location.origin + window.location.pathname;
 
@@ -127,7 +127,7 @@ function syncBitDepth(val) {
   sliderBit.setAttribute('aria-valuenow', val);
   updateSliderTrack(sliderBit);
   saveState();
-  updateWorkletParams();
+
   if (state.liveUpdate) requestPreviewUpdate();
   updateSavingsEstimate();
 }
@@ -154,7 +154,7 @@ function syncSampleRate(val) {
   if (state.liveUpdate) requestPreviewUpdate();
   updateSavingsEstimate();
 }
-window.syncSampleRate = syncSampleRate;
+
 
 const SIMPLE_QUALITY = [
   { rate: 8000, bits: 8, label: 'TINY (MICRO)', desc: 'Micro size (8kHz / 8-bit) — telephone-like and intentionally lo-fi.' },
@@ -237,7 +237,7 @@ function syncSimpleQuality(val, { persist = true, requestPreview = true } = {}) 
   }
 
   if (persist) saveState();
-  updateWorkletParams();
+
   if (requestPreview && state.liveUpdate) requestPreviewUpdate();
   updateSavingsEstimate();
 }
@@ -251,7 +251,7 @@ function syncGrit(val) {
   outGrit.textContent = (+val).toFixed(1);
   updateSliderTrack(sliderGrit);
   saveState();
-  updateWorkletParams();
+
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
@@ -264,7 +264,7 @@ function syncNoise(val) {
   outNoise.textContent = (+val).toFixed(3);
   updateSliderTrack(sliderNoise);
   saveState();
-  updateWorkletParams();
+
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
@@ -289,7 +289,7 @@ function syncHpf(val) {
   outHpf.textContent = val > 20 ? `${val} Hz` : '20 Hz';
   updateSliderTrack(sliderHpf);
   saveState();
-  updateLiveFilters();
+
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
@@ -302,7 +302,7 @@ function syncLpf(val) {
   outLpf.textContent = val < 20000 ? `${val} Hz` : 'OFF';
   updateSliderTrack(sliderLpf);
   saveState();
-  updateLiveFilters();
+
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
@@ -315,7 +315,7 @@ function syncBass(val) {
   outBass.textContent = val > 0 ? `+${val} dB` : '0 dB';
   updateSliderTrack(sliderBass);
   saveState();
-  updateLiveFilters();
+
   if (state.liveUpdate) requestPreviewUpdate();
 }
 
@@ -355,7 +355,7 @@ function applyParamsToUI(p) {
   if (state.simpleMode) syncSimpleQuality(state.simpleQuality, { persist: false, requestPreview: false });
   pauseHistory(false);
   updatePresetUI();
-  updateWorkletParams();
+
   if (options.persist !== false) saveState();
   if (options.requestPreview !== false && state.liveUpdate) requestPreviewUpdate();
 }
@@ -495,22 +495,24 @@ function initResizers() {
 
   const savedLeft = safeGet('og_col_left');
   const savedCenter = safeGet('og_col_center');
-  const savedRight = safeGet('og_col_right');
-  const validColumn = value => /^(?:\d+(?:\.\d+)?px|1fr|auto)$/.test(String(value));
-  if (validColumn(savedLeft)) main.style.setProperty('--col-left', savedLeft);
-  if (validColumn(savedCenter)) main.style.setProperty('--col-center', savedCenter);
-  if (validColumn(savedRight)) main.style.setProperty('--col-right', savedRight);
+  const validPx = value => /^\d+(?:\.\d+)?px$/.test(String(value));
+  if (validPx(savedLeft)) main.style.setProperty('--col-left', savedLeft);
+  if (validPx(savedCenter)) main.style.setProperty('--col-center', savedCenter);
+  main.style.setProperty('--col-right', '1fr');
 
   let activeResizer = null;
 
-  const onMouseDown = (e) => {
+  const onPointerDown = (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
     activeResizer = e.currentTarget.dataset.resizer;
     document.body.style.cursor = 'col-resize';
     document.body.classList.add('is-dragging');
     e.currentTarget.classList.add('dragging');
     main.style.transition = 'none';
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
   };
 
   const onKeyDown = (e) => {
@@ -518,16 +520,23 @@ function initResizers() {
     e.preventDefault();
     const direction = e.key === 'ArrowRight' ? 1 : -1;
     const rect = main.getBoundingClientRect();
-    const current = e.currentTarget.dataset.resizer === 'left'
-      ? parseFloat(getComputedStyle(main).gridTemplateColumns) || rect.width * .25
-      : parseFloat(getComputedStyle(main).gridTemplateColumns.split(' ')[2]) || rect.width * .33;
-    const next = Math.max(e.currentTarget.dataset.resizer === 'left' ? 240 : 320, current + direction * 24);
-    const variable = e.currentTarget.dataset.resizer === 'left' ? '--col-left' : '--col-center';
+    const cols = getComputedStyle(main).gridTemplateColumns.split(' ');
+    const isLeft = e.currentTarget.dataset.resizer === 'left';
+    const leftPx = parseFloat(cols[0]) || rect.width * .25;
+    const centerPx = parseFloat(cols[2]) || rect.width * .33;
+    const current = isLeft ? leftPx : centerPx;
+    const min = isLeft ? 240 : 320;
+    const max = isLeft
+      ? Math.max(min, rect.width - 600)
+      : Math.max(min, rect.width - leftPx - 16 - 256);
+    const next = Math.max(min, Math.min(max, current + direction * 24));
+    const variable = isLeft ? '--col-left' : '--col-center';
     main.style.setProperty(variable, `${next}px`);
-    safeSet(e.currentTarget.dataset.resizer === 'left' ? 'og_col_left' : 'og_col_center', `${next}px`);
+    main.style.setProperty('--col-right', '1fr');
+    safeSet(isLeft ? 'og_col_left' : 'og_col_center', `${next}px`);
   };
 
-  const onMouseMove = (e) => {
+  const onPointerMove = (e) => {
     if (!activeResizer) return;
     const rect = main.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -541,14 +550,14 @@ function initResizers() {
       main.style.setProperty('--col-left', `${newLeft}px`);
       main.style.setProperty('--col-right', `1fr`);
     } else {
-      const centerStart = leftPx + 6;
-      const newCenter = Math.max(320, Math.min(x - centerStart, totalWidth - centerStart - 240));
+      const centerStart = leftPx + 16;
+      const newCenter = Math.max(320, Math.min(x - centerStart, totalWidth - centerStart - 256));
       main.style.setProperty('--col-center', `${newCenter}px`);
       main.style.setProperty('--col-right', `1fr`);
     }
   };
 
-  const onMouseUp = () => {
+  const onPointerUp = () => {
     if (activeResizer) {
       resizerLeft.classList.remove('dragging');
       resizerRight.classList.remove('dragging');
@@ -557,17 +566,18 @@ function initResizers() {
       const cols = style.gridTemplateColumns.split(' ');
       safeSet('og_col_left', cols[0]);
       safeSet('og_col_center', cols[2]);
-      safeSet('og_col_right', cols[4]);
+      safeSet('og_col_right', '1fr');
     }
     activeResizer = null;
     document.body.style.cursor = '';
     document.body.classList.remove('is-dragging');
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerUp);
   };
 
-  resizerLeft.addEventListener('mousedown', onMouseDown);
-  resizerRight.addEventListener('mousedown', onMouseDown);
+  resizerLeft.addEventListener('pointerdown', onPointerDown);
+  resizerRight.addEventListener('pointerdown', onPointerDown);
   resizerLeft.addEventListener('keydown', onKeyDown);
   resizerRight.addEventListener('keydown', onKeyDown);
 }
@@ -592,16 +602,18 @@ dropZone.addEventListener('drop', async e => {
 });
 
 dropZone.addEventListener('click', () => { if (!state.processing) fileInput.click(); });
-dropZone.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!state.processing) fileInput.click(); } });
+dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === dropZone) { e.preventDefault(); if (!state.processing) fileInput.click(); } });
 fileInput.addEventListener('change', () => { if (state.processing) return; addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
 
 const wrapSlider = (slider, syncFn) => {
+  const endDrag = () => {
+    _isDragging = false;
+  };
   slider.addEventListener('pointerdown', () => {
     _isDragging = true;
     pushHistory();
-  });
-  slider.addEventListener('pointerup', () => {
-    _isDragging = false;
+    window.addEventListener('pointerup', endDrag, { once: true });
+    window.addEventListener('pointercancel', endDrag, { once: true });
   });
   slider.addEventListener('input', () => syncFn(slider.value));
 };
@@ -616,6 +628,20 @@ wrapSlider(sliderLpf, syncLpf);
 wrapSlider(sliderBass, syncBass);
 
 wrapSlider(sliderSimpleQuality, syncSimpleQuality);
+
+document.querySelector('.sr-snap-row')?.addEventListener('click', (e) => {
+  const btn = e.target instanceof Element ? e.target.closest('.btn-sr-snap[data-value]') : null;
+  if (!btn || state.processing) return;
+  syncSampleRate(btn.dataset.value);
+});
+
+document.querySelectorAll('.pip-snap[data-val]').forEach((pip) => {
+  pip.addEventListener('click', () => {
+    if (state.processing) return;
+    pushHistory();
+    syncSimpleQuality(pip.dataset.val);
+  });
+});
 
 function advancedSnapshot() {
   const snapshot = getStateSnapshot();
@@ -665,7 +691,7 @@ btnMarioToggle.addEventListener('click', () => {
   btnMarioToggle.setAttribute('aria-checked', state.crushMode);
   btnMarioToggle.classList.toggle('active', state.crushMode);
   saveState();
-  updateWorkletParams();
+
   if (state.liveUpdate) requestPreviewUpdate();
   outMario.textContent = state.crushMode ? 'ON' : 'OFF';
   log(`Crush mode: ${state.crushMode ? 'ENABLED' : 'DISABLED'}`, 'sys');
@@ -679,7 +705,7 @@ if (btnDitherToggle) {
     btnDitherToggle.setAttribute('aria-checked', state.dither);
     btnDitherToggle.classList.toggle('active', state.dither);
     saveState();
-    updateWorkletParams();
+
     if (state.liveUpdate) requestPreviewUpdate();
     if (outDither) outDither.textContent = state.dither ? 'ON' : 'OFF';
     log(`Dither: ${state.dither ? 'ENABLED' : 'DISABLED'}`, 'sys');
@@ -707,7 +733,7 @@ btnNormalizeToggle.addEventListener('click', () => {
   btnNormalizeToggle.setAttribute('aria-checked', state.normalize);
   btnNormalizeToggle.classList.toggle('active', state.normalize);
   saveState();
-  updateWorkletParams();
+
   if (state.liveUpdate) requestPreviewUpdate();
   outNormalize.textContent = state.normalize ? 'ON' : 'OFF';
   log(`Normalization: ${state.normalize ? 'ENABLED' : 'DISABLED'}`, 'sys');
@@ -835,6 +861,7 @@ btnSaveCustom.addEventListener('click', () => {
   btnPresetUser.disabled = false;
   userPresetMeta.textContent = `${preset.bitDepth}-bit / ${preset.sampleRate}Hz`;
   updatePresetUI();
+  saveState();
   log('custom preset saved to localstorage', 'ok');
   showToast('💾 custom preset saved', 'ok');
 });
@@ -936,17 +963,17 @@ window.addEventListener('keydown', (e) => {
   if (e.defaultPrevented) return;
   if (!modalInfo.hidden) return;
   const target = e.target instanceof Element ? e.target : null;
-  if (target?.closest('button, a, input, textarea, select, [contenteditable="true"]')) return;
+  const inTextInput = !!target?.closest('input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), textarea, select, [contenteditable="true"]');
 
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !e.shiftKey) {
-    if (state.processing) return;
+    if (inTextInput || state.processing) return;
     e.preventDefault();
     const ok = undo(applyParamsToUI);
     if (ok) showToast('↩ undo', 'sys');
     return;
   }
   if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey))) {
-    if (state.processing) return;
+    if (inTextInput || state.processing) return;
     e.preventDefault();
     const ok = redo(applyParamsToUI);
     if (ok) showToast('↪ redo', 'sys');
@@ -957,6 +984,8 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape') { e.preventDefault(); cancelProcessing(); }
     return;
   }
+
+  if (target?.closest('button, a, input, textarea, select, [contenteditable="true"]')) return;
 
   if (e.code === 'Space') {
     e.preventDefault();
@@ -980,7 +1009,7 @@ window.addEventListener('keydown', (e) => {
   initUtils({ logWindow, toast, badgeStatus });
   initQueue({ 
     fileQueue, queueHeader, btnProcess, btnProcessLbl, 
-    btnPreview, resultsArea, progressWrap, btnLoadDemo, btnCancel, batchSummary,
+    btnPreview, resultsArea, resultsBatchBar: $('results-batch-bar'), resultsBatchSummary: $('results-batch-summary'), btnDownloadZip: $('btn-download-zip'), btnClearResults: $('btn-clear-results'), progressWrap, btnLoadDemo, btnLoadDemoLabel: $('btn-load-demo-label'), btnCancel, batchSummary,
     panelCenter: $('panel-center')
   });
   initPreview({ 
@@ -1041,7 +1070,7 @@ window.addEventListener('keydown', (e) => {
   const saved = safeGet('ogcruncher_preset');
   if (saved) {
     try {
-      const p = JSON.parse(saved);
+      const p = sanitizeParams(JSON.parse(saved));
       btnPresetUser.disabled = false;
       userPresetMeta.textContent = `${p.bitDepth}-bit / ${p.sampleRate}Hz`;
     } catch (_) {}
@@ -1057,12 +1086,8 @@ window.addEventListener('keydown', (e) => {
   });
   initResizers();
   
-  // Show info modal on first visit
-  if (!safeGet('og_seen_info')) {
-    modalInfo.hidden = false;
-    safeSet('og_seen_info', 'true');
-    btnInfoOk.focus();
-  }
+  // Info modal remains user-triggered via ABOUT button
+  if (!safeGet('og_seen_info')) safeSet('og_seen_info', 'true');
 
   // ── PWA Install Prompt ────────────────────────────────────────────────
   const badgePwa = $('badge-pwa');

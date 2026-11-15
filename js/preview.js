@@ -35,6 +35,7 @@ let comparingOriginal = false;
 let previewUpdateRevision = 0;
 let updateInFlight = false;
 let updatePending = false;
+let visualizerObserver = null;
 const BRANCH_RAMP_SECONDS = 0.025;
 const SOURCE_CROSSFADE_SECONDS = 0.04;
 
@@ -222,6 +223,9 @@ async function startPreview() {
     if (mySession !== sessionId) return;
     const decoded = await ctx.decodeAudioData(raw.slice(0));
     if (mySession !== sessionId) return;
+    if (!decoded || decoded.length === 0 || !(decoded.duration > 0)) {
+      throw new Error('Audio file contains no samples.');
+    }
     const params = { ...state };
     const rendered = await renderBuffers(decoded, params, file, () => mySession === sessionId);
     if (!rendered || mySession !== sessionId) return;
@@ -261,6 +265,11 @@ export async function togglePreview() {
   else await startPreview();
 }
 
+function stopVisualizer() {
+  visualizerObserver?.disconnect();
+  visualizerObserver = null;
+}
+
 export function stopPreview() {
   sessionId++;
   previewUpdateRevision++;
@@ -268,6 +277,7 @@ export function stopPreview() {
   updatePending = false;
   clearTimeout(updateTimer);
   updateTimer = null;
+  stopVisualizer();
   cleanupGraph();
   clearBuffers();
   comparingOriginal = false;
@@ -357,11 +367,6 @@ export function invalidatePreviewUpdates() {
   updateTimer = null;
 }
 
-// Kept as a compatibility hook for the UI controller. Filters are rendered in
-// the same offline graph as export, so there is no second live filter graph.
-export function updateLiveFilters() {}
-export function updateWorkletParams() {}
-
 function updateMetricsPanel() {
   if (!previewWet || !previewDry || !_dom.metricsPanel) return;
   _dom.metricsPanel.style.display = 'flex';
@@ -380,6 +385,35 @@ function startVisualizer() {
   const canvas = _dom.visualizer;
   if (!canvas || !wetAnalyser || !dryAnalyser) return;
   const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  stopVisualizer();
+
+  let logicalWidth = canvas.width || 300;
+  let logicalHeight = canvas.height || 120;
+  const syncCanvasSize = () => {
+    const rect = typeof canvas.getBoundingClientRect === 'function' ? canvas.getBoundingClientRect() : null;
+    if (rect && rect.width > 0 && rect.height > 0) {
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      logicalWidth = rect.width;
+      logicalHeight = rect.height;
+      const targetWidth = Math.max(1, Math.round(logicalWidth * dpr));
+      const targetHeight = Math.max(1, Math.round(logicalHeight * dpr));
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+      }
+      ctx.setTransform?.(dpr, 0, 0, dpr, 0, 0);
+    } else {
+      logicalWidth = canvas.width || 300;
+      logicalHeight = canvas.height || 120;
+    }
+  };
+  syncCanvasSize();
+  if (typeof ResizeObserver === 'function') {
+    visualizerObserver = new ResizeObserver(syncCanvasSize);
+    visualizerObserver.observe(canvas);
+  }
+
   const binCount = wetAnalyser.frequencyBinCount;
   const frequency = new Uint8Array(binCount);
   const frequencyDry = new Uint8Array(binCount);
@@ -387,32 +421,37 @@ function startVisualizer() {
   const timeDry = new Uint8Array(binCount);
   let peak = 0;
   const draw = () => {
-    if (!_dom.btnPreview?.classList.contains('playing')) return;
+    if (!_dom.btnPreview?.classList.contains('playing')) {
+      stopVisualizer();
+      return;
+    }
     requestAnimationFrame(draw);
     wetAnalyser.getByteFrequencyData(frequency); dryAnalyser.getByteFrequencyData(frequencyDry);
     wetAnalyser.getByteTimeDomainData(time); dryAnalyser.getByteTimeDomainData(timeDry);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const visibleBins = Math.max(1, Math.min(binCount, Math.floor(canvas.width / 4)));
-    const barWidth = canvas.width / visibleBins;
+    ctx.clearRect(0, 0, logicalWidth, logicalHeight);
+    const visibleBins = Math.max(1, Math.min(binCount, Math.floor(logicalWidth / 4)));
+    const barWidth = logicalWidth / visibleBins;
     for (let index = 0; index < visibleBins; index++) {
       const bin = Math.min(binCount - 1, Math.floor(index * binCount / visibleBins));
       if (comparingOriginal || state.dualView) {
         ctx.fillStyle = `rgba(78, 205, 196, ${comparingOriginal ? .65 : .22})`;
-        ctx.fillRect(index * barWidth, canvas.height - (frequencyDry[bin] / 255) * canvas.height, Math.max(1, barWidth - 1), (frequencyDry[bin] / 255) * canvas.height);
+        const h = (frequencyDry[bin] / 255) * logicalHeight;
+        ctx.fillRect(index * barWidth, logicalHeight - h, Math.max(1, barWidth - 1), h);
       }
       if (!comparingOriginal || state.dualView) {
         ctx.fillStyle = `rgba(122, 184, 36, ${comparingOriginal ? .28 : .78})`;
-        ctx.fillRect(index * barWidth, canvas.height - (frequency[bin] / 255) * canvas.height, Math.max(1, barWidth - 1), (frequency[bin] / 255) * canvas.height);
+        const h = (frequency[bin] / 255) * logicalHeight;
+        ctx.fillRect(index * barWidth, logicalHeight - h, Math.max(1, barWidth - 1), h);
       }
     }
     let currentPeak = 0;
     const activeTime = comparingOriginal ? timeDry : time;
     for (const value of activeTime) currentPeak = Math.max(currentPeak, Math.abs(value - 128) / 128);
     peak = Math.max(currentPeak, peak * .92);
-    ctx.fillStyle = 'rgba(26, 26, 46, .18)'; ctx.fillRect(0, 0, canvas.width, 4);
-    const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    ctx.fillStyle = 'rgba(26, 26, 46, .18)'; ctx.fillRect(0, 0, logicalWidth, 4);
+    const gradient = ctx.createLinearGradient(0, 0, logicalWidth, 0);
     gradient.addColorStop(0, '#b5e853'); gradient.addColorStop(.72, '#f7e04a'); gradient.addColorStop(1, '#e8603c');
-    ctx.fillStyle = gradient; ctx.fillRect(0, 0, Math.min(canvas.width, peak * canvas.width), 4);
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, Math.min(logicalWidth, peak * logicalWidth), 4);
   };
   draw();
 }
