@@ -19,7 +19,19 @@ assert.ok(fs.existsSync(path.join(dist, 'sw.js')), 'generated service worker exi
 assert.doesNotMatch(html, /property=["']twitter:/i, 'generated HTML must use name="twitter:*" attributes');
 assert.match(html, /<meta[^>]+name=["']twitter:card["']/i, 'generated HTML includes name="twitter:card"');
 assert.match(html, /id=["']btn-clear-results["']/i, 'generated HTML includes Clear Results button');
+assert.match(html, /name=["']google-site-verification["']/i, 'generated HTML includes Google Site Verification tag');
+assert.match(html, /id=["']guide["']/i, 'generated HTML includes below-the-fold guide section');
+assert.match(html, /id=["']faq["']/i, 'generated HTML includes FAQ section');
 assert.doesNotMatch(html, /figarist\.github\.io/i, 'generated HTML must not reference legacy figarist.github.io domain');
+
+const ldMatch = html.match(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
+assert.ok(ldMatch, 'generated HTML must contain JSON-LD structured data');
+const ldGraph = JSON.parse(ldMatch[1])['@graph'];
+assert.ok(Array.isArray(ldGraph), 'JSON-LD must define an @graph array');
+assert.ok(ldGraph.some(item => item['@type'] === 'WebApplication'), 'JSON-LD @graph must include WebApplication');
+assert.ok(ldGraph.some(item => item['@type'] === 'BreadcrumbList'), 'JSON-LD @graph must include BreadcrumbList');
+const faqNode = ldGraph.find(item => item['@type'] === 'FAQPage');
+assert.ok(faqNode && Array.isArray(faqNode.mainEntity) && faqNode.mainEntity.length >= 6, 'JSON-LD @graph must include FAQPage items');
 
 const sw = fs.readFileSync(path.join(dist, 'sw.js'), 'utf8');
 const precacheMatch = sw.match(/precacheAndRoute\(\s*\[([\s\S]*?)\]\s*,/);

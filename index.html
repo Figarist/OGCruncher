@@ -3,24 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="OGCruncher — 100% Free Online Audio Bit-Crusher, sample rate reducer, and OGG/WAV/MP3 compressor. Optimize your game audio and Wear OS assets in your browser for free." />
-  <meta name="keywords" content="free audio bit-crusher, free online bitcrusher, free ogg compressor online, audio bit-crusher, lo-fi converter, ogg compressor, wav converter, mp3 compressor, game audio optimization, wear os audio, in-browser audio tool, dsp, offlineaudiocontext" />
-  <meta name="author" content="Ihor Sivochka (figarist)" />
+  <meta name="description" content="OGCruncher (OG Cruncher) — 100% Free Online Audio Bit-Crusher, sample rate reducer, and OGG/WAV/MP3 batch compressor. Optimize game SFX, Wear OS, Unity, and Godot audio locally in your browser." />
+  <meta name="keywords" content="OGCruncher, OG Cruncher, free audio bit-crusher, free online bitcrusher, 8-bit audio converter online, sample rate reducer, free ogg compressor online, ogg vorbis compressor unity, 8-bit pcm wav converter, mp3 batch compressor, lo-fi sfx generator, game audio optimization, wear os audio, біткрашер онлайн, in-browser audio tool, offlineaudiocontext" />
+  <meta name="author" content="Ihor Sivochka (Figarist)" />
+  <meta name="application-name" content="OGCruncher" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <meta name="google-site-verification" content="Whr2bJTggESM1pyCXLfqwodNQu6cNqk_XKdZ0ix2Tyk" />
   <link rel="canonical" href="https://sivochka.com/OGCruncher/" />
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Figarist — Ihor Sivochka" />
+  <meta property="og:locale" content="en_US" />
   <meta property="og:url" content="https://sivochka.com/OGCruncher/" />
-  <meta property="og:title" content="OGCruncher — Free Online Audio Bit-Crusher" />
-  <meta property="og:description" content="100% Free online audio bit-crusher and OGG/WAV/MP3 compressor. Optimize your game assets with high-quality, local lo-fi processing." />
+  <meta property="og:title" content="OGCruncher — Free Online Audio Bit-Crusher &amp; Game SFX Optimizer" />
+  <meta property="og:description" content="100% Free online audio bit-crusher, sample rate reducer, and OGG/WAV/MP3 batch compressor. Process game audio and retro SFX locally in your browser." />
   <meta property="og:image" content="https://sivochka.com/OGCruncher/images/social-card.png" />
+  <meta property="og:image:alt" content="OGCruncher — Free online audio bit-crusher, sample rate reducer, and OGG/WAV/MP3 batch processor" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:url" content="https://sivochka.com/OGCruncher/" />
-  <meta name="twitter:title" content="OGCruncher — Free Online Audio Bit-Crusher" />
-  <meta name="twitter:description" content="100% Free online audio bit-crusher and OGG/WAV/MP3 compressor. Optimize your game assets with high-quality, local lo-fi processing." />
+  <meta name="twitter:title" content="OGCruncher — Free Online Audio Bit-Crusher &amp; Game SFX Optimizer" />
+  <meta name="twitter:description" content="100% Free online audio bit-crusher, sample rate reducer, and OGG/WAV/MP3 batch compressor. Process game audio and retro SFX locally in your browser." />
   <meta name="twitter:image" content="https://sivochka.com/OGCruncher/images/social-card.png" />
+  <meta name="twitter:image:alt" content="OGCruncher — Free online audio bit-crusher, sample rate reducer, and OGG/WAV/MP3 batch processor" />
 
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="%BASE_URL%images/logo.svg" />
@@ -31,30 +38,140 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "OGCruncher",
-    "url": "https://sivochka.com/OGCruncher/",
-    "description": "Free in-browser audio bit-crusher, sample rate reducer, and OGG/WAV/MP3 batch converter powered by OfflineAudioContext.",
-    "applicationCategory": "MultimediaApplication",
-    "operatingSystem": "Any",
-    "browserRequirements": "Requires Web Audio API and Web Workers",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    },
-    "image": "https://sivochka.com/OGCruncher/images/social-card.png",
-    "author": {
-      "@type": "Person",
-      "@id": "https://sivochka.com#person",
-      "name": "Ihor Sivochka",
-      "url": "https://sivochka.com/"
-    },
-    "isPartOf": {
-      "@type": "WebSite",
-      "name": "Figarist",
-      "url": "https://sivochka.com/"
-    }
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "@id": "https://sivochka.com/OGCruncher/#app",
+        "name": "OGCruncher",
+        "alternateName": [
+          "OG Cruncher",
+          "OGCruncher Audio Bit-Crusher",
+          "Figarist OGCruncher"
+        ],
+        "url": "https://sivochka.com/OGCruncher/",
+        "description": "Free in-browser audio bit-crusher, sample rate reducer, and OGG/WAV/MP3 batch converter powered by OfflineAudioContext and Web Workers.",
+        "applicationCategory": "MultimediaApplication",
+        "applicationSubCategory": "Game Audio DSP & Bit-Crusher",
+        "operatingSystem": "Any (Web Browser, Windows, macOS, Linux, Android, iOS)",
+        "browserRequirements": "Requires Web Audio API (OfflineAudioContext) and Web Workers",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "1–16 bit audio quantization and creative Crush mode (DC removal, soft expander, anti-alias filter)",
+          "4,000 Hz to 48,000 Hz sample rate decimation with instant standard snap presets",
+          "Tanh saturation drive (Grit), tape-style noise floor injection, and TPDF triangular dither",
+          "High-Pass Filter (HPF), Low-Pass Filter (LPF), 80 Hz Bass Boost, Speed/Pitch scaling, and 0 dBFS linked normalization",
+          "100% local in-browser processing with zero file uploads",
+          "Simultaneous Web Worker batch export to Ogg Vorbis, 8-bit/16-bit PCM WAV, MP3, and ZIP archive",
+          "Real-time Dry/Wet A/B switching and live spectrum visualizer"
+        ],
+        "image": "https://sivochka.com/OGCruncher/images/social-card.png",
+        "author": {
+          "@type": "Person",
+          "@id": "https://sivochka.com#person",
+          "name": "Ігор Сівочка",
+          "alternateName": [
+            "Ihor Sivochka",
+            "Sivochka Ihor",
+            "Ігор Глібович Сівочка",
+            "Игорь Сивочка",
+            "Figarist"
+          ],
+          "url": "https://sivochka.com/",
+          "sameAs": [
+            "https://sivochka.com/tutoring/",
+            "https://github.com/Figarist",
+            "https://www.youtube.com/@proVR_ua",
+            "https://t.me/proVR_ua"
+          ]
+        },
+        "creator": {
+          "@id": "https://sivochka.com#person"
+        },
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://sivochka.com#website",
+          "name": "Figarist — Ihor Sivochka",
+          "url": "https://sivochka.com/"
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "https://sivochka.com/OGCruncher/#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Figarist",
+            "item": "https://sivochka.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "OGCruncher",
+            "item": "https://sivochka.com/OGCruncher/"
+          }
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://sivochka.com/OGCruncher/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is OGCruncher and how does it differ from a standard audio compressor?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "OGCruncher is a free creative bit-crusher, sample rate reducer, and batch exporter built for indie game developers, Wear OS apps, and retro sound designers. Instead of transparent audio transcoding, it intentionally reshapes WAV, MP3, FLAC, OGG, and AIFF samples using OfflineAudioContext EQ/speed filters, soft expansion, 1–16 bit quantization, optional TPDF dither, and tanh saturation before exporting OGG, WAV, and MP3."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Are my audio files uploaded to any external server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Your audio files stay on your device. Decoding, OfflineAudioContext filtering, Float32Array DSP processing, and OGG/WAV/MP3 encoding all run locally inside your browser and a dedicated Web Worker. Only static web assets and the optional demo track are fetched over HTTP."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How does OGCruncher choose between 8-bit and 16-bit PCM WAV export?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The WAV encoder automatically matches container precision to your Bit Depth setting: effect depths of 1 to 8 bits export as unsigned 8-bit PCM WAV, while depths of 9 to 16 bits export as signed 16-bit PCM WAV. That keeps zero-latency SFX files compact when targeting 8-bit crunch without discarding precision on 12-bit or 16-bit exports."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which export format and sample rate should I choose for Unity, Godot, WebGL, or Wear OS?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Use 8-bit or 16-bit Mono PCM WAV at 16,000–22,050 Hz for ultra-short UI clicks, footsteps, and combat SFX that need instant playback without CPU decoding overhead. Use Ogg Vorbis (.ogg) at 22,050–32,000 Hz for ambient loops, music stems, and APK/WebGL asset budgets where file size matters most."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why are ultra-low sample rates (like 4,000 Hz) exported as 8,000 Hz in MP3?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The MPEG audio standard used by MP3 supports nine discrete sample rates starting at 8,000 Hz (8k, 11.025k, 12k, 16k, 22.05k, 24k, 32k, 44.1k, and 48k Hz). When you select a non-standard rate such as 4,000 Hz or 28,000 Hz, WAV and OGG preserve your exact requested rate while the MP3 encoder resamples the crunched signal using windowed Lanczos-3 interpolation to the nearest valid MPEG rate."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do batch processing, ZIP export, and shareable preset links work?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Drop multiple audio files into the queue, tune Simple or Advanced parameters, and click CRUNCH to freeze one validated snapshot across the entire batch. When processing finishes, download individual OGG, WAV, or MP3 files, grab everything at once via DOWNLOAD ALL (.ZIP), or click COPY LINK to share your exact DSP settings in the URL hash."
+            }
+          }
+        ]
+      }
+    ]
   }
   </script>
 
@@ -68,7 +185,7 @@
 <body>
 
   <!-- ══════════════ HEADER ══════════════ -->
-  <header class="app-header" role="banner">
+  <header class="app-header">
     <div class="header-progress-container" aria-hidden="true">
       <div id="header-progress-fill" class="header-progress-fill"></div>
     </div>
@@ -91,11 +208,13 @@
         <span class="badge badge--green" id="badge-pwa">PWA READY</span>
         <span class="badge badge--amber" id="badge-status">IDLE</span>
         <button id="btn-info" class="btn btn--ghost btn--xs header-about" title="About OGCruncher">ABOUT</button>
+        <a class="header-route header-route--guide" href="#faq">GUIDE &amp; FAQ</a>
         <a class="header-route" href="https://sivochka.com/" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
       </div>
     </div>
   </header>
 
+  <main class="page-main">
   <div class="tool-intro" aria-label="OGCruncher status">
     <div>
       <span class="tool-intro__kicker">A SMALL TOOL FOR BIG SOUNDS</span>
@@ -105,7 +224,7 @@
   </div>
 
   <!-- ══════════════ MAIN LAYOUT ══════════════ -->
-  <main class="app-main" role="main">
+  <div class="app-main" role="region" aria-label="Audio processing workspace">
 
     <!-- ── LEFT PANEL: DROP ZONE ── -->
     <section id="panel-left" class="panel panel--drop" aria-label="File input panel">
@@ -603,11 +722,138 @@
       </div>
       <div id="results-area" class="results-area" hidden aria-label="Download results" aria-live="polite"></div>
     </section>
+  </div>
+
+  <!-- ══════════════ DOCUMENTATION, TARGETS & FAQ ══════════════ -->
+  <section class="seo-guide" id="guide" aria-labelledby="seo-guide-title">
+    <header class="seo-guide__header">
+      <span class="tool-intro__kicker">DOCUMENTATION &amp; GAME AUDIO GUIDE</span>
+      <h2 id="seo-guide-title" class="seo-guide__title">Free Online Audio Bit-Crusher, Sample Rate Reducer &amp; Game SFX Optimizer</h2>
+      <p class="seo-guide__lead">
+        <strong>OGCruncher</strong> (often searched as <strong>OG Cruncher</strong>) is a browser-based creative DSP workstation built by <a href="https://sivochka.com/" target="_blank" rel="noopener noreferrer">Ihor Sivochka (Figarist)</a>. Drop <code>WAV</code>, <code>MP3</code>, <code>FLAC</code>, <code>OGG</code>, or <code>AIFF</code> files into the queue to crush bit depth, reduce sample rate, shape EQ/saturation, audition live Dry/Wet A/B differences, and batch-export game-ready audio entirely inside your browser via <code>OfflineAudioContext</code> and <code>Float32Array</code> Web Workers.
+      </p>
+    </header>
+
+    <div class="seo-bento-grid">
+      <article class="seo-card">
+        <h3>1–16 Bit Quantization, Sample Rate Decimation &amp; TPDF Dither</h3>
+        <p>
+          Dial in authentic 4-bit, 8-bit, or 12-bit quantization alongside 4,000 Hz to 48,000 Hz sample rate decimation with instant hardware snap points. Toggle <strong>Crush Mode</strong> (DC offset removal, <code>|x|^1.15</code> soft expander, and two-tap anti-alias smoothing), add <strong>TPDF triangular dither</strong> to soften quantization grain, drive harmonics with <code>tanh</code> <strong>Grit</strong> saturation, or layer tape-style <strong>Noise</strong> floor hiss.
+        </p>
+      </article>
+      <article class="seo-card">
+        <h3>Simultaneous Batch Export: 8-Bit / 16-Bit PCM WAV, Ogg Vorbis &amp; MP3</h3>
+        <p>
+          Queue dozens of sound effects and crunch them sequentially under one locked parameter snapshot. Each job outputs three formats in parallel inside a dedicated Web Worker: unsigned 8-bit or signed 16-bit <strong>PCM WAV</strong> for zero-latency engine playback, <strong>Ogg Vorbis (.ogg)</strong> for compact Unity/Godot/WebGL loops, and 128 kbps <strong>MP3</strong> (with windowed Lanczos-3 resampling for non-MPEG rates), plus one-click <code>ogcruncher_batch.zip</code> packaging.
+        </p>
+      </article>
+      <article class="seo-card">
+        <h3>Retro Console Presets, Dry/Wet Spectrum Analyzer &amp; 100% Local Privacy</h3>
+        <p>
+          Switch between <strong>Simple</strong> quality tiers or <strong>Advanced</strong> rack presets (<em>LO-Q MODE</em>, <em>NES 8-BIT</em>, <em>AMIGA 500</em>, and custom saved presets). Compare Dry vs. Wet signals in real time with the FFT spectrum visualizer and RMS/Peak/Duration telemetry, copy shareable URL hash configurations, and work offline as an installable PWA—zero audio files ever leave your computer.
+        </p>
+      </article>
+    </div>
+
+    <div class="seo-table-wrap" role="region" aria-labelledby="seo-matrix-title" tabindex="0">
+      <h3 id="seo-matrix-title" class="seo-table__title">Recommended Settings for Game Engines &amp; Retro Targets</h3>
+      <table class="seo-table">
+        <thead>
+          <tr>
+            <th scope="col">Target / Use Case</th>
+            <th scope="col">Bit Depth &amp; Rate</th>
+            <th scope="col">Channels &amp; DSP</th>
+            <th scope="col">Recommended Format</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Unity / Godot Low-Latency Combat &amp; UI SFX</strong></td>
+            <td>8–12 bit · 22,050 Hz</td>
+            <td>Mono · Normalize ON · HPF 80 Hz</td>
+            <td>PCM WAV (zero decode latency)</td>
+          </tr>
+          <tr>
+            <td><strong>Wear OS, Mobile &amp; WebGL Loops</strong></td>
+            <td>12–16 bit · 22,050–32,000 Hz</td>
+            <td>Mono or Stereo · Dither ON · Grit 1.2</td>
+            <td>Ogg Vorbis (<code>.ogg</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>NES / 8-Bit Chiptune Crunch</strong></td>
+            <td>4 bit · 12,000 Hz</td>
+            <td>Mono · Crush ON · Dither OFF · LPF 6 kHz</td>
+            <td>8-Bit PCM WAV or OGG</td>
+          </tr>
+          <tr>
+            <td><strong>Amiga 500 / 90s Tracker Sampler</strong></td>
+            <td>8 bit · 28,000 Hz</td>
+            <td>Stereo · Grit 1.5 · Noise 0.005 · LPF 10 kHz</td>
+            <td>8-Bit PCM WAV / MP3 preview</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <section class="seo-faq accordion" id="faq" aria-labelledby="faq-heading">
+      <h2 id="faq-heading" class="seo-guide__subtitle">Frequently Asked Questions (FAQ)</h2>
+      <details class="faq-item" open>
+        <summary>What is OGCruncher and how does it differ from a standard audio compressor?</summary>
+        <p>OGCruncher is a free creative bit-crusher, sample rate reducer, and batch exporter built for indie game developers, Wear OS apps, and retro sound designers. Instead of transparent audio transcoding, it intentionally reshapes WAV, MP3, FLAC, OGG, and AIFF samples using OfflineAudioContext EQ/speed filters, soft expansion, 1–16 bit quantization, optional TPDF dither, and tanh saturation before exporting OGG, WAV, and MP3.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Are my audio files uploaded to any external server?</summary>
+        <p>No. Your audio files stay on your device. Decoding, OfflineAudioContext filtering, Float32Array DSP processing, and OGG/WAV/MP3 encoding all run locally inside your browser and a dedicated Web Worker. Only static web assets and the optional demo track are fetched over HTTP.</p>
+      </details>
+      <details class="faq-item">
+        <summary>How does OGCruncher choose between 8-bit and 16-bit PCM WAV export?</summary>
+        <p>The WAV encoder automatically matches container precision to your Bit Depth setting: effect depths of 1 to 8 bits export as unsigned 8-bit PCM WAV, while depths of 9 to 16 bits export as signed 16-bit PCM WAV. That keeps zero-latency SFX files compact when targeting 8-bit crunch without discarding precision on 12-bit or 16-bit exports.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Which export format and sample rate should I choose for Unity, Godot, WebGL, or Wear OS?</summary>
+        <p>Use 8-bit or 16-bit Mono PCM WAV at 16,000–22,050 Hz for ultra-short UI clicks, footsteps, and combat SFX that need instant playback without CPU decoding overhead. Use Ogg Vorbis (.ogg) at 22,050–32,000 Hz for ambient loops, music stems, and APK/WebGL asset budgets where file size matters most.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Why are ultra-low sample rates (like 4,000 Hz) exported as 8,000 Hz in MP3?</summary>
+        <p>The MPEG audio standard used by MP3 supports nine discrete sample rates starting at 8,000 Hz (8k, 11.025k, 12k, 16k, 22.05k, 24k, 32k, 44.1k, and 48k Hz). When you select a non-standard rate such as 4,000 Hz or 28,000 Hz, WAV and OGG preserve your exact requested rate while the MP3 encoder resamples the crunched signal using windowed Lanczos-3 interpolation to the nearest valid MPEG rate.</p>
+      </details>
+      <details class="faq-item">
+        <summary>How do batch processing, ZIP export, and shareable preset links work?</summary>
+        <p>Drop multiple audio files into the queue, tune Simple or Advanced parameters, and click CRUNCH to freeze one validated snapshot across the entire batch. When processing finishes, download individual OGG, WAV, or MP3 files, grab everything at once via DOWNLOAD ALL (.ZIP), or click COPY LINK to share your exact DSP settings in the URL hash.</p>
+      </details>
+    </section>
+
+    <aside class="seo-locale-card" lang="uk" aria-labelledby="seo-uk-title">
+      <h3 id="seo-uk-title">OGCruncher українською — безкоштовний онлайн біткрашер (Bit-Crusher) та оптимізатор звуку для ігор</h3>
+      <p>
+        <strong>OGCruncher</strong> — це безкоштовний браузерний <strong>біткрашер онлайн</strong>, редуктор частоти дискретизації та пакетний <strong>lo-fi конвертер аудіо</strong> у формати <code>OGG</code>, <code>WAV</code> і <code>MP3</code>, створений українським розробником Ігорем Сівочкою (<a href="https://sivochka.com/uk/" target="_blank" rel="noopener noreferrer">Figarist</a>). Інструмент працює повністю локально у вашому браузері (без завантаження файлів на сервер) і допомагає розробникам ігор на <strong>Unity</strong>, <strong>Godot</strong>, <strong>WebGL</strong> та <strong>Wear OS</strong> зменшити вагу аудіоресурсів, зробити автентичний 8-бітний чи 4-бітний звук, обробити серію SFX за один клік і завантажити готовий ZIP-архів.
+      </p>
+      <ul class="seo-locale-links">
+        <li><a href="https://sivochka.com/uk/blog/ogcruncher-game-audio-bitcrusher/" target="_blank" rel="noopener noreferrer">Технічний розбір OGCruncher та архітектури DSP у блозі Figarist →</a></li>
+        <li><a href="https://sivochka.com/uk/" target="_blank" rel="noopener noreferrer">Портфоліо, блог і курси програмування на sivochka.com →</a></li>
+        <li><a href="https://sivochka.com/bouncy/" target="_blank" rel="noopener noreferrer">Тихий клас — безкоштовний Web Audio DSP шумомір для школи →</a></li>
+        <li><a href="https://sivochka.com/3d-club-studio/" target="_blank" rel="noopener noreferrer">3D Кузня Чудес — процедурний 3D-генератор без підтримок →</a></li>
+        <li><a href="https://sivochka.com/lego-catalog/" target="_blank" rel="noopener noreferrer">Каталог інструкцій LEGO WeDo 2.0 →</a></li>
+      </ul>
+    </aside>
+  </section>
   </main>
 
   <!-- ══════════════ FOOTER ══════════════ -->
-  <footer class="app-footer" role="contentinfo">
+  <footer class="app-footer">
     <span class="footer-note">Made by Ihor Sivochka for game developers and curious people.</span>
+    <span class="footer-sep">·</span>
+    <a href="#guide" class="footer-link">Guide</a>
+    <span class="footer-sep">·</span>
+    <a href="#faq" class="footer-link">FAQ</a>
+    <span class="footer-sep">·</span>
+    <a href="https://sivochka.com/blog/ogcruncher-game-audio-bitcrusher/" class="footer-link" target="_blank" rel="noopener noreferrer">DSP Article</a>
+    <span class="footer-sep">·</span>
+    <a href="https://sivochka.com/3d-club-studio/" class="footer-link" target="_blank" rel="noopener noreferrer">3D Club Studio</a>
+    <span class="footer-sep">·</span>
+    <a href="https://sivochka.com/bouncy/" class="footer-link" target="_blank" rel="noopener noreferrer">Quiet Class</a>
+    <span class="footer-sep">·</span>
+    <a href="https://sivochka.com/lego-catalog/" class="footer-link" target="_blank" rel="noopener noreferrer">LEGO WeDo 2.0</a>
     <span class="footer-sep">·</span>
     <a href="https://sivochka.com/" class="footer-link" target="_blank" rel="noopener noreferrer">Figarist</a>
     <span class="footer-sep">·</span>
