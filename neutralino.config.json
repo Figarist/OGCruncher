@@ -47,7 +47,7 @@
     "clientVersion": "5.3.0",
     "frontendLibrary": {
       "patchFile": "./dist/index.html",
-      "devUrl": "http://localhost:3000"
+      "devUrl": "http://localhost:5173/OGCruncher/"
     }
   }
 }

@@ -3,30 +3,60 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="OGCruncher — 100% Free Online Audio Bit-Crusher, sample rate reducer, and OGG/MP3 compressor. Optimize your game audio and Wear OS assets in your browser for free." />
-  <meta name="keywords" content="free audio bit-crusher, free online bitcrusher, free ogg compressor online, audio bit-crusher, lo-fi converter, ogg compressor, mp3 compressor, game audio optimization, wear os audio, in-browser audio tool, dsp, offlineaudiocontext" />
+  <meta name="description" content="OGCruncher — 100% Free Online Audio Bit-Crusher, sample rate reducer, and OGG/WAV/MP3 compressor. Optimize your game audio and Wear OS assets in your browser for free." />
+  <meta name="keywords" content="free audio bit-crusher, free online bitcrusher, free ogg compressor online, audio bit-crusher, lo-fi converter, ogg compressor, wav converter, mp3 compressor, game audio optimization, wear os audio, in-browser audio tool, dsp, offlineaudiocontext" />
   <meta name="author" content="Ihor Sivochka (figarist)" />
-  <link rel="canonical" href="https://figarist.github.io/OGCruncher/" />
+  <link rel="canonical" href="https://sivochka.com/OGCruncher/" />
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://figarist.github.io/OGCruncher/" />
+  <meta property="og:url" content="https://sivochka.com/OGCruncher/" />
   <meta property="og:title" content="OGCruncher — Free Online Audio Bit-Crusher" />
-  <meta property="og:description" content="100% Free online audio bit-crusher and OGG compressor. Optimize your game assets with high-quality, local lo-fi processing." />
-  <meta property="og:image" content="https://figarist.github.io/OGCruncher/images/social-card.png" />
+  <meta property="og:description" content="100% Free online audio bit-crusher and OGG/WAV/MP3 compressor. Optimize your game assets with high-quality, local lo-fi processing." />
+  <meta property="og:image" content="https://sivochka.com/OGCruncher/images/social-card.png" />
 
   <!-- Twitter -->
-  <meta property="twitter:card" content="summary_large_image" />
-  <meta property="twitter:url" content="https://figarist.github.io/OGCruncher/" />
-  <meta property="twitter:title" content="OGCruncher — Free Online Audio Bit-Crusher" />
-  <meta property="twitter:description" content="100% Free online audio bit-crusher and OGG compressor. Optimize your game assets with high-quality, local lo-fi processing." />
-  <meta property="twitter:image" content="https://figarist.github.io/OGCruncher/images/social-card.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://sivochka.com/OGCruncher/" />
+  <meta name="twitter:title" content="OGCruncher — Free Online Audio Bit-Crusher" />
+  <meta name="twitter:description" content="100% Free online audio bit-crusher and OGG/WAV/MP3 compressor. Optimize your game assets with high-quality, local lo-fi processing." />
+  <meta name="twitter:image" content="https://sivochka.com/OGCruncher/images/social-card.png" />
 
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="%BASE_URL%images/logo.svg" />
-  <link rel="apple-touch-icon" href="%BASE_URL%images/logo.svg" />
+  <link rel="apple-touch-icon" href="%BASE_URL%images/icon-192.png" />
 
-  <title>OGCruncher — Free Online Audio Bit-Crusher & OGG Compressor</title>
+  <title>OGCruncher — Free Online Audio Bit-Crusher &amp; OGG/WAV/MP3 Compressor</title>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "OGCruncher",
+    "url": "https://sivochka.com/OGCruncher/",
+    "description": "Free in-browser audio bit-crusher, sample rate reducer, and OGG/WAV/MP3 batch converter powered by OfflineAudioContext.",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Any",
+    "browserRequirements": "Requires Web Audio API and Web Workers",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "image": "https://sivochka.com/OGCruncher/images/social-card.png",
+    "author": {
+      "@type": "Person",
+      "@id": "https://sivochka.com#person",
+      "name": "Ihor Sivochka",
+      "url": "https://sivochka.com/"
+    },
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "Figarist",
+      "url": "https://sivochka.com/"
+    }
+  }
+  </script>
 
   <!-- PWA -->
   <meta name="theme-color" content="#f2f0eb" />
@@ -43,9 +73,9 @@
       <div id="header-progress-fill" class="header-progress-fill"></div>
     </div>
     <div class="header-inner">
-      <a class="brand-link" href="https://figarist.github.io/" target="_blank" rel="noopener noreferrer" aria-label="Back to Figarist">
+      <a class="brand-link" href="https://sivochka.com/" target="_blank" rel="noopener noreferrer" aria-label="Back to Figarist">
         <div class="logo-block">
-          <img src="images/logo.svg" class="logo-img" alt="" aria-hidden="true">
+          <img src="%BASE_URL%images/logo.svg" class="logo-img" alt="" aria-hidden="true">
           <div class="logo-text">
             <h1 class="logo-title">OGCruncher</h1>
             <span class="logo-sub">audio tool by Ihor</span>
@@ -61,11 +91,9 @@
         <span class="badge badge--green" id="badge-pwa">PWA READY</span>
         <span class="badge badge--amber" id="badge-status">IDLE</span>
         <button id="btn-info" class="btn btn--ghost btn--xs header-about" title="About OGCruncher">ABOUT</button>
-        <a class="header-route" href="https://figarist.github.io/" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
+        <a class="header-route" href="https://sivochka.com/" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
       </div>
     </div>
-    <!-- scanline decoration -->
-    <div class="header-scanline" aria-hidden="true"></div>
   </header>
 
   <div class="tool-intro" aria-label="OGCruncher status">
@@ -106,7 +134,7 @@
           <p class="drop-formats">WAV · MP3 · FLAC · OGG · AIFF</p>
           <button id="btn-load-demo" class="btn btn--demo" title="Test OGCruncher with a pre-loaded track">
             <span class="demo-pulse-dot"></span>
-            TRY DEMO TRACK 🎵
+            <span id="btn-load-demo-label">TRY DEMO TRACK 🎵</span>
           </button>
         </div>
         <canvas id="visualizer" width="300" height="120" style="display:none; width:100%; height:120px; border-radius:8px;"></canvas>
@@ -305,14 +333,14 @@
           </div>
           <!-- IMPROVEMENT 1: Snap-to-Standard Buttons -->
           <div class="sr-snap-row" style="display:flex; gap:4px; margin-top:8px; flex-wrap:wrap;">
-            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="4000" onclick="syncSampleRate(4000)">4k</button>
-            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="8000" onclick="syncSampleRate(8000)">8k</button>
-            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="11025" onclick="syncSampleRate(11025)">11k</button>
-            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="16000" onclick="syncSampleRate(16000)">16k</button>
-            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="22050" onclick="syncSampleRate(22050)">22k</button>
-            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="32000" onclick="syncSampleRate(32000)">32k</button>
-            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="44100" onclick="syncSampleRate(44100)">44.1k</button>
-            <button class="btn btn--ghost btn--xs btn-sr-snap" data-value="48000" onclick="syncSampleRate(48000)">48k</button>
+            <button type="button" class="btn btn--ghost btn--xs btn-sr-snap" data-value="4000">4k</button>
+            <button type="button" class="btn btn--ghost btn--xs btn-sr-snap" data-value="8000">8k</button>
+            <button type="button" class="btn btn--ghost btn--xs btn-sr-snap" data-value="11025">11k</button>
+            <button type="button" class="btn btn--ghost btn--xs btn-sr-snap" data-value="16000">16k</button>
+            <button type="button" class="btn btn--ghost btn--xs btn-sr-snap" data-value="22050">22k</button>
+            <button type="button" class="btn btn--ghost btn--xs btn-sr-snap" data-value="32000">32k</button>
+            <button type="button" class="btn btn--ghost btn--xs btn-sr-snap" data-value="44100">44.1k</button>
+            <button type="button" class="btn btn--ghost btn--xs btn-sr-snap" data-value="48000">48k</button>
           </div>
         </div>
 
@@ -514,7 +542,7 @@
         <div id="ab-container" class="ab-container" style="display:none;">
           <button id="btn-ab" class="btn btn--ab-toggle" aria-label="Toggle comparison">
             <span class="ab-label">COMPARING:</span>
-            <span id="ab-status" class="ab-value">CRUNCHED</span>
+            <span id="ab-status" class="ab-value">CRUNCHED (WET)</span>
             <kbd class="hotkey" style="margin-left:6px">C</kbd>
           </button>
           
@@ -547,7 +575,6 @@
         </div>
         <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
           <div class="progress-fill" id="progress-fill"></div>
-          <div class="progress-scanline" aria-hidden="true"></div>
         </div>
       </div>
     </section>
@@ -567,6 +594,13 @@
       </div>
 
       <!-- Download results -->
+      <div id="results-batch-bar" class="results-batch-bar" hidden>
+        <span id="results-batch-summary" class="results-batch-summary">0 files ready</span>
+        <div class="results-batch-actions">
+          <button id="btn-clear-results" type="button" class="btn btn--ghost btn--xs">CLEAR RESULTS</button>
+          <button id="btn-download-zip" type="button" class="btn btn--primary btn--xs btn-download-zip" hidden>DOWNLOAD ALL (.ZIP)</button>
+        </div>
+      </div>
       <div id="results-area" class="results-area" hidden aria-label="Download results" aria-live="polite"></div>
     </section>
   </main>
@@ -575,11 +609,9 @@
   <footer class="app-footer" role="contentinfo">
     <span class="footer-note">Made by Ihor Sivochka for game developers and curious people.</span>
     <span class="footer-sep">·</span>
-    <a href="https://figarist.github.io" class="footer-link" target="_blank" rel="noopener noreferrer">Figarist</a>
+    <a href="https://sivochka.com/" class="footer-link" target="_blank" rel="noopener noreferrer">Figarist</a>
     <span class="footer-sep">·</span>
     <a href="https://github.com/figarist/OGCruncher" class="footer-link" target="_blank" rel="noopener noreferrer">GitHub</a>
-    <span class="footer-sep">·</span>
-    <a href="https://figarist.github.io" class="footer-link footer-link--donate" target="_blank" rel="noopener noreferrer">SUPPORT DEVELOPER</a>
   </footer>
 
   <!-- ══════════════ NOTIFICATION TOAST ══════════════ -->

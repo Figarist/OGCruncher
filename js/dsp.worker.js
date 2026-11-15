@@ -47,7 +47,12 @@ try {
 }
 
 function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+  const num = Number(value);
+  return Number.isFinite(num) ? Math.min(max, Math.max(min, num)) : min;
+}
+
+function finiteSample(value) {
+  return Number.isFinite(value) ? value : 0;
 }
 
 function finiteOr(value, fallback) {
@@ -68,6 +73,8 @@ function processDSP(buf, bitDepth = 8, crushMode = true, dither = true,
   const drive = clamp(finiteOr(grit, 1), 1, 10);
   const noiseLevel = clamp(finiteOr(noise, 0), 0, 0.05);
   if (!buf || !buf.length) return false;
+
+  for (let i = 0; i < buf.length; i++) buf[i] = finiteSample(buf[i]);
 
   if (noiseLevel > 0) {
     for (let i = 0; i < buf.length; i++) buf[i] += (random() * 2 - 1) * noiseLevel;
@@ -136,8 +143,9 @@ async function encodeOGG(channels, sampleRate) {
 
 function encodeWAV(channels, sampleRate, effectBits) {
   const containerDepth = Math.round(effectBits) <= 8 ? 8 : 16;
-  const numChannels = Math.max(1, channels.length);
+  const numChannels = Math.max(1, Math.round(channels.length));
   const numSamples = channels[0] ? channels[0].length : 0;
+  const rate = Math.max(1, Math.round(sampleRate));
   const bytesPerSample = containerDepth === 8 ? 1 : 2;
   const blockAlign = numChannels * bytesPerSample;
   const dataBytes = numSamples * blockAlign;
@@ -155,8 +163,8 @@ function encodeWAV(channels, sampleRate, effectBits) {
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
   view.setUint16(22, numChannels, true);
-  view.setUint32(24, Math.round(sampleRate), true);
-  view.setUint32(28, Math.round(sampleRate) * blockAlign, true);
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * blockAlign, true);
   view.setUint16(32, blockAlign, true);
   view.setUint16(34, containerDepth, true);
   writeString(36, 'data');
@@ -179,10 +187,52 @@ function encodeWAV(channels, sampleRate, effectBits) {
   return buffer;
 }
 
+const MPEG_SAMPLE_RATES = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000];
+
+function resolveMp3SampleRate(sampleRate) {
+  const rate = Math.round(finiteOr(sampleRate, 44100));
+  if (MPEG_SAMPLE_RATES.includes(rate)) return rate;
+  return MPEG_SAMPLE_RATES.find(candidate => candidate >= rate) || 48000;
+}
+
+function sinc(x) {
+  if (Math.abs(x) < 1e-6) return 1;
+  const px = Math.PI * x;
+  return Math.sin(px) / px;
+}
+
+function resampleChannel(channel, fromRate, toRate) {
+  if (!channel || !channel.length || fromRate === toRate) return channel;
+  const ratio = toRate / fromRate;
+  const targetLength = Math.max(1, Math.round(channel.length * ratio));
+  const resampled = new Float32Array(targetLength);
+  const lobes = 3;
+  for (let i = 0; i < targetLength; i++) {
+    const srcPos = i / ratio;
+    const center = Math.floor(srcPos);
+    let sum = 0;
+    let weightSum = 0;
+    for (let k = center - lobes + 1; k <= center + lobes; k++) {
+      const idx = Math.min(channel.length - 1, Math.max(0, k));
+      const d = srcPos - k;
+      if (Math.abs(d) >= lobes) continue;
+      const w = sinc(d) * sinc(d / lobes);
+      sum += finiteSample(channel[idx]) * w;
+      weightSum += w;
+    }
+    resampled[i] = clamp(weightSum > 0 ? sum / weightSum : 0, -1, 1);
+  }
+  return resampled;
+}
+
 function encodeMP3(channels, sampleRate) {
   if (mp3LoadError || typeof lamejs === 'undefined') throw new Error('MP3 encoder is unavailable.');
-  const encoder = new lamejs.Mp3Encoder(channels.length, sampleRate, 128);
-  const intChannels = channels.map(channel => {
+  const targetRate = resolveMp3SampleRate(sampleRate);
+  const preparedChannels = targetRate === sampleRate
+    ? channels
+    : channels.map(channel => resampleChannel(channel, sampleRate, targetRate));
+  const encoder = new lamejs.Mp3Encoder(preparedChannels.length, targetRate, 128);
+  const intChannels = preparedChannels.map(channel => {
     const output = new Int16Array(channel.length);
     for (let i = 0; i < channel.length; i++) {
       const sample = clamp(channel[i], -1, 1);
@@ -194,7 +244,7 @@ function encodeMP3(channels, sampleRate) {
   for (let i = 0; i < intChannels[0].length; i += 1152) {
     const left = intChannels[0].subarray(i, Math.min(i + 1152, intChannels[0].length));
     const right = intChannels.length > 1 ? intChannels[1].subarray(i, Math.min(i + 1152, intChannels[0].length)) : left;
-    const chunk = channels.length === 1 ? encoder.encodeBuffer(left) : encoder.encodeBuffer(left, right);
+    const chunk = preparedChannels.length === 1 ? encoder.encodeBuffer(left) : encoder.encodeBuffer(left, right);
     if (chunk.length) chunks.push(chunk);
   }
   const tail = encoder.flush();
@@ -203,7 +253,7 @@ function encodeMP3(channels, sampleRate) {
   const output = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) { output.set(chunk, offset); offset += chunk.length; }
-  return output.buffer;
+  return { buffer: output.buffer, sampleRate: targetRate };
 }
 
 let cancelled = false;
@@ -251,11 +301,16 @@ self.onmessage = async function(event) {
     self.postMessage({ type: 'progress', pct: 65, label: 'Encoding WAV…' });
     await attempt('wav', () => encodeWAV(channels, sampleRate, params.bitDepth));
     self.postMessage({ type: 'progress', pct: 82, label: 'Encoding MP3…' });
-    await attempt('mp3', () => encodeMP3(channels, sampleRate));
+    let mp3SampleRate = sampleRate;
+    await attempt('mp3', () => {
+      const mp3 = encodeMP3(channels, sampleRate);
+      mp3SampleRate = mp3.sampleRate;
+      return mp3.buffer;
+    });
     if (!Object.keys(formats).length) throw new Error(errors.map(item => `${item.format}: ${item.message}`).join('; '));
 
     const transferList = Object.values(formats).filter(value => value instanceof ArrayBuffer);
-    self.postMessage({ type: 'done', formats, errors, hasClipping, fileName }, transferList);
+    self.postMessage({ type: 'done', formats, errors, hasClipping, fileName, mp3SampleRate }, transferList);
   } catch (error) {
     self.postMessage({ type: 'error', message: error.message || String(error), fileName: msg.fileName });
   }

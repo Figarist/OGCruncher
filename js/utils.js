@@ -1,6 +1,6 @@
 /**
  * OGCruncher — Utilities
- * by figarist · https://figarist.github.io
+ * by figarist · https://sivochka.com
  */
 
 'use strict';

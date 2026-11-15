@@ -1,6 +1,6 @@
 # Prioritized improvement plan
 
-Updated 2026-09-13. Items marked complete are implemented in the current working tree;
+Updated 2026-11-13. Items marked complete are implemented in the current working tree;
 remaining items are backlog. Evidence and acceptance criteria are in the
 [bug register](docs/audit/2026-09-10/BUGS.md) and the
 [remediation verification](docs/remediation/VERIFICATION.md).
@@ -16,7 +16,7 @@ Effort: S = localized; M = multiple modules; L = architecture/cross-browser work
 | 6 | Batch snapshot/failures/blobs, S06–S08 | Reproducible jobs and bounded repeated-run memory | M | Implemented; partial codec and cancellation paths covered by deterministic phase-2 tests; browser injection/memory profiling pending |
 | 7 | Safe PWA updates, S09 | Queued work survives until explicit reload | M | Implemented statically; live update timing pending |
 | 8 | Choose formats before encoding | Avoid unnecessary codecs and isolate failures | M | Backlog |
-| 9 | ZIP/download-all and naming templates | Collision-safe batch delivery with settings manifest | M | Backlog |
+| 9 | ZIP/download-all and naming templates | Collision-safe batch delivery with settings manifest | M | Batch ZIP (`ogcruncher_batch.zip`) + Clear Results implemented in `js/queue.js`; naming templates backlog |
 | 10 | Per-file progress/cancel/retry | Clear stage and recovery controls | M | Logical cancellation/retry implemented and deterministic-tested; browser slow-fixture verification pending |
 | 11 | Waveform, seek and loop region | Audition attacks/tails without whole-file looping | L | Backlog |
 | 12 | Select file for preview | Explicit currently playing filename | M | Backlog |
@@ -24,7 +24,7 @@ Effort: S = localized; M = multiple modules; L = architecture/cross-browser work
 | 14 | Actual output meters/headroom | Distinguish sample peak, true peak and estimates | M | Backlog |
 | 15 | Full Ukrainian UI | Consistent labels, errors, help and number formatting | M | Backlog |
 | 16 | Keyboard help/numeric entry/reset | Discoverable, undoable, accessible controls | M | Backlog |
-| 17 | Encoder quality choices | Supported MP3/OGG settings with honest estimates | M | Backlog |
+| 17 | Encoder quality choices | Supported MP3/OGG settings with honest estimates | M | MPEG-2.5 `64 kbps` clamping aligned in estimator; configurable bitrate UI backlog |
 | 18 | Named creative presets | Sonic intent without unverified hardware claims | S | Backlog |
 | 19 | Shared DSP and regression tests | Prevent worker/worklet drift | L | Core/actual-worker behavioral parity covered for phase-2 vectors; source unification and Worklet parity pending |
 | 20 | Desktop release smoke matrix | Executable/assets/export validated per OS | L | Backlog |
@@ -50,4 +50,4 @@ loudness normalization. A simplified RMS calculation is not a compliant LUFS met
   would change the sound and is not a preview/export parity fix.
 - Current precache includes local encoders and `.mem`. Offline update/cold-launch
   behavior still needs runtime tests.
-- ZIP, waveform and standards-based loudness remain proposals.
+- Batch ZIP (`ogcruncher_batch.zip`) and Clear Results are implemented in `js/queue.js`; waveform and standards-based loudness remain proposals.

@@ -15,4 +15,21 @@ assert.equal(manifest.name, 'OGCruncher', 'generated manifest has the expected n
 assert.ok(Array.isArray(manifest.icons) && manifest.icons.length >= 2, 'generated manifest includes required icons');
 manifest.icons.forEach(icon => assert.ok(fs.existsSync(path.join(dist, icon.src)), `manifest icon exists: ${icon.src}`));
 assert.ok(fs.existsSync(path.join(dist, 'sw.js')), 'generated service worker exists');
-console.log('Generated build checks passed: one base-path manifest link, manifest icons, and service worker.');
+
+assert.doesNotMatch(html, /property=["']twitter:/i, 'generated HTML must use name="twitter:*" attributes');
+assert.match(html, /<meta[^>]+name=["']twitter:card["']/i, 'generated HTML includes name="twitter:card"');
+assert.match(html, /id=["']btn-clear-results["']/i, 'generated HTML includes Clear Results button');
+assert.doesNotMatch(html, /figarist\.github\.io/i, 'generated HTML must not reference legacy figarist.github.io domain');
+
+const sw = fs.readFileSync(path.join(dist, 'sw.js'), 'utf8');
+const precacheMatch = sw.match(/precacheAndRoute\(\s*\[([\s\S]*?)\]\s*,/);
+assert.ok(precacheMatch, 'generated service worker must contain precacheAndRoute manifest');
+const precacheUrls = [...precacheMatch[1].matchAll(/\burl\s*:\s*["']([^"']+)["']/g)].map(m => m[1]);
+assert.ok(precacheUrls.length > 0, 'generated service worker precache list must be non-empty');
+assert.equal(
+  new Set(precacheUrls).size,
+  precacheUrls.length,
+  `generated service worker precache list must not contain duplicates: ${precacheUrls.filter((u, i) => precacheUrls.indexOf(u) !== i).join(', ')}`,
+);
+
+console.log('Generated build checks passed: manifest link, icons, meta tags, clear button, and deduplicated service worker.');

@@ -270,13 +270,15 @@ function createWorkerContext({ ogg = true, mp3 = true } = {}) {
     encode() {}
     finish() { return { arrayBuffer: async () => new ArrayBuffer(4) }; }
   };
+  const mp3Calls = [];
   context.lamejs = {
     Mp3Encoder: class {
-      encodeBuffer() { return new Int8Array([1]); }
+      constructor(ch, sr, kbps) { this.encodedSamples = 0; mp3Calls.push({ ch, sr, kbps, ref: this }); }
+      encodeBuffer(left) { this.encodedSamples += left.length; return new Int8Array([1]); }
       flush() { return new Int8Array([2]); }
     },
   };
-  return { context, messages };
+  return { context, messages, mp3Calls };
 }
 
 async function runWorker(worker, channels, params, sampleRate = 24000) {
@@ -778,6 +780,187 @@ function testServiceWorkerUpdateSafety() {
   assert.equal(reloads, 1, 'controllerchange does not cause a second reload');
 }
 
+async function testMp3ResamplingAndDemoButtonAndZip() {
+  const worker = createWorkerContext();
+  const resampled4k = await runWorker(worker, [new Float32Array(400)], {
+    bitDepth: 8, crushMode: false, dither: false, grit: 1, noise: 0, normalize: false,
+  }, 4000);
+  assert.equal(resampled4k.mp3SampleRate, 8000, '4000Hz resamples to nearest valid MPEG rate 8000Hz');
+  assert.equal(worker.mp3Calls.at(-1).sr, 8000, 'Mp3Encoder receives valid MPEG rate 8000Hz');
+  assert.equal(worker.mp3Calls.at(-1).ref.encodedSamples, 800, 'MP3 input channel resampled proportionally (400 -> 800)');
+
+  const resampled15k = await runWorker(worker, [new Float32Array(1555)], {
+    bitDepth: 8, crushMode: false, dither: false, grit: 1, noise: 0, normalize: false,
+  }, 15550);
+  assert.equal(resampled15k.mp3SampleRate, 16000, '15550Hz resamples to 16000Hz');
+  assert.equal(worker.mp3Calls.at(-1).sr, 16000, 'Mp3Encoder receives 16000Hz');
+
+  // Demo button preserves inner label element and Batch ZIP packs generated outputs.
+  const packedFiles = [];
+  let createdAnchor = null;
+  const btnLoadDemo = { disabled: false, textContent: 'DO_NOT_OVERWRITE' };
+  const btnLoadDemoLabel = { textContent: 'TRY DEMO TRACK 🎵' };
+  const btnDownloadZip = { disabled: false, textContent: 'DOWNLOAD ALL (.ZIP)', addEventListener() {} };
+  const resultsBatchBar = { hidden: true };
+  const resultsBatchSummary = { textContent: '' };
+  const genericEl = () => ({
+    children: [], className: '', style: {}, attributes: {}, dataset: {},
+    setAttribute(k, v) { this.attributes[k] = v; },
+    append(...items) { this.children.push(...items); },
+    appendChild(item) { this.children.push(item); return item; },
+    insertBefore(item, ref) { const i = this.children.indexOf(ref); if (i >= 0) this.children.splice(i, 0, item); else this.children.push(item); },
+    addEventListener() {}, remove() {}, click() {},
+  });
+  const doc = {
+    body: { appendChild() {} },
+    getElementById: () => null,
+    createElement: (tag) => {
+      const el = genericEl();
+      if (tag === 'a') createdAnchor = el;
+      return el;
+    },
+  };
+  const ctx = loadModule('js/queue.js', {
+    state: { files: new Map(), nextId: 1, processing: false, playbackRate: 1, stereo: false, sampleRate: 8000, bitDepth: 8 },
+    getStateSnapshot: () => ({}),
+    window: {
+      JSZip: class {
+        file(name, blob) { packedFiles.push({ name, blob }); }
+        async generateAsync() { return new Blob(['zip'], { type: 'application/zip' }); }
+      },
+    },
+    document: doc,
+    fetch: async () => ({ ok: true, blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/mpeg' }) }),
+    File: class { constructor(parts, name, opts) { this.parts = parts; this.name = name; this.type = opts.type; this.size = 3; } },
+    Blob,
+    URL: { createObjectURL: () => 'blob:zip-1', revokeObjectURL() {} },
+    log() {}, showToast() {}, formatBytes: v => `${v}B`, formatSizeChange: () => '0%', setBadge() {},
+    buildFilterChain() {}, safeOfflineCtx() {}, hashSeed: () => 1, stopPreview() {},
+  });
+  ctx.initQueue({
+    fileQueue: { firstChild: null, removeChild() {}, appendChild() {} },
+    queueHeader: genericEl(), btnProcess: genericEl(), btnPreview: genericEl(),
+    resultsArea: { ...genericEl(), hidden: true },
+    resultsBatchBar, resultsBatchSummary, btnDownloadZip,
+    btnLoadDemo, btnLoadDemoLabel,
+  });
+  await ctx.loadDemoTrack();
+  assert.equal(btnLoadDemo.textContent, 'DO_NOT_OVERWRITE', 'loadDemoTrack does not wipe inner icon span');
+  assert.equal(btnLoadDemoLabel.textContent, 'TRY DEMO TRACK 🎵', 'loadDemoTrack restores label text');
+
+  ctx.renderResult({
+    name: 'demo',
+    errors: [],
+    formats: [
+      { ext: 'ogg', filename: 'demo.ogg', mime: 'audio/ogg', url: 'blob:1', blob: new Blob(['a']), size: '1B', change: '0%' },
+      { ext: 'wav', filename: 'demo.wav', mime: 'audio/wav', url: 'blob:2', blob: new Blob(['b']), size: '1B', change: '0%' },
+    ],
+  });
+  assert.equal(resultsBatchBar.hidden, false, 'resultsBatchBar unhides when multiple output files exist');
+  await ctx.downloadBatchZip();
+  assert.deepEqual(packedFiles.map(f => f.name), ['demo.ogg', 'demo.wav'], 'ZIP archive includes all generated output files');
+  assert.equal(createdAnchor?.download, 'ogcruncher_batch.zip', 'ZIP download triggers expected archive filename');
+}
+
+async function testAuditFixesAndInvariants() {
+  const core = loadModule('js/dsp-core.js', { Math });
+  const worker = createWorkerContext();
+
+  // 1. Non-finite sample sanitization parity (core & worker)
+  const toxic = Float32Array.from([NaN, 0.25, Infinity, -Infinity, -0.25, 0]);
+  const expectedToxic = [toxic.slice()];
+  core.processChannels(expectedToxic, { bitDepth: 16, crushMode: false, dither: false, grit: 1, noise: 0, normalize: false }, 12345);
+  const actualToxic = [toxic.slice()];
+  const workerToxicMsg = await runWorker(worker, actualToxic, { bitDepth: 16, crushMode: false, dither: false, grit: 1, noise: 0, normalize: false }, 24000);
+  assert.ok(expectedToxic[0].every(v => Number.isFinite(v) && Math.abs(v) <= 1), 'dsp-core sanitizes NaN/Infinity samples');
+  assertArrayEqual(actualToxic[0], expectedToxic[0], 'worker and core sanitize NaN/Infinity identically');
+  assertArrayEqual(
+    new Uint8Array(workerToxicMsg.formats.wav),
+    new Uint8Array(core.encodeWAV(expectedToxic, 24000, 16)),
+    'sanitized WAV bytes match across worker and core',
+  );
+
+  // 2. Lanczos-3 MP3 resampler finiteness & exact length
+  const srcSine = Float32Array.from({ length: 160 }, (_, i) => Math.sin(i / 4) * 0.8);
+  const up = worker.context.resampleChannel(srcSine, 4000, 8000);
+  const down = worker.context.resampleChannel(srcSine, 48000, 44100);
+  assert.equal(up.length, 320, 'Lanczos-3 upsampling preserves exact target length');
+  assert.equal(down.length, Math.round(160 * 44100 / 48000), 'Lanczos-3 downsampling preserves exact target length');
+  assert.ok(up.every(v => Number.isFinite(v) && Math.abs(v) <= 1.25), 'Lanczos-3 upsampled values remain bounded and finite');
+  assert.ok(down.every(v => Number.isFinite(v) && Math.abs(v) <= 1.25), 'Lanczos-3 downsampled values remain bounded and finite');
+
+  // 3. MPEG-2.5 64 kbps estimate alignment & per-format MP3 filename rate
+  const estElements = new Map();
+  const makeEstEl = () => ({ style: {}, textContent: '', className: '', hidden: false, addEventListener() {}, appendChild() {}, setAttribute() {} });
+  ['savings-estimate', 'savings-original-size', 'savings-estimated-wav', 'savings-estimated-ogg',
+    'savings-estimated-mp3', 'savings-pct-wav', 'savings-pct-ogg', 'savings-pct-mp3', 'savings-pct-badge']
+    .forEach(id => estElements.set(id, makeEstEl()));
+  class EstAudioCtx {
+    async decodeAudioData() { return { duration: 10, numberOfChannels: 2, sampleRate: 48000 }; }
+    async close() {}
+  }
+  const estState = {
+    files: new Map([[1, { name: 'tone.wav', size: 100000, type: 'audio/wav', arrayBuffer: async () => new ArrayBuffer(10) }]]),
+    nextId: 2, processing: false, playbackRate: 1, stereo: true, sampleRate: 4000, bitDepth: 8,
+  };
+  const resultsBatchBar = { hidden: true };
+  const resultsBatchSummary = { textContent: '' };
+  const btnDownloadZip = { hidden: true, disabled: false, textContent: 'DOWNLOAD ALL (.ZIP)', addEventListener() {} };
+  const btnClearResults = { hidden: false, disabled: false, addEventListener() {} };
+  const resultsArea = { firstChild: null, removeChild() {}, insertBefore() {}, appendChild() {}, hidden: true };
+  const estCtx = loadModule('js/queue.js', {
+    state: estState,
+    getStateSnapshot: () => ({ ...estState }),
+    window: { AudioContext: EstAudioCtx },
+    document: { getElementById: id => estElements.get(id) || null, createElement: () => genericElement() },
+    URL: { createObjectURL: () => 'blob:x', revokeObjectURL() {} },
+    Blob,
+    log() {}, showToast() {}, formatBytes: v => `${v}B`, formatSizeChange: () => '0%', setBadge() {},
+    buildFilterChain() {}, safeOfflineCtx() {}, hashSeed: () => 1, stopPreview() {},
+  });
+  estCtx.initQueue({
+    fileQueue: { firstChild: null, removeChild() {}, appendChild() {} },
+    queueHeader: genericElement(), btnProcess: genericElement(), btnPreview: genericElement(),
+    resultsArea, resultsBatchBar, resultsBatchSummary, btnDownloadZip, btnClearResults,
+  });
+  estCtx.updateSavingsEstimate();
+  await flushMicrotasks();
+  await flushMicrotasks();
+  assert.equal(estElements.get('savings-estimated-mp3').textContent, '80720B', 'MPEG-2.5 low-rate <=12000Hz uses 64 kbps estimate (80720B for 10s + 720B overhead)');
+
+  const allocated = estCtx.allocateOutputFilenames(
+    'tone.wav',
+    8,
+    { default: 4000, mp3: 8000 },
+    new Set(),
+  );
+  assert.match(allocated.wav, /_4000hz\.wav$/, 'WAV filename keeps requested sample rate');
+  assert.match(allocated.mp3, /_8000hz\.mp3$/, 'MP3 filename uses actual resampled MPEG rate');
+
+  // Clear results hides bar & resets ZIP button visibility
+  estCtx.renderResult({
+    name: 'tone', errors: [],
+    formats: [{ ext: 'wav', filename: 'tone.wav', mime: 'audio/wav', url: 'blob:1', blob: new Blob(['a']), size: '1B', change: '0%' }],
+  });
+  assert.equal(resultsBatchBar.hidden, false, 'resultsBatchBar visible even for 1 result so Clear Results is accessible');
+  assert.equal(btnDownloadZip.hidden, true, 'ZIP button stays hidden when only 1 output file exists');
+  estCtx.clearResults();
+  assert.equal(resultsArea.hidden, true, 'clearResults hides resultsArea');
+  assert.equal(resultsBatchBar.hidden, true, 'clearResults hides resultsBatchBar');
+  assert.equal(btnDownloadZip.hidden, true, 'clearResults keeps ZIP button hidden');
+
+  // 4. Worker reuse across completed non-cancelled batches
+  const reuseHarness = createQueueHarness({ autoCompleteWorker: true });
+  reuseHarness.state.files.set(1, { name: 'a.wav', size: 10, type: 'audio/wav', arrayBuffer: async () => new ArrayBuffer(10) });
+  await reuseHarness.context.startProcessing(() => {});
+  reuseHarness.context.clearQueue();
+  reuseHarness.state.files.set(2, { name: 'b.wav', size: 10, type: 'audio/wav', arrayBuffer: async () => new ArrayBuffer(10) });
+  await reuseHarness.context.startProcessing(() => {});
+  assert.equal(reuseHarness.workers.length, 1, 'sequential completed batches reuse one worker instead of respawning');
+  assert.equal(reuseHarness.workers[0].terminated, false, 'completed non-cancelled batch keeps worker alive');
+  assert.equal(reuseHarness.workerProcessCount, 2, 'reused worker processed both batches');
+}
+
 async function main() {
   testABSignalPath();
   await testLatestPreviewUpdateWins();
@@ -790,6 +973,8 @@ async function main() {
   await testCancellationAndRetry();
   await testPartialQueueSummary();
   await testDuplicateQueueResults();
+  await testMp3ResamplingAndDemoButtonAndZip();
+  await testAuditFixesAndInvariants();
   console.log('OGCruncher phase-2 regression checks passed.');
 }
 
