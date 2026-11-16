@@ -96,3 +96,14 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  notify_failure:
+    name: Notify Telegram on failure
+    if: failure()
+    needs: [build-desktop, deploy-pages]
+    uses: Figarist/figarist.github.io/.github/workflows/notify-telegram.yml@main
+    with:
+      title: "OGCruncher deploy failed on ${{ github.ref_name }}"
+      status: "error"
+      details: "Commit ${{ github.sha }}"
+    secrets: inherit
