@@ -1,11 +1,7 @@
 # OGCruncher architecture and design contract
 
 Updated 2026-11-13. The baseline audit was recorded at
-`fc0209cd27a3ffa7562955bac22cf272eb740f39`; current implementation evidence is in
-the [remediation status](docs/remediation/IMPLEMENTATION_STATUS.md) and
-[verification record](docs/remediation/VERIFICATION.md). Phase-2 evidence is in
-[docs/remediation/phase-2/STATUS.md](docs/remediation/phase-2/STATUS.md) and
-[docs/remediation/phase-2/VERIFICATION.md](docs/remediation/phase-2/VERIFICATION.md).
+`fc0209cd27a3ffa7562955bac22cf272eb740f39`.
 
 ## Module ownership
 
@@ -45,7 +41,7 @@ rendering, copies and encoders allocate memory.
 WAV stores 8-bit unsigned PCM for effect depths 1–8 and 16-bit signed PCM for 9–16.
 Effect depth is not storage depth. MP3 requests 128 kbps (LAME MPEG-2.5 clamps low rates
 `<= 12000 Hz` to `~64 kbps`, reflected in queue estimates); OGG uses quality 0. All
-three codecs are currently attempted per file. See [formulas](docs/audit/2026-09-10/AUDIO_AND_FORMULAS.md).
+three codecs are currently attempted per file.
 
 State precedence is validated defaults < saved state < explicit URL values. Hash parsing
 is side-effect free; startup synchronizes once, then persists. Undo/redo restores every

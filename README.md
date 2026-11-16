@@ -10,23 +10,7 @@ This is a creative processor, not currently a transparent audio converter.
 
 ## Documentation
 
-- [Production deployment and verification, 2026-09-13](docs/deployment/2026-09-13.md).
-- [Online audit](docs/online-audit/2026-09-13/README.md).
-- [Online audit fixes](docs/remediation/online-audit-fixes/STATUS.md).
-- [Professional audit, 2026-09-10](docs/audit/2026-09-10/README.md).
-- [Detailed bug register](docs/audit/2026-09-10/BUGS.md).
-- [Audio and formulas](docs/audit/2026-09-10/AUDIO_AND_FORMULAS.md).
-- [UI/UX and visual alignment](docs/audit/2026-09-10/UI_UX.md).
-- [Verification record](docs/audit/2026-09-10/VERIFICATION.md).
-- [Remediation status](docs/remediation/IMPLEMENTATION_STATUS.md).
-- [Post-remediation verification](docs/remediation/VERIFICATION.md).
-- [Phase-2 remediation status](docs/remediation/phase-2/STATUS.md).
-- [Phase-2 verification](docs/remediation/phase-2/VERIFICATION.md).
-- [Release-readiness status](docs/release-readiness/STATUS.md).
-- [Release-readiness verification](docs/release-readiness/VERIFICATION.md).
-- [Current numeric results](docs/remediation/numeric-results-2026-09-10.json).
 - [Architecture and design contract](DESIGN.md).
-- [Prioritized improvements](PROPOSALS.md).
 
 ## Current capabilities and limitations
 
@@ -47,9 +31,6 @@ Reload, share-link parsing, undo/redo, Simple/Advanced snapshots, filename rende
 PCM WAV packing, channel-linked normalization, quiet-signal handling, batch locking,
 resource cleanup and explicit, state-aware service-worker updates are implemented.
 Existing cached-client adoption still needs migration verification.
-See the [deployment evidence](docs/deployment/2026-09-13.md),
-[remediation status](docs/remediation/IMPLEMENTATION_STATUS.md)
-and [verification record](docs/remediation/VERIFICATION.md) for exact historical evidence levels.
 
 Known limitations: lossy codec round-trips, human listening quality, full keyboard and
 screen-reader conformance, cross-browser/mobile-device behavior, browser codec-failure

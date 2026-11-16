@@ -1,0 +1,51 @@
+name: Privacy & Secret Guard
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for internal docs, local paths, and secrets
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess, sys
+
+          files = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
+          errors = []
+
+          forbidden_prefixes = ("docs/",)
+          forbidden_names = {"PROPOSALS.md", "debug.log", ".env"}
+          path_leak_re = re.compile(r"([A-Za-z]:\\Users\\|[A-Za-z]:\\GitHub\\|[A-Za-z]:\\OGCruncher|/Users/[a-zA-Z0-9._-]+/|C:\\Program Files\\)")
+          secret_re = re.compile(r"(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{35}|-----BEGIN [A-Z ]*PRIVATE KEY-----)")
+
+          for path in files:
+              if path.startswith(forbidden_prefixes) or os.path.basename(path) in forbidden_names:
+                  errors.append(f"Forbidden internal file tracked: {path}")
+              if path == ".github/workflows/privacy-guard.yml":
+                  continue
+              try:
+                  with open(path, "rb") as fh:
+                      raw = fh.read()
+                  if b"\x00" in raw:
+                      continue
+                  text = raw.decode("utf-8", errors="replace")
+              except OSError:
+                  continue
+              for idx, line in enumerate(text.splitlines(), 1):
+                  if path_leak_re.search(line):
+                      errors.append(f"Local machine path leak in {path}:{idx}")
+                  if secret_re.search(line):
+                      errors.append(f"Potential secret/token in {path}:{idx}")
+
+          if errors:
+              print("PRIVACY GUARD FAILED:\n" + "\n".join(" - " + e for e in errors))
+              sys.exit(1)
+          print(f"Privacy guard passed ({len(files)} tracked files scanned).")
+          PY
