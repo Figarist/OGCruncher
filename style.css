@@ -157,6 +157,7 @@ input:focus-visible,
 }
 .logo-text { display: flex; flex-direction: column; gap: 1px; }
 .logo-title { margin: 0; color: var(--text-primary); font-size: 1.05rem; font-weight: 750; letter-spacing: -.025em; transition: color var(--t-fast); }
+.logo-title__kw { display: block; margin-top: 1px; color: var(--text-muted); font-family: var(--font-mono); font-size: .56rem; font-weight: 600; letter-spacing: .02em; line-height: 1.25; }
 .logo-sub { color: var(--text-muted); font-family: var(--font-mono); font-size: .61rem; letter-spacing: .055em; text-transform: uppercase; }
 
 .header-context { display: flex; flex: 1 1 auto; flex-direction: column; gap: 1px; min-width: 0; }
