@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check for internal docs, local paths, and secrets
+      - name: Check for internal docs, AI files, local paths, and secrets
         run: |
           python3 - <<'PY'
           import os, re, subprocess, sys
@@ -20,16 +20,23 @@ jobs:
           files = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
           errors = []
 
-          forbidden_prefixes = ("docs/",)
-          forbidden_names = {"PROPOSALS.md", "debug.log", ".env"}
-          path_leak_re = re.compile(r"([A-Za-z]:\\Users\\|[A-Za-z]:\\GitHub\\|[A-Za-z]:\\OGCruncher|/Users/[a-zA-Z0-9._-]+/|C:\\Program Files\\)")
-          secret_re = re.compile(r"(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{35}|-----BEGIN [A-Z ]*PRIVATE KEY-----)")
+          generic_forbidden_re = re.compile(
+              r"(^|/)(project_context\.md|debug\.log|\.env(\..*)?|.*NEXT_WORK_PROMPT.*|.*NEXT_AGENT_HANDOFF.*|.*IMPLEMENTATION_CHECKLIST.*|.*UX_CRO_.*|.*_PROMPT\.md|(AGENTS|CLAUDE|GEMINI|AI_CONTEXT)\.md)$|(^|/)(\.claude|\.agents?|\.cursor)(/|$)",
+              re.I,
+          )
+          repo_specific = [re.compile(p, re.I) for p in ['^(docs/|PROPOSALS\\.md$)']]
+          path_leak_re = re.compile(r"([A-Za-z]:\\Users\\|[A-Za-z]:\\GitHub\\|[A-Za-z]:\\OGCruncher|C:\\Program Files\\|/Users/[A-Za-z0-9._-]+/)")
+          fictional_re = re.compile(r"(UNVERIFIED AI-GENERATED EXAMPLES|permission_basis)")
+          secret_re = re.compile(r"(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{35}|-----BEGIN [A-Z ]*PRIVATE KEY-----|\b[0-9]{8,10}:AA[A-Za-z0-9_-]{33}\b)")
 
           for path in files:
-              if path.startswith(forbidden_prefixes) or os.path.basename(path) in forbidden_names:
-                  errors.append(f"Forbidden internal file tracked: {path}")
               if path == ".github/workflows/privacy-guard.yml":
                   continue
+              if os.path.basename(path) != ".env.example" and generic_forbidden_re.search(path):
+                  errors.append(f"Forbidden internal/AI file tracked: {path}")
+              for pat in repo_specific:
+                  if pat.search(path):
+                      errors.append(f"Forbidden repo-specific path tracked: {path}")
               try:
                   with open(path, "rb") as fh:
                       raw = fh.read()
@@ -41,6 +48,8 @@ jobs:
               for idx, line in enumerate(text.splitlines(), 1):
                   if path_leak_re.search(line):
                       errors.append(f"Local machine path leak in {path}:{idx}")
+                  if fictional_re.search(line):
+                      errors.append(f"Fictional/draft marker in {path}:{idx}")
                   if secret_re.search(line):
                       errors.append(f"Potential secret/token in {path}:{idx}")
 
