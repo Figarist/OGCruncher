@@ -66,7 +66,45 @@ assert.equal(parsed.bitDepth, undefined, 'invalid bit depth rejected');
 assert.equal(parsed.sampleRate, undefined, 'invalid sample rate rejected');
 assert.equal(parsed.playbackRate, .5, 'valid playback rate accepted');
 assert.equal(parsed.simpleQuality, 2, 'valid integer quality accepted');
-const invalid = stateContext.sanitizeParams({ bitDepth: 1.5, sampleRate: Infinity, grit: NaN, previewVolume: 4 });
+const invalid = stateContext.sanitizeParams({ bitDepth: 1.5, sampleRate: Infinity, grit: NaN, previewVolume: 4, normalizeCeiling: 2 });
 assert.equal(Object.keys(invalid).length, 0, 'invalid saved fields rejected');
 
-console.log('OGCruncher regression checks passed: DSP neutral/linked, PCM WAV, and state validation.');
+// -1 dBFS normalization ceiling preserves stereo balance and leaves headroom.
+const ceilLeft = Float32Array.from({ length: 256 }, (_, i) => .8 * Math.sin(i / 9));
+const ceilRight = Float32Array.from({ length: 256 }, (_, i) => .2 * Math.sin(i / 9));
+core.processChannels([ceilLeft, ceilRight], { bitDepth: 16, crushMode: false, dither: false, grit: 1, noise: 0, normalize: true, normalizeCeiling: -1 }, 42);
+const expectedCeiling = Math.pow(10, -1 / 20);
+approx(peak(ceilLeft), expectedCeiling, 1e-4, '-1 dBFS ceiling peak');
+approx(peak(ceilRight) / peak(ceilLeft), .25, 1e-5, '-1 dBFS ceiling preserves stereo balance');
+
+// Auto-trim silence removes leading/trailing silence, applies click-free fade, and never zeros all-silent input.
+const padded = new Float32Array(2000);
+for (let i = 600; i < 1400; i++) padded[i] = 0.5 * Math.sin((i - 600) / 8);
+const trimmed = core.processChannels([padded], { sampleRate: 22050, bitDepth: 16, crushMode: false, dither: false, grit: 1, noise: 0, normalize: false, trimSilence: true }, 1);
+assert.ok(trimmed[0].length < padded.length && trimmed[0].length >= 800, `trimSilence trims padding cleanly (got ${trimmed[0].length})`);
+approx(trimmed[0][0], 0, 1e-6, 'micro fade-in starts at zero');
+approx(trimmed[0][trimmed[0].length - 1], 0, 1e-6, 'micro fade-out ends at zero');
+const allSilent = new Float32Array(512);
+const keptSilent = core.trimSilenceChannels([allSilent], 22050);
+assert.equal(keptSilent[0].length, 512, 'all-silence buffer is never truncated to 0 samples');
+
+// State parser must guard against all export formats disabled and accept new flags.
+const allDisabled = stateContext.sanitizeParams({ exportOgg: false, exportWav: false, exportMp3: false, keepOriginalName: true, trimSilence: true, previewLoop: false, normalizeCeiling: -1 });
+assert.equal(allDisabled.exportWav, true, 'at least one export format remains enabled');
+assert.equal(allDisabled.keepOriginalName, true, 'keepOriginalName accepted');
+assert.equal(allDisabled.trimSilence, true, 'trimSilence accepted');
+assert.equal(allDisabled.previewLoop, false, 'previewLoop accepted');
+assert.equal(allDisabled.normalizeCeiling, -1, 'normalizeCeiling accepted');
+
+// Queue filename contract with keepOriginalName = true vs false.
+const queueSource = read('js/queue.js');
+const queueContext = vm.createContext({ console, Math });
+vm.runInContext(
+  queueSource.match(/function safeFilenameStem[\s\S]*?export function getOutputFilename[\s\S]*?\n\}/)[0].replace(/export /g, ''),
+  queueContext,
+);
+assert.equal(queueContext.getOutputFilename('jump.wav', 'ogg', 8, 22050, '', false), 'jump_crunched_8bit_22050hz.ogg', 'default suffixed filename');
+assert.equal(queueContext.getOutputFilename('jump.wav', 'ogg', 8, 22050, '', true), 'jump.ogg', 'keepOriginalName omits suffix');
+assert.equal(queueContext.getOutputFilename('jump.wav', 'ogg', 8, 22050, '-2', true), 'jump-2.ogg', 'keepOriginalName preserves collision disambiguator');
+
+console.log('OGCruncher regression checks passed: DSP neutral/linked, -1 dBFS ceiling, trim/fade, PCM WAV, filenames, and state validation.');

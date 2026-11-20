@@ -12,7 +12,7 @@
   <link rel="canonical" href="https://sivochka.com/OGCruncher/" />
   <link rel="alternate" hreflang="x-default" href="https://sivochka.com/OGCruncher/" />
   <link rel="alternate" hreflang="en" href="https://sivochka.com/OGCruncher/" />
-  <link rel="alternate" hreflang="uk" href="https://sivochka.com/OGCruncher/#seo-uk-title" />
+  <link rel="alternate" hreflang="uk" href="https://sivochka.com/OGCruncher/uk/" />
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website" />
@@ -68,9 +68,10 @@
           "1–16 bit audio quantization and creative Crush mode (DC removal, soft expander, anti-alias filter)",
           "4,000 Hz to 48,000 Hz sample rate decimation with instant standard snap presets",
           "Tanh saturation drive (Grit), tape-style noise floor injection, and TPDF triangular dither",
-          "High-Pass Filter (HPF), Low-Pass Filter (LPF), 80 Hz Bass Boost, Speed/Pitch scaling, and 0 dBFS linked normalization",
+          "High-Pass Filter (HPF), Low-Pass Filter (LPF), 80 Hz Bass Boost, Speed/Pitch scaling, and linked peak normalization to -1 or 0 dBFS",
           "100% local in-browser processing with zero file uploads",
-          "Simultaneous Web Worker batch export to Ogg Vorbis, 8-bit/16-bit PCM WAV, MP3, and ZIP archive",
+          "Web Worker batch export to selectable Ogg Vorbis, 8-bit/16-bit PCM WAV and MP3 outputs, optional original filenames, and ZIP archive",
+          "Auto-trim of leading and trailing silence with click-free micro-fades",
           "Real-time Dry/Wet A/B switching and live spectrum visualizer"
         ],
         "image": "https://sivochka.com/OGCruncher/images/social-card.png",
@@ -170,6 +171,14 @@
               "@type": "Answer",
               "text": "Drop multiple audio files into the queue, tune Simple or Advanced parameters, and click CRUNCH to freeze one validated snapshot across the entire batch. When processing finishes, download individual OGG, WAV, or MP3 files, grab everything at once via DOWNLOAD ALL (.ZIP), or click COPY LINK to share your exact DSP settings in the URL hash."
             }
+          },
+          {
+            "@type": "Question",
+            "name": "Which format should I export for Scratch 3.0?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Export WAV for short sound effects or MP3 for longer music tracks, keeping each file under Scratch 3.0's 10 MB per-asset limit. Scratch 3.0 does not import .ogg files."
+            }
           }
         ]
       }
@@ -211,7 +220,8 @@
         <span class="badge badge--amber" id="badge-status">IDLE</span>
         <button id="btn-info" class="btn btn--ghost btn--xs header-about" title="About OGCruncher">ABOUT</button>
         <a class="header-route header-route--guide" href="#faq">GUIDE &amp; FAQ</a>
-        <a data-goatcounter-click="ogcruncher-hub" class="header-route" href="https://sivochka.com/" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
+        <a class="header-route header-route--lang" href="uk/" hreflang="uk" lang="uk" title="Українська версія">УКР</a>
+        <a data-goatcounter-click="ogcruncher-hub" class="header-route header-route--hub" href="https://sivochka.com/" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
       </div>
     </div>
   </header>
@@ -468,16 +478,16 @@
         <!-- Grit -->
         <div class="control-group" id="group-grit">
           <div class="control-header">
-            <label for="slider-grit" class="control-label" data-tooltip="Saturation and brightness. Adds character and energy, making sound denser and louder.">GRIT</label>
-            <output id="out-grit" for="slider-grit" class="control-value">1.5</output>
+            <label for="slider-grit" class="control-label" data-tooltip="Saturation drive (tanh). 1.0 is clean bypass (OFF); higher values add harmonic density.">GRIT</label>
+            <output id="out-grit" for="slider-grit" class="control-value">OFF</output>
           </div>
           <div class="slider-track-wrap">
             <input
               type="range"
               id="slider-grit"
-              min="1.0" max="10.0" value="1.5" step="0.1"
+              min="1.0" max="10.0" value="1.0" step="0.1"
               class="slider"
-              aria-valuemin="1.0" aria-valuemax="10.0" aria-valuenow="1.5"
+              aria-valuemin="1.0" aria-valuemax="10.0" aria-valuenow="1.0"
               aria-label="Saturation drive amount"
             />
           </div>
@@ -486,8 +496,8 @@
         <!-- Noise -->
         <div class="control-group" id="group-noise">
           <div class="control-header">
-            <label for="slider-noise" class="control-label" data-tooltip="Adds subtle floor hiss of vintage gear or tape for extra lo-fi atmosphere.">NOISE</label>
-            <output id="out-noise" for="slider-noise" class="control-value">0</output>
+            <label for="slider-noise" class="control-label" data-tooltip="Adds subtle floor hiss of vintage gear or tape (shown in dBFS).">NOISE</label>
+            <output id="out-noise" for="slider-noise" class="control-value">OFF</output>
           </div>
           <div class="slider-track-wrap">
             <input
@@ -504,7 +514,7 @@
         <!-- Mario Toggle -->
         <div class="control-group" id="group-mariomode">
           <div class="control-header">
-            <label for="toggle-mariomode" class="control-label" data-tooltip="Makes sound 'sharper' and more dynamic by boosting peaks for a retro game feel.">CRUSH MODE</label>
+            <label for="toggle-mariomode" class="control-label" data-tooltip="Creative bit-crush pipeline: DC removal, |x|^1.15 soft expander, quantization, and 2-tap anti-alias smoothing.">CRUSH MODE</label>
             <span id="out-mariomode" class="control-value" aria-live="polite">ON</span>
           </div>
           <button
@@ -512,6 +522,7 @@
             aria-checked="true"
             id="toggle-mariomode"
             class="toggle-switch active"
+            title="DC removal, soft expander (|x|^1.15), quantization, and 2-tap anti-alias smoothing"
             aria-label="Enable expander, dither and anti-alias pipeline"
           >
             <span class="toggle-track">
@@ -524,7 +535,7 @@
         <!-- Dither Toggle -->
         <div class="control-group" id="group-dither">
           <div class="control-header">
-            <label for="toggle-dither" class="control-label" data-tooltip="Adds noise to mask quantization distortion. Turn OFF for classic retro crunch/grit.">DITHER</label>
+            <label for="toggle-dither" class="control-label" data-tooltip="Adds triangular TPDF dither to soften quantization distortion. Turn OFF for raw retro grit.">DITHER</label>
             <span id="out-dither" class="control-value" aria-live="polite">ON</span>
           </div>
           <button
@@ -532,20 +543,23 @@
             aria-checked="true"
             id="toggle-dither"
             class="toggle-switch active"
-            aria-label="Toggle triangular dither noise"
+            aria-label="Toggle triangular TPDF dither noise"
           >
             <span class="toggle-track">
               <span class="toggle-thumb"></span>
             </span>
-            <span class="toggle-label-text">NOISE SHAPING</span>
+            <span class="toggle-label-text">TPDF DITHER</span>
           </button>
         </div>
 
         <!-- IMPROVEMENT 2: Normalize Toggle -->
         <div class="control-group" id="group-normalize">
           <div class="control-header">
-            <label for="toggle-normalize" class="control-label" data-tooltip="Normalizes output peak to 0 dBFS. Keeps all your SFX at consistent loudness across a batch.">NORMALIZE</label>
-            <span id="out-normalize" class="control-value">ON</span>
+            <label for="toggle-normalize" class="control-label" data-tooltip="Normalizes output peak to -1 dBFS (safe headroom for OGG/MP3) or 0 dBFS full scale.">NORMALIZE</label>
+            <div class="control-header-actions">
+              <button type="button" id="btn-norm-ceiling" class="btn btn--ghost btn--xs ceiling-pill" title="Toggle normalization ceiling between -1 dBFS (safe headroom for lossy codecs) and 0 dBFS">-1 dB</button>
+              <span id="out-normalize" class="control-value">ON</span>
+            </div>
           </div>
           <button
             role="switch"
@@ -557,7 +571,7 @@
             <span class="toggle-track">
               <span class="toggle-thumb"></span>
             </span>
-            <span class="toggle-label-text">0 dBFS PEAK</span>
+            <span id="norm-ceiling-label" class="toggle-label-text">-1 dBFS PEAK</span>
           </button>
         </div>
 
@@ -578,6 +592,26 @@
               <span class="toggle-thumb"></span>
             </span>
             <span class="toggle-label-text">FORCE MONO</span>
+          </button>
+        </div>
+
+        <!-- Auto-Trim Silence Toggle -->
+        <div class="control-group" id="group-trim">
+          <div class="control-header">
+            <label for="toggle-trim" class="control-label" data-tooltip="Trims leading and trailing silence below -48 dBFS and applies a 4 ms click-free micro-fade.">TRIM SILENCE</label>
+            <span id="out-trim" class="control-value" aria-live="polite">OFF</span>
+          </div>
+          <button
+            role="switch"
+            aria-checked="false"
+            id="toggle-trim"
+            class="toggle-switch"
+            aria-label="Enable auto-trim silence with micro-fade"
+          >
+            <span class="toggle-track">
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-label-text">-48 dB + FADE</span>
           </button>
         </div>
 
@@ -644,6 +678,16 @@
 
       <!-- Action buttons -->
       <div class="action-stack">
+        <div class="export-options" id="export-options" role="group" aria-label="Export format and naming options">
+          <span class="export-options__label">EXPORT</span>
+          <div class="export-format-pills">
+            <button type="button" id="btn-fmt-ogg" class="btn btn--ghost btn--xs fmt-pill active" aria-pressed="true" title="Export Ogg Vorbis (.ogg)">OGG</button>
+            <button type="button" id="btn-fmt-wav" class="btn btn--ghost btn--xs fmt-pill active" aria-pressed="true" title="Export 8-bit or 16-bit PCM WAV (.wav)">WAV</button>
+            <button type="button" id="btn-fmt-mp3" class="btn btn--ghost btn--xs fmt-pill active" aria-pressed="true" title="Export MP3 (.mp3)">MP3</button>
+          </div>
+          <button type="button" id="btn-scratch-mode" class="btn btn--ghost btn--xs fmt-pill" title="Scratch 3.0 imports only WAV and MP3 (max 10 MB per sound): export WAV only">FOR SCRATCH</button>
+          <button type="button" id="btn-keep-names" class="btn btn--ghost btn--xs fmt-pill" aria-pressed="false" title="Keep original filenames without _crunched_8bit_22050hz suffix (preserves Unity .meta and Godot .import references)">KEEP NAMES</button>
+        </div>
         <div class="action-row">
           <button id="btn-preview" class="btn btn--secondary" disabled aria-label="Preview selected audio">
             <span class="btn-icon" id="preview-icon">▶</span>
@@ -656,6 +700,8 @@
             <kbd class="hotkey">Enter</kbd>
           </button>
         </div>
+        <p class="codec-info export-hint">Making a Scratch game? Press <strong>FOR SCRATCH</strong> to get one WAV file per sound.</p>
+        <p id="codec-info" class="codec-info">Codecs: WAV 16-bit PCM · OGG q0 (~64 kbps) · MP3 128 kbps</p>
         <p id="preview-file-name" class="preview-file-name" aria-live="polite"></p>
         <p id="effective-settings" class="effective-settings">Effective settings appear after a file is loaded.</p>
         <p id="batch-summary" class="batch-summary" role="status" aria-live="polite"></p>
@@ -668,10 +714,16 @@
           </button>
           
           <!-- Live Update Toggle -->
-          <button id="btn-live-update" class="btn btn--live-toggle" aria-label="Toggle live parameter updates">
+          <button id="btn-live-update" class="btn btn--live-toggle active" title="Automatically re-render preview when you change controls" aria-label="Toggle live parameter updates">
             <span class="live-icon">⚡</span>
-            <span class="live-label">LIVE UPDATE: <span id="live-status">OFF</span></span>
+            <span class="live-label">LIVE UPDATE: <span id="live-status">ON</span></span>
             <kbd class="hotkey" style="margin-left:6px">N</kbd>
+          </button>
+
+          <!-- Preview Loop Toggle -->
+          <button id="btn-preview-loop" class="btn btn--live-toggle active" title="Loop preview continuously or play once as a one-shot SFX" aria-pressed="true" aria-label="Toggle preview loop">
+            <span class="live-label">LOOP: <span id="loop-status">ON</span></span>
+            <kbd class="hotkey" style="margin-left:6px">L</kbd>
           </button>
 
           <!-- Preview Volume Pill -->
@@ -746,7 +798,7 @@
       <article class="seo-card">
         <h3>Simultaneous Batch Export: 8-Bit / 16-Bit PCM WAV, Ogg Vorbis &amp; MP3</h3>
         <p>
-          Queue dozens of sound effects and crunch them sequentially under one locked parameter snapshot. Each job outputs three formats in parallel inside a dedicated Web Worker: unsigned 8-bit or signed 16-bit <strong>PCM WAV</strong> for zero-latency engine playback, <strong>Ogg Vorbis (.ogg)</strong> for compact Unity/Godot/WebGL loops, and 128 kbps <strong>MP3</strong> (with windowed Lanczos-3 resampling for non-MPEG rates), plus one-click <code>ogcruncher_batch.zip</code> packaging.
+          Queue dozens of sound effects and crunch them sequentially under one locked parameter snapshot. Each job outputs up to three formats (pick OGG, WAV and/or MP3 before you crunch) inside a dedicated Web Worker: unsigned 8-bit or signed 16-bit <strong>PCM WAV</strong> for zero-latency engine playback, <strong>Ogg Vorbis (.ogg)</strong> for compact Unity/Godot/WebGL loops, and <strong>MP3</strong> at 128 kbps (64 kbps at 8–12 kHz, with windowed Lanczos-3 resampling for non-MPEG rates), plus one-click <code>ogcruncher_batch.zip</code> packaging.
         </p>
       </article>
       <article class="seo-card">
@@ -773,13 +825,19 @@
             <td><strong>Unity / Godot Low-Latency Combat &amp; UI SFX</strong></td>
             <td>8–12 bit · 22,050 Hz</td>
             <td>Mono · Normalize ON · HPF 80 Hz</td>
-            <td>PCM WAV (zero decode latency)</td>
+            <td>PCM WAV (zero decode latency; note: Unity re-encodes imported WAVs per AudioClip Import Settings)</td>
           </tr>
           <tr>
             <td><strong>Wear OS, Mobile &amp; WebGL Loops</strong></td>
             <td>12–16 bit · 22,050–32,000 Hz</td>
             <td>Mono or Stereo · Dither ON · Grit 1.2</td>
-            <td>Ogg Vorbis (<code>.ogg</code>)</td>
+            <td>Ogg Vorbis (<code>.ogg</code>) — Safari/iOS support for OGG is limited and version-dependent, so ship an MP3 fallback for WebGL</td>
+          </tr>
+          <tr>
+            <td><strong>Scratch 3.0 (Kids &amp; Classroom Games)</strong></td>
+            <td>8–16 bit · 22,050 Hz</td>
+            <td>Mono · Normalize ON</td>
+            <td>PCM WAV (short SFX) or MP3 (music), max 10 MB per file — Scratch 3.0 does not import <code>.ogg</code></td>
           </tr>
           <tr>
             <td><strong>NES / 8-Bit Chiptune Crunch</strong></td>
@@ -790,7 +848,7 @@
           <tr>
             <td><strong>Amiga 500 / 90s Tracker Sampler</strong></td>
             <td>8 bit · 28,000 Hz</td>
-            <td>Stereo · Grit 1.5 · Noise 0.005 · LPF 10 kHz</td>
+            <td>Stereo · Grit 1.5 · Noise -46 dB · LPF 10 kHz</td>
             <td>8-Bit PCM WAV / MP3 preview</td>
           </tr>
         </tbody>
@@ -827,16 +885,17 @@
         <summary>How to make 8-bit sound effects for Unity &amp; Godot in 10 seconds?</summary>
         <p>Drop a clean WAV/MP3 jump or hit sound, set Bit Depth to 4–8 bit and Sample Rate to 11,025–16,000 Hz (Mono), enable Crush, and export as OGG or 8-bit WAV.</p>
       </details>
+      <details class="faq-item">
+        <summary>Which format should I export for Scratch 3.0?</summary>
+        <p>Use <strong>WAV</strong> for short sound effects or <strong>MP3</strong> for longer music tracks, and keep each file under Scratch 3.0's <strong>10 MB</strong> per-asset limit. Scratch 3.0 does not support <code>.ogg</code> files.</p>
+      </details>
     </section>
 
-    <aside class="seo-locale-card" lang="uk" aria-labelledby="seo-uk-title">
-      <h3 id="seo-uk-title">OGCruncher українською — безкоштовний онлайн біткрашер (Bit-Crusher) та оптимізатор звуку для ігор</h3>
-      <p>
-        <strong>OGCruncher</strong> — це безкоштовний браузерний <strong>біткрашер онлайн</strong>, редуктор частоти дискретизації та пакетний <strong>lo-fi конвертер аудіо</strong> у формати <code>OGG</code>, <code>WAV</code> і <code>MP3</code>, створений українським розробником Ігорем Сівочкою (<a data-goatcounter-click="ogcruncher-hub" href="https://sivochka.com/" target="_blank" rel="noopener noreferrer">Figarist</a>). Інструмент працює повністю локально у вашому браузері (без завантаження файлів на сервер) і допомагає розробникам ігор на <strong>Unity</strong>, <strong>Godot</strong>, <strong>WebGL</strong> та <strong>Wear OS</strong> зменшити вагу аудіоресурсів, зробити автентичний 8-бітний чи 4-бітний звук, обробити серію SFX за один клік і завантажити готовий ZIP-архів.
-      </p>
+    <aside class="seo-locale-card" lang="uk" aria-labelledby="seo-locale-title">
+      <h3 id="seo-locale-title">OGCruncher українською</h3>
+      <p>Повна українська версія інструмента з поясненнями простими словами та порадами для Scratch, Unity і Godot.</p>
       <ul class="seo-locale-links">
-        <li><a data-goatcounter-click="ogcruncher-hub" href="https://sivochka.com/" target="_blank" rel="noopener noreferrer">sivochka.com →</a></li>
-        <li><a href="https://github.com/Figarist/OGCruncher" target="_blank" rel="noopener noreferrer">GitHub →</a></li>
+        <li><a href="uk/" hreflang="uk">Відкрити українську версію →</a></li>
       </ul>
     </aside>
   </section>

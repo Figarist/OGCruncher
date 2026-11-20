@@ -102,13 +102,64 @@ export function processDSP(buf, bitDepth = 8, crushMode = true, dither = true,
   return clipped;
 }
 
-export function normalizeChannels(channels) {
+export function trimSilenceChannels(channels, sampleRate = 22050, thresholdDb = -48, padMs = 2) {
+  if (!Array.isArray(channels) || !channels.length || !channels[0] || !channels[0].length) return channels;
+  const length = channels[0].length;
+  const threshold = Math.pow(10, clamp(finiteOr(thresholdDb, -48), -96, -6) / 20);
+  let start = length;
+  let end = -1;
+
+  for (let ch = 0; ch < channels.length; ch++) {
+    const data = channels[ch];
+    if (!data) continue;
+    for (let i = 0; i < data.length; i++) {
+      const value = Math.abs(finiteSample(data[i]));
+      if (value >= threshold) {
+        if (i < start) start = i;
+        if (i > end) end = i;
+      }
+    }
+  }
+
+  // Keep all-silence buffers untouched so we never produce a 0-sample buffer.
+  if (end < start) return channels;
+
+  const rate = Math.max(1000, finiteOr(sampleRate, 22050));
+  const padSamples = Math.round((clamp(finiteOr(padMs, 2), 0, 50) / 1000) * rate);
+  const trimStart = Math.max(0, start - padSamples);
+  const trimEnd = Math.min(length - 1, end + padSamples);
+  if (trimStart === 0 && trimEnd === length - 1) return channels;
+
+  const outLength = Math.max(1, trimEnd - trimStart + 1);
+  return channels.map(ch => ch.slice(trimStart, trimStart + outLength));
+}
+
+export function applyMicroFadeChannels(channels, sampleRate = 22050, fadeInMs = 1, fadeOutMs = 4) {
+  // Fade-in stays shorter than the 2 ms trim pad so the attack of a hit/click is
+  // not attenuated; the longer fade-out removes the tail click.
+  if (!Array.isArray(channels) || !channels.length || !channels[0] || channels[0].length < 4) return channels;
+  const rate = Math.max(1000, finiteOr(sampleRate, 22050));
+  const maxFade = Math.floor(channels[0].length / 4);
+  const toSamples = ms => Math.min(maxFade, Math.max(1, Math.round((clamp(finiteOr(ms, 1), 0.1, 50) / 1000) * rate)));
+  const fadeIn = toSamples(fadeInMs);
+  const fadeOut = toSamples(fadeOutMs);
+  for (const channel of channels) {
+    const len = channel.length;
+    for (let i = 0; i < fadeIn; i++) channel[i] *= i / fadeIn;
+    for (let i = 0; i < fadeOut; i++) channel[len - 1 - i] *= i / fadeOut;
+  }
+  return channels;
+}
+
+export function normalizeChannels(channels, ceilingDb = 0) {
+  const ceiling = clamp(finiteOr(ceilingDb, 0), -6, 0);
+  const targetPeak = ceiling < 0 ? Math.pow(10, ceiling / 20) : 1;
   let peak = 0;
   for (const channel of channels || []) {
     for (let i = 0; i < channel.length; i++) peak = Math.max(peak, Math.abs(channel[i]));
   }
   if (peak <= 1e-6 || !Number.isFinite(peak)) return peak;
-  const scale = 1 / peak;
+  const scale = targetPeak / peak;
   for (const channel of channels) {
     for (let i = 0; i < channel.length; i++) channel[i] = clamp(channel[i] * scale, -1, 1);
   }
@@ -116,8 +167,11 @@ export function normalizeChannels(channels) {
 }
 
 export function processChannels(channels, params = {}, seed = 1) {
+  const working = params.trimSilence
+    ? trimSilenceChannels(channels, params.sampleRate)
+    : channels;
   const random = createSeededRandom(seed);
-  for (const channel of channels) {
+  for (const channel of working) {
     processDSP(
       channel,
       params.bitDepth,
@@ -128,8 +182,9 @@ export function processChannels(channels, params = {}, seed = 1) {
       random,
     );
   }
-  if (params.normalize) normalizeChannels(channels);
-  return channels;
+  if (params.trimSilence) applyMicroFadeChannels(working, params.sampleRate);
+  if (params.normalize) normalizeChannels(working, params.normalizeCeiling);
+  return working;
 }
 
 export function wavContainerDepth(effectBits) {

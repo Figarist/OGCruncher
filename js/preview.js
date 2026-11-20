@@ -12,6 +12,7 @@ import { state } from './state.js';
 import { log } from './utils.js';
 import { computeAudioMetrics, renderFilteredBuffer, processChannels } from './dsp.js';
 import { hashSeed } from './dsp-core.js';
+import { t } from './i18n.js';
 
 let _dom = {};
 let sessionId = 0;
@@ -112,11 +113,11 @@ function stopSource(source) {
 
 function resetPreviewUI() {
   _dom.btnPreview?.classList.remove('playing');
-  if (_dom.btnPreviewLbl) _dom.btnPreviewLbl.textContent = 'PREVIEW';
+  if (_dom.btnPreviewLbl) _dom.btnPreviewLbl.textContent = t('PREVIEW');
   if (_dom.previewIcon) _dom.previewIcon.textContent = '▶';
-  if (_dom.btnPreview) _dom.btnPreview.setAttribute('aria-label', 'Preview selected audio');
+  if (_dom.btnPreview) _dom.btnPreview.setAttribute('aria-label', t('Preview selected audio'));
   if (_dom.abContainer) _dom.abContainer.style.display = 'none';
-  if (_dom.abStatus) { _dom.abStatus.textContent = 'CRUNCHED (WET)'; _dom.abStatus.classList.remove('status--dry'); }
+  if (_dom.abStatus) { _dom.abStatus.textContent = t('CRUNCHED (WET)'); _dom.abStatus.classList.remove('status--dry'); }
   if (_dom.dropContent) _dom.dropContent.style.display = 'flex';
   if (_dom.visualizer) _dom.visualizer.style.display = 'none';
   if (_dom.metricsPanel) _dom.metricsPanel.style.display = 'none';
@@ -159,13 +160,13 @@ async function renderBuffers(decoded, params, file, isCurrent) {
 
   const wetChannels = Array.from({ length: filtered.numberOfChannels }, (_, index) =>
     new Float32Array(filtered.getChannelData(index)));
-  processChannels(wetChannels, params, hashSeed(`${file.name}:${file.size}`));
+  const processedWet = processChannels(wetChannels, { ...params, sampleRate: filtered.sampleRate }, hashSeed(`${file.name}:${file.size}`)) || wetChannels;
   return {
     dry: bufferFromChannels(
       Array.from({ length: dry.numberOfChannels }, (_, index) => new Float32Array(dry.getChannelData(index))),
       dry.sampleRate,
     ),
-    wet: bufferFromChannels(wetChannels, filtered.sampleRate),
+    wet: bufferFromChannels(processedWet, filtered.sampleRate),
   };
 }
 
@@ -177,12 +178,19 @@ function installSources(wetBuffer, dryBuffer, startOffset = 0, crossfade = false
   const oldDryGain = drySourceGain;
   const now = ctx.currentTime;
 
+  const loopEnabled = state.previewLoop !== false;
   wetSource = ctx.createBufferSource();
   drySource = ctx.createBufferSource();
   wetSource.buffer = wetBuffer;
   drySource.buffer = dryBuffer;
-  wetSource.loop = true;
-  drySource.loop = true;
+  wetSource.loop = loopEnabled;
+  drySource.loop = loopEnabled;
+  const currentWet = wetSource;
+  currentWet.onended = () => {
+    if (wetSource === currentWet && !currentWet.loop && _dom.btnPreview?.classList.contains('playing')) {
+      stopPreview();
+    }
+  };
   wetSourceGain = ctx.createGain();
   drySourceGain = ctx.createGain();
   // Source gains own only source replacement. Both new sources become fully
@@ -214,7 +222,7 @@ async function startPreview() {
   const file = files[0];
   const mySession = ++sessionId;
   _dom.btnPreview.disabled = true;
-  if (_dom.btnPreviewLbl) _dom.btnPreviewLbl.textContent = 'LOADING…';
+  if (_dom.btnPreviewLbl) _dom.btnPreviewLbl.textContent = t('LOADING…');
 
   try {
     const ctx = currentContext();
@@ -239,13 +247,13 @@ async function startPreview() {
     createBranchGraph();
     installSources(previewWet, previewDry);
     _dom.btnPreview.classList.add('playing');
-    _dom.btnPreviewLbl.textContent = 'STOP';
+    _dom.btnPreviewLbl.textContent = t('STOP');
     _dom.previewIcon.textContent = '■';
-    _dom.btnPreview.setAttribute('aria-label', 'Stop preview');
+    _dom.btnPreview.setAttribute('aria-label', t('Stop preview'));
     if (_dom.abContainer) _dom.abContainer.style.display = 'flex';
     if (_dom.dropContent) _dom.dropContent.style.display = 'none';
     if (_dom.visualizer) _dom.visualizer.style.display = 'block';
-    if (_dom.previewFileName) _dom.previewFileName.textContent = `Previewing: ${file.name}`;
+    if (_dom.previewFileName) _dom.previewFileName.textContent = t('Previewing: {name}', { name: file.name });
     updateABLabel();
     updateMetricsPanel();
     startVisualizer();
@@ -287,9 +295,9 @@ export function stopPreview() {
 
 function updateABLabel() {
   if (!_dom.abStatus) return;
-  _dom.abStatus.textContent = comparingOriginal ? 'ORIGINAL (DRY · OUTPUT SETTINGS)' : 'CRUNCHED (WET)';
+  _dom.abStatus.textContent = t(comparingOriginal ? 'ORIGINAL (DRY · OUTPUT SETTINGS)' : 'CRUNCHED (WET)');
   _dom.abStatus.classList.toggle('status--dry', comparingOriginal);
-  if (_dom.btnAB) _dom.btnAB.setAttribute('aria-label', comparingOriginal ? 'Compare crunched preview' : 'Compare original dry preview');
+  if (_dom.btnAB) _dom.btnAB.setAttribute('aria-label', t(comparingOriginal ? 'Compare crunched preview' : 'Compare original dry preview'));
 }
 
 export function toggleAB() {
@@ -460,4 +468,11 @@ export function setPreviewVolume(volume) {
   const value = clamp(volume, 0, 1);
   state.previewVolume = Number.isFinite(value) ? value : .8;
   if (monitorGain && previewCtx) monitorGain.gain.setTargetAtTime(state.previewVolume, previewCtx.currentTime, .02);
+}
+
+export function setPreviewLoop(enabled) {
+  const loop = !!enabled;
+  state.previewLoop = loop;
+  if (wetSource) wetSource.loop = loop;
+  if (drySource) drySource.loop = loop;
 }

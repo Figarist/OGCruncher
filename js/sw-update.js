@@ -5,6 +5,8 @@
 
 'use strict';
 
+import { t } from './i18n.js';
+
 export function createServiceWorkerUpdateController({
   window,
   navigator,
@@ -41,13 +43,13 @@ export function createServiceWorkerUpdateController({
     const audio = getAudioState();
     notice.hidden = false;
     if (audio.safeToReload) {
-      message.textContent = 'A new version is ready. Reload is safe now; no queued files or generated results were detected.';
+      message.textContent = t('A new version is ready. Reload is safe now; no queued files or generated results were detected.');
       activateButton.disabled = false;
-      activateButton.title = 'Activate the waiting update and reload the page.';
+      activateButton.title = t('Activate the waiting update and reload the page.');
     } else {
-      message.textContent = 'Update waiting. Finish or download your work, then clear the queue before activating; reload clears in-memory audio state.';
+      message.textContent = t('Update waiting. Finish or download your work, then clear the queue before activating; reload clears in-memory audio state.');
       activateButton.disabled = true;
-      activateButton.title = 'Reload is disabled while queued files, preview, processing, or results are present.';
+      activateButton.title = t('Reload is disabled while queued files, preview, processing, or results are present.');
     }
     return audio;
   }
@@ -73,14 +75,14 @@ export function createServiceWorkerUpdateController({
     }
     activationRequested = true;
     activateButton.disabled = true;
-    activateButton.textContent = 'UPDATING…';
-    message.textContent = 'Update activation requested. The page will reload after the new worker takes control.';
+    activateButton.textContent = t('UPDATING…');
+    message.textContent = t('Update activation requested. The page will reload after the new worker takes control.');
     log('Update activation accepted after confirming the queue, preview and results are clear.', 'sys');
     try {
       waitingWorker.postMessage({ type: 'SKIP_WAITING' });
     } catch (error) {
       activationRequested = false;
-      activateButton.textContent = 'ACTIVATE & RELOAD';
+      activateButton.textContent = t('ACTIVATE & RELOAD');
       log(`Update activation failed: ${error.message || String(error)}`, 'error');
       refresh();
     }

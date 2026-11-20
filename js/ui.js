@@ -8,7 +8,8 @@
 import { state, DEFAULTS, saveState, updateHash, parseHash, readSavedState, sanitizeParams, getStateSnapshot, pushHistory, undo, redo, pauseHistory, pausePersistence, setOnStateChange } from './state.js';
 import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
 import { initQueue, addFiles, clearQueue, cancelProcessing, startProcessing, loadDemoTrack, handleItems, updateSavingsEstimate } from './queue.js';
-import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, invalidatePreviewUpdates, setPreviewVolume } from './preview.js';
+import { t, hz } from './i18n.js';
+import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, invalidatePreviewUpdates, setPreviewVolume, setPreviewLoop } from './preview.js';
 
 const SITE_URL = window.location.origin + window.location.pathname;
 
@@ -39,6 +40,16 @@ const btnMarioToggle = $('toggle-mariomode');
 const btnDitherToggle = $('toggle-dither');
 const btnStereoToggle = $('toggle-stereo');
 const btnNormalizeToggle = $('toggle-normalize');
+const btnNormCeiling = $('btn-norm-ceiling');
+const normCeilingLabel = $('norm-ceiling-label');
+const btnTrimToggle = $('toggle-trim');
+const outTrim = $('out-trim');
+const btnFmtOgg = $('btn-fmt-ogg');
+const btnFmtWav = $('btn-fmt-wav');
+const btnFmtMp3 = $('btn-fmt-mp3');
+const btnKeepNames = $('btn-keep-names');
+const btnScratchMode = $('btn-scratch-mode');
+const btnPreviewLoop = $('btn-preview-loop');
 const btnCopyLink = $('btn-copy-link');
 const sliderBit = $('slider-bitdepth');
 const sliderSr = $('slider-samplerate');
@@ -146,7 +157,7 @@ function syncSampleRate(val) {
   state.activePreset = null;
   state.sampleRate = +val;
   sliderSr.value = val;
-  outSr.textContent = `${(+val).toLocaleString()} Hz`;
+  outSr.textContent = hz(+val);
   sliderSr.setAttribute('aria-valuenow', val);
   updateSliderTrack(sliderSr);
   updateSrButtons(val);
@@ -184,6 +195,7 @@ function setSimpleMode(enabled, { persist = true } = {}) {
     'group-dither',
     'group-normalize',
     'group-stereo',
+    'group-trim',
     'group-speed',
     'group-filters'
   ];
@@ -218,8 +230,8 @@ function syncSimpleQuality(val, { persist = true, requestPreview = true } = {}) 
     sliderSimpleQuality.setAttribute('aria-valuenow', state.simpleQuality);
     updateSliderTrack(sliderSimpleQuality);
   }
-  if (outSimpleQuality) outSimpleQuality.textContent = quality.label;
-  if (simpleQualityDesc) simpleQualityDesc.textContent = quality.desc;
+  if (outSimpleQuality) outSimpleQuality.textContent = t(quality.label);
+  if (simpleQualityDesc) simpleQualityDesc.textContent = t(quality.desc);
 
   // Keep hidden standard sliders in sync
   if (sliderBit) {
@@ -230,7 +242,7 @@ function syncSimpleQuality(val, { persist = true, requestPreview = true } = {}) 
   }
   if (sliderSr) {
     sliderSr.value = state.sampleRate;
-    outSr.textContent = `${state.sampleRate.toLocaleString()} Hz`;
+    outSr.textContent = hz(state.sampleRate);
     sliderSr.setAttribute('aria-valuenow', state.sampleRate);
     updateSliderTrack(sliderSr);
     updateSrButtons(state.sampleRate);
@@ -242,13 +254,24 @@ function syncSimpleQuality(val, { persist = true, requestPreview = true } = {}) 
   updateSavingsEstimate();
 }
 
+function formatGritLabel(val) {
+  const num = Number(val);
+  return !Number.isFinite(num) || num <= 1.0001 ? t('OFF') : num.toFixed(1);
+}
+
+function formatNoiseLabel(val) {
+  const num = Number(val);
+  if (!Number.isFinite(num) || num <= 0) return t('OFF');
+  return `${Math.round(20 * Math.log10(num))} dB`;
+}
+
 function syncGrit(val) {
   if (!_isDragging) pushHistory();
   state.activePreset = null;
   state.grit = +val;
   sliderGrit.value = val;
   sliderGrit.setAttribute('aria-valuenow', val);
-  outGrit.textContent = (+val).toFixed(1);
+  outGrit.textContent = formatGritLabel(val);
   updateSliderTrack(sliderGrit);
   saveState();
 
@@ -261,7 +284,7 @@ function syncNoise(val) {
   state.noise = +val;
   sliderNoise.value = val;
   sliderNoise.setAttribute('aria-valuenow', val);
-  outNoise.textContent = (+val).toFixed(3);
+  outNoise.textContent = formatNoiseLabel(val);
   updateSliderTrack(sliderNoise);
   saveState();
 
@@ -286,7 +309,7 @@ function syncHpf(val) {
   state.hpf = +val;
   sliderHpf.value = val;
   sliderHpf.setAttribute('aria-valuenow', val);
-  outHpf.textContent = val > 20 ? `${val} Hz` : '20 Hz';
+  outHpf.textContent = hz(val > 20 ? val : 20);
   updateSliderTrack(sliderHpf);
   saveState();
 
@@ -299,7 +322,7 @@ function syncLpf(val) {
   state.lpf = +val;
   sliderLpf.value = val;
   sliderLpf.setAttribute('aria-valuenow', val);
-  outLpf.textContent = val < 20000 ? `${val} Hz` : 'OFF';
+  outLpf.textContent = val < 20000 ? hz(val) : t('OFF');
   updateSliderTrack(sliderLpf);
   saveState();
 
@@ -330,28 +353,40 @@ function applyParamsToUI(p) {
 
   setSimpleMode(state.simpleMode, { persist: false });
   if (sliderBit) { sliderBit.value = state.bitDepth; outBit.textContent = state.bitDepth; sliderBit.setAttribute('aria-valuenow', state.bitDepth); updateSliderTrack(sliderBit); }
-  if (sliderSr) { sliderSr.value = state.sampleRate; outSr.textContent = `${state.sampleRate.toLocaleString()} Hz`; sliderSr.setAttribute('aria-valuenow', state.sampleRate); updateSliderTrack(sliderSr); updateSrButtons(state.sampleRate); }
-  if (sliderGrit) { sliderGrit.value = state.grit; sliderGrit.setAttribute('aria-valuenow', state.grit); outGrit.textContent = state.grit.toFixed(1); updateSliderTrack(sliderGrit); }
-  if (sliderNoise) { sliderNoise.value = state.noise; sliderNoise.setAttribute('aria-valuenow', state.noise); outNoise.textContent = state.noise.toFixed(3); updateSliderTrack(sliderNoise); }
+  if (sliderSr) { sliderSr.value = state.sampleRate; outSr.textContent = hz(state.sampleRate); sliderSr.setAttribute('aria-valuenow', state.sampleRate); updateSliderTrack(sliderSr); updateSrButtons(state.sampleRate); }
+  if (sliderGrit) { sliderGrit.value = state.grit; sliderGrit.setAttribute('aria-valuenow', state.grit); outGrit.textContent = formatGritLabel(state.grit); updateSliderTrack(sliderGrit); }
+  if (sliderNoise) { sliderNoise.value = state.noise; sliderNoise.setAttribute('aria-valuenow', state.noise); outNoise.textContent = formatNoiseLabel(state.noise); updateSliderTrack(sliderNoise); }
   if (sliderSpeed) { sliderSpeed.value = state.playbackRate; sliderSpeed.setAttribute('aria-valuenow', state.playbackRate); outSpeed.textContent = `${Math.round(state.playbackRate * 100)}%`; updateSliderTrack(sliderSpeed); }
-  if (sliderHpf) { sliderHpf.value = state.hpf; sliderHpf.setAttribute('aria-valuenow', state.hpf); outHpf.textContent = `${state.hpf} Hz`; updateSliderTrack(sliderHpf); }
-  if (sliderLpf) { sliderLpf.value = state.lpf; sliderLpf.setAttribute('aria-valuenow', state.lpf); outLpf.textContent = state.lpf >= 20000 ? 'OFF' : `${state.lpf} Hz`; updateSliderTrack(sliderLpf); }
+  if (sliderHpf) { sliderHpf.value = state.hpf; sliderHpf.setAttribute('aria-valuenow', state.hpf); outHpf.textContent = hz(state.hpf); updateSliderTrack(sliderHpf); }
+  if (sliderLpf) { sliderLpf.value = state.lpf; sliderLpf.setAttribute('aria-valuenow', state.lpf); outLpf.textContent = state.lpf >= 20000 ? t('OFF') : hz(state.lpf); updateSliderTrack(sliderLpf); }
   if (sliderBass) { sliderBass.value = state.bass; sliderBass.setAttribute('aria-valuenow', state.bass); outBass.textContent = state.bass > 0 ? `+${state.bass} dB` : '0 dB'; updateSliderTrack(sliderBass); }
 
   const switches = [
     [btnMarioToggle, state.crushMode, outMario],
     [btnDitherToggle, state.dither, outDither],
     [btnNormalizeToggle, state.normalize, outNormalize],
+    [btnTrimToggle, state.trimSilence, outTrim],
   ];
-  switches.forEach(([button, value, output]) => { if (button) { button.setAttribute('aria-checked', String(value)); button.classList.toggle('active', value); } if (output) output.textContent = value ? 'ON' : 'OFF'; });
+  switches.forEach(([button, value, output]) => { if (button) { button.setAttribute('aria-checked', String(value)); button.classList.toggle('active', value); } if (output) output.textContent = t(value ? 'ON' : 'OFF'); });
+  const ceilingDb = Number(state.normalizeCeiling) < 0 ? Number(state.normalizeCeiling) : 0;
+  if (btnNormCeiling) btnNormCeiling.textContent = `${ceilingDb} dB`;
+  if (normCeilingLabel) normCeilingLabel.textContent = t('{db} dBFS PEAK', { db: ceilingDb });
+  if (btnFmtOgg) { btnFmtOgg.classList.toggle('active', state.exportOgg !== false); btnFmtOgg.setAttribute('aria-pressed', String(state.exportOgg !== false)); }
+  if (btnFmtWav) { btnFmtWav.classList.toggle('active', state.exportWav !== false); btnFmtWav.setAttribute('aria-pressed', String(state.exportWav !== false)); }
+  if (btnFmtMp3) { btnFmtMp3.classList.toggle('active', state.exportMp3 !== false); btnFmtMp3.setAttribute('aria-pressed', String(state.exportMp3 !== false)); }
+  if (btnKeepNames) { btnKeepNames.classList.toggle('active', !!state.keepOriginalName); btnKeepNames.setAttribute('aria-pressed', String(!!state.keepOriginalName)); }
+  updateScratchButton();
   if (btnStereoToggle) { const forceMono = !state.stereo; btnStereoToggle.setAttribute('aria-checked', String(forceMono)); btnStereoToggle.classList.toggle('active', forceMono); }
-  if (outStereo) outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
+  if (outStereo) outStereo.textContent = t(state.stereo ? 'STEREO' : 'MONO');
   if (btnLiveUpdate) btnLiveUpdate.classList.toggle('active', state.liveUpdate);
-  const liveStatus = $('live-status'); if (liveStatus) liveStatus.textContent = state.liveUpdate ? 'ON' : 'OFF';
+  const liveStatus = $('live-status'); if (liveStatus) liveStatus.textContent = t(state.liveUpdate ? 'ON' : 'OFF');
+  if (btnPreviewLoop) { btnPreviewLoop.classList.toggle('active', state.previewLoop !== false); btnPreviewLoop.setAttribute('aria-pressed', String(state.previewLoop !== false)); }
+  const loopStatus = $('loop-status'); if (loopStatus) loopStatus.textContent = t(state.previewLoop !== false ? 'ON' : 'OFF');
+  setPreviewLoop(state.previewLoop !== false);
   if (sliderPreviewVolume) { sliderPreviewVolume.value = state.previewVolume; updateSliderTrack(sliderPreviewVolume); }
   if (outPreviewVolume) outPreviewVolume.textContent = `${Math.round(state.previewVolume * 100)}%`;
   setPreviewVolume(state.previewVolume);
-  if (btnDualView) { btnDualView.classList.toggle('active', state.dualView); btnDualView.textContent = `DUAL VIEW: ${state.dualView ? 'ON' : 'OFF'}`; }
+  if (btnDualView) { btnDualView.classList.toggle('active', state.dualView); btnDualView.textContent = t('DUAL VIEW: {state}', { state: t(state.dualView ? 'ON' : 'OFF') }); }
   if (state.simpleMode) syncSimpleQuality(state.simpleQuality, { persist: false, requestPreview: false });
   pauseHistory(false);
   updatePresetUI();
@@ -450,7 +485,23 @@ function updatePresetUI() {
   if (btnPresetAmiga) btnPresetAmiga.classList.toggle('active', matchAmiga);
   btnPresetUser.classList.toggle('active', matchUser);
   const effective = $('effective-settings');
-  if (effective) effective.textContent = `${state.simpleMode ? 'Simple' : 'Advanced'} · ${state.sampleRate.toLocaleString()} Hz · ${state.bitDepth}-bit effect · ${state.stereo ? 'stereo' : 'mono'} output · filters ${state.hpf > 20 || state.lpf < 20000 || state.bass > 0 ? 'on' : 'off'}`;
+  if (effective) effective.textContent = t('{mode} · {rate} Hz · {bits}-bit effect · {channels} output · filters {filters}', {
+    mode: t(state.simpleMode ? 'Simple' : 'Advanced'),
+    rate: state.sampleRate.toLocaleString(),
+    bits: state.bitDepth,
+    channels: t(state.stereo ? 'stereo' : 'mono'),
+    filters: t(state.hpf > 20 || state.lpf < 20000 || state.bass > 0 ? 'on' : 'off'),
+  });
+  const codecInfo = $('codec-info');
+  if (codecInfo) {
+    const parts = [];
+    const wavBits = Math.round(state.bitDepth) <= 8 ? '8-bit' : '16-bit';
+    const mp3Kbps = state.sampleRate <= 12000 ? '64 kbps' : '128 kbps';
+    if (state.exportOgg !== false) parts.push('OGG q0 (~64 kbps)');
+    if (state.exportWav !== false) parts.push(`WAV ${wavBits} PCM`);
+    if (state.exportMp3 !== false) parts.push(`MP3 ${mp3Kbps}`);
+    codecInfo.textContent = t('Codecs: {list}', { list: `${parts.join(' · ')}${state.keepOriginalName ? ` · ${t('Original names')}` : ''}` });
+  }
   updateSavingsEstimate();
 }
 
@@ -693,7 +744,7 @@ btnMarioToggle.addEventListener('click', () => {
   saveState();
 
   if (state.liveUpdate) requestPreviewUpdate();
-  outMario.textContent = state.crushMode ? 'ON' : 'OFF';
+  outMario.textContent = t(state.crushMode ? 'ON' : 'OFF');
   log(`Crush mode: ${state.crushMode ? 'ENABLED' : 'DISABLED'}`, 'sys');
 });
 
@@ -707,7 +758,7 @@ if (btnDitherToggle) {
     saveState();
 
     if (state.liveUpdate) requestPreviewUpdate();
-    if (outDither) outDither.textContent = state.dither ? 'ON' : 'OFF';
+    if (outDither) outDither.textContent = t(state.dither ? 'ON' : 'OFF');
     log(`Dither: ${state.dither ? 'ENABLED' : 'DISABLED'}`, 'sys');
   });
 }
@@ -721,7 +772,7 @@ btnStereoToggle.addEventListener('click', () => {
   btnStereoToggle.classList.toggle('active', isForceMono);
   saveState();
   if (state.liveUpdate) requestPreviewUpdate();
-  outStereo.textContent = state.stereo ? 'STEREO' : 'MONO';
+  outStereo.textContent = t(state.stereo ? 'STEREO' : 'MONO');
   log(`Output mode: ${state.stereo ? 'STEREO' : 'MONO'}`, 'sys');
   updateSavingsEstimate();
 });
@@ -735,15 +786,97 @@ btnNormalizeToggle.addEventListener('click', () => {
   saveState();
 
   if (state.liveUpdate) requestPreviewUpdate();
-  outNormalize.textContent = state.normalize ? 'ON' : 'OFF';
+  outNormalize.textContent = t(state.normalize ? 'ON' : 'OFF');
   log(`Normalization: ${state.normalize ? 'ENABLED' : 'DISABLED'}`, 'sys');
+});
+
+btnNormCeiling?.addEventListener('click', () => {
+  pushHistory();
+  state.normalizeCeiling = Number(state.normalizeCeiling) < 0 ? 0 : -1;
+  btnNormCeiling.textContent = `${state.normalizeCeiling} dB`;
+  if (normCeilingLabel) normCeilingLabel.textContent = t('{db} dBFS PEAK', { db: state.normalizeCeiling });
+  saveState();
+  if (state.liveUpdate && state.normalize) requestPreviewUpdate();
+  log(`Normalization ceiling: ${state.normalizeCeiling} dBFS`, 'sys');
+});
+
+btnTrimToggle?.addEventListener('click', () => {
+  pushHistory();
+  state.trimSilence = !state.trimSilence;
+  btnTrimToggle.setAttribute('aria-checked', String(state.trimSilence));
+  btnTrimToggle.classList.toggle('active', state.trimSilence);
+  if (outTrim) outTrim.textContent = t(state.trimSilence ? 'ON' : 'OFF');
+  saveState();
+  if (state.liveUpdate) requestPreviewUpdate();
+  log(`Auto-trim silence: ${state.trimSilence ? 'ENABLED (-48 dB + 4ms fade)' : 'DISABLED'}`, 'sys');
+});
+
+function bindFormatToggle(button, key, label) {
+  button?.addEventListener('click', () => {
+    const next = !(state[key] !== false);
+    const remaining = ['exportOgg', 'exportWav', 'exportMp3'].filter(k => (k === key ? next : state[k] !== false));
+    if (!remaining.length) {
+      showToast(t('Keep at least one export format enabled.'), 'info');
+      return;
+    }
+    pushHistory();
+    state[key] = next;
+    button.classList.toggle('active', next);
+    button.setAttribute('aria-pressed', String(next));
+    saveState();
+    updateSavingsEstimate();
+    updateScratchButton();
+    log(`Export ${label}: ${next ? 'ON' : 'OFF'}`, 'sys');
+  });
+}
+bindFormatToggle(btnFmtOgg, 'exportOgg', 'OGG');
+bindFormatToggle(btnFmtWav, 'exportWav', 'WAV');
+bindFormatToggle(btnFmtMp3, 'exportMp3', 'MP3');
+
+/** Scratch 3.0 imports WAV and MP3 only; WAV-only is the clearest single file for kids. */
+function isScratchExport() {
+  return state.exportWav !== false && state.exportOgg === false && state.exportMp3 === false;
+}
+
+function updateScratchButton() {
+  if (!btnScratchMode) return;
+  const active = isScratchExport();
+  btnScratchMode.classList.toggle('active', active);
+  btnScratchMode.setAttribute('aria-pressed', String(active));
+}
+
+btnScratchMode?.addEventListener('click', () => {
+  if (isScratchExport()) return;
+  pushHistory();
+  state.exportOgg = false;
+  state.exportWav = true;
+  state.exportMp3 = false;
+  [[btnFmtOgg, false], [btnFmtWav, true], [btnFmtMp3, false]].forEach(([button, on]) => {
+    if (!button) return;
+    button.classList.toggle('active', on);
+    button.setAttribute('aria-pressed', String(on));
+  });
+  saveState();
+  updateSavingsEstimate();
+  updateScratchButton();
+  showToast(t('🧩 Scratch: WAV only. Keep each sound under 10 MB.'), 'info');
+  log('Export preset: Scratch 3.0 (WAV only, 10 MB per sound)', 'sys');
+});
+
+btnKeepNames?.addEventListener('click', () => {
+  pushHistory();
+  state.keepOriginalName = !state.keepOriginalName;
+  btnKeepNames.classList.toggle('active', state.keepOriginalName);
+  btnKeepNames.setAttribute('aria-pressed', String(state.keepOriginalName));
+  saveState();
+  log(`Keep original filenames: ${state.keepOriginalName ? 'ON' : 'OFF'}`, 'sys');
 });
 
 btnDualView.addEventListener('click', () => {
   pushHistory();
   state.dualView = !state.dualView;
   btnDualView.classList.toggle('active', state.dualView);
-  btnDualView.textContent = `DUAL VIEW: ${state.dualView ? 'ON' : 'OFF'}`;
+  btnDualView.textContent = t('DUAL VIEW: {state}', { state: t(state.dualView ? 'ON' : 'OFF') });
   saveState();
   log(`Dual View mode: ${state.dualView ? 'ENABLED' : 'DISABLED'}`, 'sys');
 });
@@ -752,9 +885,9 @@ btnCopyLink.addEventListener('click', async () => {
   try {
     const shareUrl = SITE_URL + window.location.hash;
     await navigator.clipboard.writeText(shareUrl);
-    showToast('🔗 Link copied to clipboard', 'ok');
+    showToast(t('🔗 Link copied to clipboard'), 'ok');
   } catch (err) {
-    showToast('⚠ Copy manually from address bar', 'error');
+    showToast(t('⚠ Copy manually from address bar'), 'error');
   }
 });
 
@@ -776,7 +909,7 @@ btnPresetAuthor.addEventListener('click', () => {
     normalize: true
   });
   log('preset: LO-Q (author default)', 'accent');
-  showToast('◉ author preset loaded', 'info');
+  showToast(t('◉ author preset loaded'), 'info');
 });
 
 if (btnPresetNes) {
@@ -798,7 +931,7 @@ if (btnPresetNes) {
       normalize: true
     });
     log('preset: NES 8-BIT (retro gaming classic)', 'accent');
-    showToast('🎮 NES 8-bit preset loaded', 'info');
+    showToast(t('🎮 NES 8-bit preset loaded'), 'info');
   });
 }
 
@@ -821,7 +954,7 @@ if (btnPresetAmiga) {
       normalize: true
     });
     log('preset: AMIGA 500 (vintage sampler)', 'accent');
-    showToast('💾 Amiga 500 preset loaded', 'info');
+    showToast(t('💾 Amiga 500 preset loaded'), 'info');
   });
 }
 
@@ -834,9 +967,9 @@ btnPresetUser.addEventListener('click', () => {
     state.activePreset = 'user';
     applyParamsToUI(p);
     log('preset: MY PRESET (user custom)', 'accent');
-    showToast('👤 custom preset loaded', 'info');
+    showToast(t('👤 custom preset loaded'), 'info');
   } catch (_) {
-    showToast('❌ Failed to load custom preset', 'error');
+    showToast(t('❌ Failed to load custom preset'), 'error');
   }
 });
 
@@ -863,14 +996,15 @@ btnSaveCustom.addEventListener('click', () => {
   updatePresetUI();
   saveState();
   log('custom preset saved to localstorage', 'ok');
-  showToast('💾 custom preset saved', 'ok');
+  showToast(t('💾 custom preset saved'), 'ok');
 });
 
 function setControlsEnabled(enabled) {
   const inputs = [
     sliderBit, sliderSr, sliderGrit, sliderNoise, sliderSpeed,
     sliderHpf, sliderLpf, sliderBass, sliderSimpleQuality,
-    btnMarioToggle, btnDitherToggle, btnStereoToggle, btnNormalizeToggle,
+    btnMarioToggle, btnDitherToggle, btnStereoToggle, btnNormalizeToggle, btnNormCeiling, btnTrimToggle,
+    btnFmtOgg, btnFmtWav, btnFmtMp3, btnScratchMode, btnKeepNames, btnPreviewLoop,
     btnModeSimple, btnModeAdvanced,
     btnLiveUpdate, btnDualView, btnPresetAuthor, btnPresetNes, btnPresetAmiga, btnPresetUser,
     btnSaveCustom, btnClearQueue, btnLoadDemo, fileInput, sliderPreviewVolume
@@ -927,11 +1061,23 @@ btnLiveUpdate.addEventListener('click', () => {
   state.liveUpdate = !state.liveUpdate;
   btnLiveUpdate.classList.toggle('active', state.liveUpdate);
   const statusEl = $('live-status');
-  if (statusEl) statusEl.textContent = state.liveUpdate ? 'ON' : 'OFF';
+  if (statusEl) statusEl.textContent = t(state.liveUpdate ? 'ON' : 'OFF');
   log(`live update: ${state.liveUpdate ? 'ON' : 'OFF'}`, 'sys');
   saveState();
   if (state.liveUpdate) requestPreviewUpdate();
   else invalidatePreviewUpdates();
+});
+
+btnPreviewLoop?.addEventListener('click', () => {
+  // Listening preference only: not an undo step and not part of share links.
+  const next = !(state.previewLoop !== false);
+  setPreviewLoop(next);
+  btnPreviewLoop.classList.toggle('active', next);
+  btnPreviewLoop.setAttribute('aria-pressed', String(next));
+  const statusEl = $('loop-status');
+  if (statusEl) statusEl.textContent = t(next ? 'ON' : 'OFF');
+  log(`preview loop: ${next ? 'ON' : 'OFF'}`, 'sys');
+  saveState();
 });
 
 btnLoadDemo.addEventListener('click', (e) => {
@@ -969,14 +1115,14 @@ window.addEventListener('keydown', (e) => {
     if (inTextInput || state.processing) return;
     e.preventDefault();
     const ok = undo(applyParamsToUI);
-    if (ok) showToast('↩ undo', 'sys');
+    if (ok) showToast(t('↩ undo'), 'sys');
     return;
   }
   if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey))) {
     if (inTextInput || state.processing) return;
     e.preventDefault();
     const ok = redo(applyParamsToUI);
-    if (ok) showToast('↪ redo', 'sys');
+    if (ok) showToast(t('↪ redo'), 'sys');
     return;
   }
 
@@ -997,6 +1143,8 @@ window.addEventListener('keydown', (e) => {
     if (abContainer.style.display !== 'none') btnAB.click();
   } else if (e.code === 'KeyN') {
     btnLiveUpdate.click();
+  } else if (e.code === 'KeyL') {
+    if (abContainer.style.display !== 'none') btnPreviewLoop?.click();
   }
 });
 
@@ -1097,11 +1245,11 @@ window.addEventListener('keydown', (e) => {
     _installPrompt = e;
 
     if (badgePwa) {
-      badgePwa.textContent = '⬇ INSTALL APP';
+      badgePwa.textContent = t('⬇ INSTALL APP');
       badgePwa.classList.remove('badge--green');
       badgePwa.classList.add('badge--install', 'badge--pulse');
       badgePwa.style.cursor = 'pointer';
-      badgePwa.title = 'Install OGCruncher as a standalone app';
+      badgePwa.title = t('Install OGCruncher as a standalone app');
       badgePwa.setAttribute('role', 'button');
       badgePwa.setAttribute('tabindex', '0');
 
@@ -1112,7 +1260,7 @@ window.addEventListener('keydown', (e) => {
         _installPrompt = null;
 
         if (outcome === 'accepted') {
-          badgePwa.textContent = 'PWA READY';
+          badgePwa.textContent = t('PWA READY');
           badgePwa.classList.add('badge--green');
           badgePwa.classList.remove('badge--install', 'badge--pulse');
           badgePwa.style.cursor = '';
@@ -1121,7 +1269,7 @@ window.addEventListener('keydown', (e) => {
           badgePwa.removeEventListener('click', doInstall);
           badgePwa.removeEventListener('keydown', onKeydown);
           log('OGCruncher installed as standalone app.', 'ok');
-          showToast('✅ App installed!', 'ok');
+          showToast(t('✅ App installed!'), 'ok');
         } else {
           log('Install dismissed.', 'sys');
         }
@@ -1138,7 +1286,7 @@ window.addEventListener('keydown', (e) => {
   window.addEventListener('appinstalled', () => {
     _installPrompt = null;
     if (badgePwa) {
-      badgePwa.textContent = 'PWA READY';
+      badgePwa.textContent = t('PWA READY');
       badgePwa.classList.add('badge--green');
       badgePwa.classList.remove('badge--install', 'badge--pulse');
       badgePwa.style.cursor = '';
@@ -1149,6 +1297,6 @@ window.addEventListener('keydown', (e) => {
   updatePresetUI();
   pauseHistory(false);
   pushHistory(); 
-  log('ready. drop files or click browse.', 'ok');
-  setBadge('IDLE', 'badge--amber');
+  log(t('ready. drop files or click browse.'), 'ok');
+  setBadge(t('IDLE'), 'badge--amber');
 })();

@@ -18,6 +18,13 @@ export const DEFAULTS = Object.freeze({
   bass: 0,
   liveUpdate: true,
   normalize: true,
+  normalizeCeiling: -1,
+  trimSilence: false,
+  previewLoop: true,
+  exportOgg: true,
+  exportWav: true,
+  exportMp3: true,
+  keepOriginalName: false,
   dualView: false,
   previewVolume: 0.8,
   activePreset: 'author',
@@ -34,12 +41,14 @@ const NUMBER_RULES = {
   hpf: [20, 1000, true],
   lpf: [500, 20000, true],
   bass: [0, 15, false],
+  normalizeCeiling: [-6, 0, false],
   previewVolume: [0, 1, false],
   simpleQuality: [0, 3, true],
 };
 
 const BOOLEAN_KEYS = new Set([
-  'crushMode', 'dither', 'stereo', 'liveUpdate', 'normalize', 'dualView', 'simpleMode'
+  'crushMode', 'dither', 'stereo', 'liveUpdate', 'normalize', 'trimSilence', 'previewLoop',
+  'exportOgg', 'exportWav', 'exportMp3', 'keepOriginalName', 'dualView', 'simpleMode'
 ]);
 const ENUM_KEYS = new Set(['activePreset']);
 const PRESETS = new Set(['author', 'nes', 'amiga', 'user']);
@@ -103,6 +112,9 @@ export function sanitizeParams(input, { includeUnknown = false } = {}) {
     else if (typeof value === 'string' && PRESETS.has(value)) output[key] = value;
   });
 
+  if (output.exportOgg === false && output.exportWav === false && output.exportMp3 === false) {
+    output.exportWav = true;
+  }
   if (includeUnknown && typeof input.ts === 'number' && Number.isFinite(input.ts)) output.ts = input.ts;
   return output;
 }
@@ -127,6 +139,15 @@ function persistentSnapshot() {
 
 export function getStateSnapshot() {
   return { ...persistentSnapshot() };
+}
+
+// Listening preferences are persisted, but they are not processing settings:
+// undo/redo must not flip them back.
+const HISTORY_EXCLUDED_KEYS = ['previewLoop', 'previewVolume'];
+function historySnapshot() {
+  const snapshot = getStateSnapshot();
+  HISTORY_EXCLUDED_KEYS.forEach(key => delete snapshot[key]);
+  return snapshot;
 }
 
 export function saveState() {
@@ -165,6 +186,12 @@ export function updateHash() {
     setHashParam(params, 'l', state.lpf);
     setHashParam(params, 'bs', state.bass);
     setHashParam(params, 'norm', state.normalize);
+    setHashParam(params, 'nc', state.normalizeCeiling);
+    setHashParam(params, 'ts', state.trimSilence);
+    setHashParam(params, 'fo', state.exportOgg);
+    setHashParam(params, 'fw', state.exportWav);
+    setHashParam(params, 'fm', state.exportMp3);
+    setHashParam(params, 'kn', state.keepOriginalName);
     setHashParam(params, 'dv', state.dualView);
     setHashParam(params, 'sp', state.playbackRate);
     setHashParam(params, 'lu', state.liveUpdate);
@@ -204,6 +231,7 @@ export function parseHash(applyParamsCallback) {
       ...parseNumber(params, 'h', 'hpf'),
       ...parseNumber(params, 'l', 'lpf'),
       ...parseNumber(params, 'bs', 'bass'),
+      ...parseNumber(params, 'nc', 'normalizeCeiling'),
       ...parseNumber(params, 'sp', 'playbackRate'),
       ...parseNumber(params, 'v', 'previewVolume'),
       ...parseNumber(params, 'q', 'simpleQuality'),
@@ -211,6 +239,11 @@ export function parseHash(applyParamsCallback) {
       ...parseFlag(params, 'di', 'dither'),
       ...parseFlag(params, 's', 'stereo'),
       ...parseFlag(params, 'norm', 'normalize'),
+      ...parseFlag(params, 'ts', 'trimSilence'),
+      ...parseFlag(params, 'fo', 'exportOgg'),
+      ...parseFlag(params, 'fw', 'exportWav'),
+      ...parseFlag(params, 'fm', 'exportMp3'),
+      ...parseFlag(params, 'kn', 'keepOriginalName'),
       ...parseFlag(params, 'dv', 'dualView'),
       ...parseFlag(params, 'lu', 'liveUpdate'),
       ...parseFlag(params, 'm', 'simpleMode'),
@@ -236,7 +269,7 @@ export function pauseHistory(paused) {
 
 export function pushHistory() {
   if (historyPaused) return;
-  const snapshot = getStateSnapshot();
+  const snapshot = historySnapshot();
   if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
   if (history.length && JSON.stringify(history[historyIndex]) === JSON.stringify(snapshot)) return;
   history.push(snapshot);
@@ -248,7 +281,7 @@ export function pushHistory() {
 }
 
 export function undo(applyParamsCallback) {
-  const current = getStateSnapshot();
+  const current = historySnapshot();
   if (historyIndex === history.length - 1 && history.length &&
       JSON.stringify(history[historyIndex]) !== JSON.stringify(current)) {
     history.push(current);

@@ -1,6 +1,6 @@
 # OGCruncher architecture and design contract
 
-Updated 2026-11-13. The baseline audit was recorded at
+Updated 2026-11-20. The baseline audit was recorded at
 `fc0209cd27a3ffa7562955bac22cf272eb740f39`.
 
 ## Module ownership
@@ -17,13 +17,17 @@ Updated 2026-11-13. The baseline audit was recorded at
 | `js/preview.js` | Offline parity preview graph, A/B, spectrum and measured metrics |
 | `js/sw-update.js` | State-aware Service Worker update banner controller |
 | `js/utils.js` | Logging, badges, toasts and formatting |
+| `js/i18n.js` | `t()` runtime strings for localized pages (English source strings are keys), plural/Hz helpers |
+| `scripts/build-locales.cjs` + `scripts/locales/uk.cjs` | Generate the committed `uk/index.html` from `index.html`; `--check` fails on drift |
 
 ## Current audio paths
 
 Export: file -> decode -> OfflineAudioContext speed/resampling/channel mix ->
-HPF/LPF/bass -> worker-compatible per-channel DSP with finite-sample sanitization and
-linked normalization -> OGG, WAV and MP3 (with Lanczos-3 resampling for unsupported MP3
-sample rates). Preview uses the same offline render path for the selected output rate,
+HPF/LPF/bass -> optional linked silence trim (-48 dBFS, 2 ms pad) -> worker-compatible
+per-channel DSP with finite-sample sanitization -> optional micro-fades (1 ms in, 4 ms out)
+-> linked normalization to the -1 or 0 dBFS ceiling -> the selected OGG, WAV and/or MP3
+encoders (with Lanczos-3 resampling for unsupported MP3 sample rates). `processChannels`
+returns the (possibly shorter) channel set; callers must use the return value. Preview uses the same offline render path for the selected output rate,
 speed, channel mode, filters and DSP, then routes dry/wet buffers through a monitor
 crossfade. Source replacement and A/B branch selection are separate gain concerns:
 both source buffers remain available, branch gains select the monitor with a short
@@ -40,13 +44,27 @@ rendering, copies and encoders allocate memory.
 
 WAV stores 8-bit unsigned PCM for effect depths 1–8 and 16-bit signed PCM for 9–16.
 Effect depth is not storage depth. MP3 requests 128 kbps (LAME MPEG-2.5 clamps low rates
-`<= 12000 Hz` to `~64 kbps`, reflected in queue estimates); OGG uses quality 0. All
-three codecs are currently attempted per file.
+`<= 12000 Hz` to `~64 kbps`, reflected in queue estimates and the codec line); OGG uses
+quality 0. Only the selected formats are encoded; an empty selection is impossible in the
+UI, rejected by `sanitizeParams`, and falls back to WAV in the queue and the worker. With
+KEEP NAMES the output stem is the input stem; collisions still get `-2`, `-3`.
 
 State precedence is validated defaults < saved state < explicit URL values. Hash parsing
 is side-effect free; startup synchronizes once, then persists. Undo/redo restores every
 field without applying Simple presets over Advanced values, and mode snapshots include
-speed. Each batch freezes one validated snapshot before any async work.
+speed. Each batch freezes one validated snapshot before any async work. `previewLoop` and
+`previewVolume` are persisted listening preferences: they are not written to share links and
+are excluded from undo/redo snapshots.
+
+## Localization
+
+English is `/OGCruncher/` (`index.html`), Ukrainian is `/OGCruncher/uk/` (generated
+`uk/index.html`). Both pages carry reciprocal `hreflang` (`en`, `uk`, `x-default`), their own
+canonical/`og:url`, and the shared `#person` / `#website` JSON-LD entities; the Ukrainian
+graph has its own `#app`, `#breadcrumb` and `#faq` ids under `/uk/`. The sitemap lists both
+URLs with `xhtml:link` alternates. Vite builds both as inputs; the Workbox navigation
+fallback (`index.html`) is denylisted for `/uk/` so the service worker never answers a
+Ukrainian navigation with the English page. `verify-build.cjs` asserts all of this.
 
 ## Figarist visual contract
 

@@ -6,13 +6,24 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-function loadModule(file, globals = {}) {
+let i18nDefaults = null;
+function englishI18n() {
+  // Modules import t()/plural()/hz() from js/i18n.js; imports are stripped here, so
+  // inject the real module (English, because the harness has no document).
+  if (!i18nDefaults) {
+    const ctx = loadModule('js/i18n.js', {}, false);
+    i18nDefaults = { t: ctx.t, plural: ctx.plural, hz: ctx.hz, formatNumber: ctx.formatNumber };
+  }
+  return i18nDefaults;
+}
+
+function loadModule(file, globals = {}, withI18n = true) {
   const source = fs.readFileSync(path.join(root, file), 'utf8')
     .replace(/^import .*;\r?$/mg, '')
     .replace(/import\.meta\.url/g, "'https://example.test/assets/app.js'")
     .replace(/import\.meta\.env\.BASE_URL/g, "''")
     .replace(/export /g, '');
-  const context = vm.createContext({ console, URL, URLSearchParams, setTimeout, clearTimeout, ...globals });
+  const context = vm.createContext({ console, URL, URLSearchParams, setTimeout, clearTimeout, ...(withI18n ? englishI18n() : {}), ...globals });
   vm.runInContext(source, context, { filename: file });
   return context;
 }
@@ -355,6 +366,58 @@ async function testWorkerParityAndPartialFailures() {
   const mp3Message = await runWorker(mp3Failure, [Float32Array.from([0, .2, -.2])], { bitDepth: 8, crushMode: false, dither: false, grit: 1, noise: 0, normalize: false });
   assert.ok(mp3Message.formats.wav?.byteLength > 0 && mp3Message.formats.ogg?.byteLength > 0, 'WAV/OGG survive forced MP3 failure');
   assert.equal(mp3Message.errors.map(error => error.format).join(','), 'mp3', 'forced MP3 failure is reported per format');
+}
+
+async function testWorkerTrimCeilingAndFormatParity() {
+  const core = loadModule('js/dsp-core.js', { Math });
+  const worker = createWorkerContext();
+  const makePadded = (lead, body, tail, amp) => {
+    const out = new Float32Array(lead + body + tail);
+    for (let i = 0; i < body; i++) out[lead + i] = amp * Math.sin(i / 3);
+    return out;
+  };
+  const cases = [
+    { name: 'trim + -1 dB ceiling', params: { bitDepth: 16, crushMode: false, dither: false, grit: 1, noise: 0, normalize: true, normalizeCeiling: -1, trimSilence: true } },
+    { name: 'trim + creative', params: { bitDepth: 8, crushMode: true, dither: true, grit: 2, noise: 0.004, normalize: true, normalizeCeiling: 0, trimSilence: true } },
+    { name: 'no trim + -1 dB', params: { bitDepth: 12, crushMode: false, dither: true, grit: 1.4, noise: 0, normalize: true, normalizeCeiling: -1, trimSilence: false } },
+  ];
+  for (const sampleRate of [8000, 22050, 48000]) {
+    for (const testCase of cases) {
+      const input = [makePadded(400, 900, 300, 0.5), makePadded(400, 900, 300, 0.1)];
+      const label = `${testCase.name} ${sampleRate}Hz`;
+      const expected = core.processChannels(input.map(channel => channel.slice()), { ...testCase.params, sampleRate }, 12345);
+      const message = await runWorker(worker, input.map(channel => channel.slice()), testCase.params, sampleRate);
+      assert.equal(message.type, 'done', `worker done: ${label}`);
+      const expectedWav = new Uint8Array(core.encodeWAV(expected, sampleRate, testCase.params.bitDepth));
+      assertArrayEqual(new Uint8Array(message.formats.wav), expectedWav, `worker/core WAV parity: ${label}`);
+      if (testCase.params.trimSilence) {
+        assert.ok(expected[0].length < input[0].length, `trim shortens padded input: ${label}`);
+      }
+    }
+  }
+
+  // Fade-in must stay inside the trim pad so a hard attack keeps its first peak.
+  const sampleRate = 48000;
+  const hit = new Float32Array(4000);
+  for (let i = 1000; i < 3000; i++) hit[i] = 0.9 * Math.exp(-(i - 1000) / 400) * (i % 2 ? 1 : -1);
+  const trimmedHit = core.processChannels([hit.slice()], {
+    sampleRate, bitDepth: 16, crushMode: false, dither: false, grit: 1, noise: 0, normalize: false, trimSilence: true,
+  }, 1)[0];
+  const padSamples = Math.round(0.002 * sampleRate);
+  assert.ok(Math.abs(trimmedHit[padSamples]) > 0.85, `attack survives micro-fade (got ${trimmedHit[padSamples]})`);
+  assert.equal(trimmedHit[0], 0, 'fade-in still starts from silence');
+
+  // Disabled formats are skipped in the worker, and an empty selection falls back to WAV.
+  const wavOnly = await runWorker(worker, [Float32Array.from({ length: 64 }, (_, i) => Math.sin(i / 4) * .3)], {
+    bitDepth: 16, crushMode: false, dither: false, grit: 1, noise: 0, normalize: false,
+    exportFormats: { ogg: false, wav: true, mp3: false },
+  });
+  assert.deepEqual(Object.keys(wavOnly.formats).sort(), ['wav'], 'WAV-only export encodes only WAV');
+  const noneSelected = await runWorker(worker, [Float32Array.from({ length: 64 }, (_, i) => Math.sin(i / 4) * .3)], {
+    bitDepth: 16, crushMode: false, dither: false, grit: 1, noise: 0, normalize: false,
+    exportFormats: { ogg: false, wav: false, mp3: false },
+  });
+  assert.deepEqual(Object.keys(noneSelected.formats).sort(), ['wav'], 'empty format selection falls back to WAV');
 }
 
 async function testMetadataStatesAndCleanup() {
@@ -965,6 +1028,7 @@ async function main() {
   testABSignalPath();
   await testLatestPreviewUpdateWins();
   await testWorkerParityAndPartialFailures();
+  await testWorkerTrimCeilingAndFormatParity();
   await testMetadataStatesAndCleanup();
   await testOutputFilenameContract();
   testQueueIdentityAndUniqueOutputs();

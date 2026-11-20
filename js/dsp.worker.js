@@ -117,13 +117,59 @@ function processDSP(buf, bitDepth = 8, crushMode = true, dither = true,
   return clipped;
 }
 
-function normalizeChannels(channels) {
+function trimSilenceChannels(channels, sampleRate = 22050, thresholdDb = -48, padMs = 2) {
+  if (!Array.isArray(channels) || !channels.length || !channels[0] || !channels[0].length) return channels;
+  const length = channels[0].length;
+  const threshold = Math.pow(10, clamp(finiteOr(thresholdDb, -48), -96, -6) / 20);
+  let start = length;
+  let end = -1;
+  for (let ch = 0; ch < channels.length; ch++) {
+    const data = channels[ch];
+    if (!data) continue;
+    for (let i = 0; i < data.length; i++) {
+      const value = Math.abs(finiteSample(data[i]));
+      if (value >= threshold) {
+        if (i < start) start = i;
+        if (i > end) end = i;
+      }
+    }
+  }
+  if (end < start) return channels;
+  const rate = Math.max(1000, finiteOr(sampleRate, 22050));
+  const padSamples = Math.round((clamp(finiteOr(padMs, 2), 0, 50) / 1000) * rate);
+  const trimStart = Math.max(0, start - padSamples);
+  const trimEnd = Math.min(length - 1, end + padSamples);
+  if (trimStart === 0 && trimEnd === length - 1) return channels;
+  const outLength = Math.max(1, trimEnd - trimStart + 1);
+  return channels.map(ch => ch.slice(trimStart, trimStart + outLength));
+}
+
+function applyMicroFadeChannels(channels, sampleRate = 22050, fadeInMs = 1, fadeOutMs = 4) {
+  // Fade-in stays shorter than the 2 ms trim pad so the attack of a hit/click is
+  // not attenuated; the longer fade-out removes the tail click.
+  if (!Array.isArray(channels) || !channels.length || !channels[0] || channels[0].length < 4) return channels;
+  const rate = Math.max(1000, finiteOr(sampleRate, 22050));
+  const maxFade = Math.floor(channels[0].length / 4);
+  const toSamples = ms => Math.min(maxFade, Math.max(1, Math.round((clamp(finiteOr(ms, 1), 0.1, 50) / 1000) * rate)));
+  const fadeIn = toSamples(fadeInMs);
+  const fadeOut = toSamples(fadeOutMs);
+  for (const channel of channels) {
+    const len = channel.length;
+    for (let i = 0; i < fadeIn; i++) channel[i] *= i / fadeIn;
+    for (let i = 0; i < fadeOut; i++) channel[len - 1 - i] *= i / fadeOut;
+  }
+  return channels;
+}
+
+function normalizeChannels(channels, ceilingDb = 0) {
+  const ceiling = clamp(finiteOr(ceilingDb, 0), -6, 0);
+  const targetPeak = ceiling < 0 ? Math.pow(10, ceiling / 20) : 1;
   let peak = 0;
   for (const channel of channels) {
     for (let i = 0; i < channel.length; i++) peak = Math.max(peak, Math.abs(channel[i]));
   }
   if (peak <= 1e-6 || !Number.isFinite(peak)) return;
-  const scale = 1 / peak;
+  const scale = targetPeak / peak;
   for (const channel of channels) {
     for (let i = 0; i < channel.length; i++) channel[i] = clamp(channel[i] * scale, -1, 1);
   }
@@ -276,18 +322,34 @@ self.onmessage = async function(event) {
       grit: msg.grit,
       noise: msg.noise,
       normalize: msg.normalize,
+      normalizeCeiling: msg.normalizeCeiling,
+      trimSilence: !!msg.trimSilence,
     };
+    const requestedFormats = msg.exportFormats && typeof msg.exportFormats === 'object'
+      ? msg.exportFormats
+      : { ogg: true, wav: true, mp3: true };
+    const activeFormats = {
+      ogg: requestedFormats.ogg !== false,
+      wav: requestedFormats.wav !== false,
+      mp3: requestedFormats.mp3 !== false,
+    };
+    if (!activeFormats.ogg && !activeFormats.wav && !activeFormats.mp3) activeFormats.wav = true;
+
     self.postMessage({ type: 'progress', pct: 5, label: 'DSP…' });
+    const workingChannels = params.trimSilence
+      ? trimSilenceChannels(channels, sampleRate)
+      : channels;
     const random = createSeededRandom(randomSeed);
     let hasClipping = false;
-    for (let ch = 0; ch < channels.length; ch++) {
+    for (let ch = 0; ch < workingChannels.length; ch++) {
       if (cancelled) throw new Error('Processing cancelled.');
-      if (processDSP(channels[ch], params.bitDepth, params.crushMode, params.dither,
+      if (processDSP(workingChannels[ch], params.bitDepth, params.crushMode, params.dither,
           params.grit, params.noise, random)) hasClipping = true;
-      self.postMessage({ type: 'progress', pct: 5 + ((ch + 1) / channels.length) * 35,
-        label: `DSP channel ${ch + 1}/${channels.length}…` });
+      self.postMessage({ type: 'progress', pct: 5 + ((ch + 1) / workingChannels.length) * 35,
+        label: `DSP channel ${ch + 1}/${workingChannels.length}…` });
     }
-    if (params.normalize) normalizeChannels(channels);
+    if (params.trimSilence) applyMicroFadeChannels(workingChannels, sampleRate);
+    if (params.normalize) normalizeChannels(workingChannels, params.normalizeCeiling);
 
     const formats = {};
     const errors = [];
@@ -296,17 +358,23 @@ self.onmessage = async function(event) {
       try { formats[format] = await fn(); }
       catch (error) { errors.push({ format, message: error.message || String(error) }); }
     };
-    self.postMessage({ type: 'progress', pct: 40, label: 'Encoding OGG…' });
-    await attempt('ogg', () => encodeOGG(channels, sampleRate));
-    self.postMessage({ type: 'progress', pct: 65, label: 'Encoding WAV…' });
-    await attempt('wav', () => encodeWAV(channels, sampleRate, params.bitDepth));
-    self.postMessage({ type: 'progress', pct: 82, label: 'Encoding MP3…' });
+    if (activeFormats.ogg) {
+      self.postMessage({ type: 'progress', pct: 40, label: 'Encoding OGG…' });
+      await attempt('ogg', () => encodeOGG(workingChannels, sampleRate));
+    }
+    if (activeFormats.wav) {
+      self.postMessage({ type: 'progress', pct: 65, label: 'Encoding WAV…' });
+      await attempt('wav', () => encodeWAV(workingChannels, sampleRate, params.bitDepth));
+    }
     let mp3SampleRate = sampleRate;
-    await attempt('mp3', () => {
-      const mp3 = encodeMP3(channels, sampleRate);
-      mp3SampleRate = mp3.sampleRate;
-      return mp3.buffer;
-    });
+    if (activeFormats.mp3) {
+      self.postMessage({ type: 'progress', pct: 82, label: 'Encoding MP3…' });
+      await attempt('mp3', () => {
+        const mp3 = encodeMP3(workingChannels, sampleRate);
+        mp3SampleRate = mp3.sampleRate;
+        return mp3.buffer;
+      });
+    }
     if (!Object.keys(formats).length) throw new Error(errors.map(item => `${item.format}: ${item.message}`).join('; '));
 
     const transferList = Object.values(formats).filter(value => value instanceof ArrayBuffer);

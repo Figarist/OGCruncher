@@ -6,6 +6,7 @@ import './ui.js';
 import { log, setBadge } from './utils.js';
 import { state } from './state.js';
 import { createServiceWorkerUpdateController } from './sw-update.js';
+import { t } from './i18n.js';
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   const updateController = createServiceWorkerUpdateController({
@@ -40,10 +41,10 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
       });
     } catch (error) {
       console.warn('Service Worker registration failed:', error);
-      log('Offline cache is unavailable; the audio workflow still runs online.', 'warn');
+      log(t('Offline cache is unavailable; the audio workflow still runs online.'), 'warn');
     }
   });
 
 } else if (import.meta.env.PROD) {
-  setBadge('WEB ONLY', 'badge--amber');
+  setBadge(t('WEB ONLY'), 'badge--amber');
 }
