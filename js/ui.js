@@ -1107,6 +1107,15 @@ modalInfo.addEventListener('keydown', (e) => {
   }
 });
 
+// Which control the mouse/touch last focused. Chrome turns :focus-visible on as
+// soon as a key is pressed, so it cannot tell a clicked button from a tabbed one.
+const FOCUSABLE_CONTROL = 'button, a, input, [role="button"], summary';
+let pointerFocusedControl = null;
+document.addEventListener('pointerdown', (e) => {
+  pointerFocusedControl = e.target instanceof Element ? e.target.closest(FOCUSABLE_CONTROL) : null;
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Tab') pointerFocusedControl = null; }, true);
+
 window.addEventListener('keydown', (e) => {
   if (e.defaultPrevented) return;
   if (!modalInfo.hidden) return;
@@ -1133,7 +1142,21 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  if (target?.closest('button, a, input, textarea, select, [contenteditable="true"]')) return;
+  const HOTKEYS = ['Space', 'Enter', 'KeyC', 'KeyN', 'KeyL'];
+  if (!HOTKEYS.includes(e.code) || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (inTextInput) return;
+  // A control that was clicked keeps focus, so Space would re-press it (or scroll
+  // the page from a slider). Only a keyboard-focused button or link keeps its
+  // native Space/Enter behaviour; anything focused by the mouse hands the key to
+  // the global shortcuts.
+  const control = target?.closest(FOCUSABLE_CONTROL);
+  if (control) {
+    const isRange = control.matches('input[type="range"]');
+    const keyboardFocused = control !== pointerFocusedControl;
+    if (!isRange && keyboardFocused && (e.code === 'Space' || e.code === 'Enter')) return;
+    if (control.matches('input[type="checkbox"], input[type="radio"]') && keyboardFocused) return;
+    control.blur();
+  }
 
   if (e.code === 'Space') {
     e.preventDefault();
@@ -1142,11 +1165,12 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (!btnProcess.disabled) btnProcess.click();
   } else if (e.code === 'KeyC') {
-    if (abContainer.style.display !== 'none') btnAB.click();
+    if (!abContainer.classList.contains('is-idle')) { e.preventDefault(); btnAB.click(); }
   } else if (e.code === 'KeyN') {
+    e.preventDefault();
     btnLiveUpdate.click();
   } else if (e.code === 'KeyL') {
-    if (abContainer.style.display !== 'none') btnPreviewLoop?.click();
+    if (!abContainer.classList.contains('is-idle')) { e.preventDefault(); btnPreviewLoop?.click(); }
   }
 });
 
@@ -1240,59 +1264,36 @@ window.addEventListener('keydown', (e) => {
   if (!safeGet('og_seen_info')) safeSet('og_seen_info', 'true');
 
   // ── PWA Install Prompt ────────────────────────────────────────────────
-  const badgePwa = $('badge-pwa');
+  const btnInstall = $('btn-install');
+  const hideInstall = () => { if (btnInstall) btnInstall.hidden = true; };
 
   window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault(); 
+    e.preventDefault();
     _installPrompt = e;
+    if (!btnInstall) return;
+    btnInstall.textContent = t('⬇ INSTALL APP');
+    btnInstall.title = t('Install OGCruncher as a standalone app');
+    btnInstall.hidden = false;
+    log('Install prompt available — click "INSTALL APP" in the header.', 'sys');
+  });
 
-    if (badgePwa) {
-      badgePwa.textContent = t('⬇ INSTALL APP');
-      badgePwa.classList.remove('badge--green');
-      badgePwa.classList.add('badge--install', 'badge--pulse');
-      badgePwa.style.cursor = 'pointer';
-      badgePwa.title = t('Install OGCruncher as a standalone app');
-      badgePwa.setAttribute('role', 'button');
-      badgePwa.setAttribute('tabindex', '0');
-
-      const doInstall = async () => {
-        if (!_installPrompt) return;
-        _installPrompt.prompt();
-        const { outcome } = await _installPrompt.userChoice;
-        _installPrompt = null;
-
-        if (outcome === 'accepted') {
-          badgePwa.textContent = t('PWA READY');
-          badgePwa.classList.add('badge--green');
-          badgePwa.classList.remove('badge--install', 'badge--pulse');
-          badgePwa.style.cursor = '';
-          badgePwa.removeAttribute('role');
-          badgePwa.removeAttribute('tabindex');
-          badgePwa.removeEventListener('click', doInstall);
-          badgePwa.removeEventListener('keydown', onKeydown);
-          log('OGCruncher installed as standalone app.', 'ok');
-          showToast(t('✅ App installed!'), 'ok');
-        } else {
-          log('Install dismissed.', 'sys');
-        }
-      };
-
-      const onKeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') doInstall(); };
-
-      badgePwa.addEventListener('click', doInstall);
-      badgePwa.addEventListener('keydown', onKeydown);
-      log('Install prompt available — click "INSTALL APP" in the header.', 'sys');
+  btnInstall?.addEventListener('click', async () => {
+    if (!_installPrompt) { hideInstall(); return; }
+    _installPrompt.prompt();
+    const { outcome } = await _installPrompt.userChoice;
+    _installPrompt = null;
+    hideInstall();
+    if (outcome === 'accepted') {
+      log('OGCruncher installed as standalone app.', 'ok');
+      showToast(t('✅ App installed!'), 'ok');
+    } else {
+      log('Install dismissed.', 'sys');
     }
   });
 
   window.addEventListener('appinstalled', () => {
     _installPrompt = null;
-    if (badgePwa) {
-      badgePwa.textContent = t('PWA READY');
-      badgePwa.classList.add('badge--green');
-      badgePwa.classList.remove('badge--install', 'badge--pulse');
-      badgePwa.style.cursor = '';
-    }
+    hideInstall();
     log('App installed via browser UI.', 'ok');
   });
 

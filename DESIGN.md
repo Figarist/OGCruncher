@@ -16,7 +16,7 @@ Updated 2026-11-20. The baseline audit was recorded at
 | `js/dsp-core.js` | Pure offline DSP, finite-sample sanitization, linked normalization and WAV/PCM helpers |
 | `js/preview.js` | Offline parity preview graph, A/B, spectrum and measured metrics |
 | `js/sw-update.js` | State-aware Service Worker update banner controller |
-| `js/utils.js` | Logging, badges, toasts and formatting |
+| `js/utils.js` | Logging, toasts and formatting |
 | `js/i18n.js` | `t()` runtime strings for localized pages (English source strings are keys), plural/Hz helpers |
 | `scripts/build-locales.cjs` + `scripts/locales/uk.cjs` | Generate the committed `uk/index.html` from `index.html`; `--check` fails on drift |
 
@@ -91,7 +91,10 @@ is superseded by this observed system.
 
 Keep labels, visible focus, reduced motion and live status messages. Aim for comfortable
 44px touch areas; audit WCAG separately rather than claiming certification. Require a
-true one-column mobile grid and shortcuts that respect focus and dialogs. See U01–U03.
+true one-column mobile grid and shortcuts that respect focus and dialogs (a control the mouse just
+clicked hands Space/Enter to the shortcuts; a keyboard-focused one keeps its native action). The log
+scrolls inside its window and the idle A/B row keeps its space, so panels never change height while
+previewing or scrolling. See U01–U03.
 
 Vite emits hashed assets, a classic worker and generated SW. Encoder scripts and `.mem`
 are in the inspected precache (`workbox.globIgnores` excludes icons/SVG already referenced

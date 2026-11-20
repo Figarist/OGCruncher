@@ -116,7 +116,7 @@ function resetPreviewUI() {
   if (_dom.btnPreviewLbl) _dom.btnPreviewLbl.textContent = t('PREVIEW');
   if (_dom.previewIcon) _dom.previewIcon.textContent = '▶';
   if (_dom.btnPreview) _dom.btnPreview.setAttribute('aria-label', t('Preview selected audio'));
-  if (_dom.abContainer) _dom.abContainer.style.display = 'none';
+  if (_dom.abContainer) { _dom.abContainer.classList.add('is-idle'); _dom.abContainer.inert = true; }
   if (_dom.abStatus) { _dom.abStatus.textContent = t('CRUNCHED (WET)'); _dom.abStatus.classList.remove('status--dry'); }
   if (_dom.dropContent) _dom.dropContent.style.display = 'flex';
   if (_dom.visualizer) _dom.visualizer.style.display = 'none';
@@ -251,7 +251,7 @@ async function startPreview() {
     _dom.btnPreviewLbl.textContent = t('STOP');
     _dom.previewIcon.textContent = '■';
     _dom.btnPreview.setAttribute('aria-label', t('Stop preview'));
-    if (_dom.abContainer) _dom.abContainer.style.display = 'flex';
+    if (_dom.abContainer) { _dom.abContainer.classList.remove('is-idle'); _dom.abContainer.inert = false; }
     if (_dom.dropContent) _dom.dropContent.style.display = 'none';
     if (_dom.visualizer) _dom.visualizer.style.display = 'block';
     if (_dom.previewFileName) _dom.previewFileName.textContent = t('Previewing: {name}', { name: file.name });

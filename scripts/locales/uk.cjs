@@ -127,17 +127,12 @@ const pairs = [
   // Header
   ['aria-label="Back to Figarist"', 'aria-label="На сайт Figarist"'],
   ['<span class="logo-title__kw"> Free Online Audio Bit-Crusher &amp; Compressor</span>', '<span class="logo-title__kw"> безкоштовний біткрашер і конвертер звуку онлайн</span>'],
-  ['<span class="logo-sub">audio tool by Ihor</span>', '<span class="logo-sub">звуковий інструмент від Ігоря</span>'],
-  ['aria-label="OGCruncher description"', 'aria-label="Опис OGCruncher"'],
-  ['<span class="header-context__kicker">IN-BROWSER AUDIO TOOL</span>', '<span class="header-context__kicker">ЗВУК ПРЯМО В БРАУЗЕРІ</span>'],
-  ['<span class="header-context__copy">Crunch audio locally, then take it to your game.</span>', '<span class="header-context__copy">Обробляй звук у себе й забирай його у свою гру.</span>'],
-  ['id="badge-free">LOCAL / OFFLINE</span>', 'id="badge-free">ЛОКАЛЬНО / ОФЛАЙН</span>'],
-  ['id="badge-pwa">PWA READY</span>', 'id="badge-pwa">МОЖНА ВСТАНОВИТИ</span>'],
-  ['id="badge-status">IDLE</span>', 'id="badge-status">ЧЕКАЮ</span>'],
+  ['aria-label="OGCruncher navigation"', 'aria-label="Навігація OGCruncher"'],
+  ['title="Install OGCruncher as a standalone app" hidden>⬇ INSTALL APP</button>', 'title="Встановити OGCruncher як окрему програму" hidden>⬇ ВСТАНОВИТИ</button>'],
+  ['<div class="lang-switch" role="group" aria-label="Language">', '<div class="lang-switch" role="group" aria-label="Мова">'],
+  ['<a class="lang-switch__item is-active" href="./" hreflang="en" lang="en" aria-current="page">EN</a>\n          <a class="lang-switch__item" href="uk/" hreflang="uk" lang="uk" title="Українська версія">УКР</a>',
+    '<a class="lang-switch__item" href="../" hreflang="en" lang="en" title="English version">EN</a>\n          <a class="lang-switch__item is-active" href="./" hreflang="uk" lang="uk" aria-current="page">УКР</a>'],
   ['title="About OGCruncher">ABOUT</button>', 'title="Про OGCruncher">ПРО САЙТ</button>'],
-  ['href="#faq">GUIDE &amp; FAQ</a>', 'href="#faq">ДОВІДКА</a>'],
-  ['<a class="header-route header-route--lang" href="uk/" hreflang="uk" lang="uk" title="Українська версія">УКР</a>',
-    '<a class="header-route header-route--lang" href="../" hreflang="en" lang="en" title="English version">EN</a>'],
 
   // Intro
   ['aria-label="OGCruncher status"', 'aria-label="Стан OGCruncher"'],

@@ -224,23 +224,18 @@
           <img src="%BASE_URL%images/logo.svg" class="logo-img" alt="" aria-hidden="true">
           <div class="logo-text">
             <h1 class="logo-title">OGCruncher<span class="logo-title__kw"> безкоштовний біткрашер і конвертер звуку онлайн</span></h1>
-            <span class="logo-sub">звуковий інструмент від Ігоря</span>
           </div>
         </div>
       </a>
-      <div class="header-context" aria-label="Опис OGCruncher">
-        <span class="header-context__kicker">ЗВУК ПРЯМО В БРАУЗЕРІ</span>
-        <span class="header-context__copy">Обробляй звук у себе й забирай його у свою гру.</span>
-      </div>
-      <div class="header-badges">
-        <span class="badge badge--blue" id="badge-free">ЛОКАЛЬНО / ОФЛАЙН</span>
-        <span class="badge badge--green" id="badge-pwa">МОЖНА ВСТАНОВИТИ</span>
-        <span class="badge badge--amber" id="badge-status">ЧЕКАЮ</span>
-        <button id="btn-info" class="btn btn--ghost btn--xs header-about" title="Про OGCruncher">ПРО САЙТ</button>
-        <a class="header-route header-route--guide" href="#faq">ДОВІДКА</a>
-        <a class="header-route header-route--lang" href="../" hreflang="en" lang="en" title="English version">EN</a>
-        <a data-goatcounter-click="ogcruncher-hub" class="header-route header-route--hub" href="https://sivochka.com/" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
-      </div>
+      <nav class="header-nav" aria-label="Навігація OGCruncher">
+        <button id="btn-install" type="button" class="nav-btn nav-btn--accent" title="Встановити OGCruncher як окрему програму" hidden>⬇ ВСТАНОВИТИ</button>
+        <div class="lang-switch" role="group" aria-label="Мова">
+          <a class="lang-switch__item" href="../" hreflang="en" lang="en" title="English version">EN</a>
+          <a class="lang-switch__item is-active" href="./" hreflang="uk" lang="uk" aria-current="page">УКР</a>
+        </div>
+        <button id="btn-info" type="button" class="nav-btn" title="Про OGCruncher">ПРО САЙТ</button>
+        <a data-goatcounter-click="ogcruncher-hub" class="nav-btn nav-btn--hub" href="https://sivochka.com/" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
+      </nav>
     </div>
   </header>
 
@@ -724,7 +719,7 @@
         <p id="effective-settings" class="effective-settings">Тут з’являться налаштування, коли додаси файл.</p>
         <p id="batch-summary" class="batch-summary" role="status" aria-live="polite"></p>
         <button id="btn-cancel" type="button" class="btn btn--ghost btn--xs cancel-button" hidden>ЗУПИНИТИ ОБРОБКУ</button>
-        <div id="ab-container" class="ab-container" style="display:none;">
+        <div id="ab-container" class="ab-container is-idle" inert>
           <button id="btn-ab" class="btn btn--ab-toggle" aria-label="Порівняти з оригіналом">
             <span class="ab-label">ЗАРАЗ ГРАЄ:</span>
             <span id="ab-status" class="ab-value">ОБРОБЛЕНИЙ</span>

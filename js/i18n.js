@@ -42,7 +42,6 @@ const UK = {
   'FAILED': 'ПОМИЛКА',
   'WAITING': 'У ЧЕРЗІ',
   'WEB ONLY': 'ЛИШЕ ОНЛАЙН',
-  'PWA READY': 'МОЖНА ВСТАНОВИТИ',
   '⬇ INSTALL APP': '⬇ ВСТАНОВИТИ',
   'Install OGCruncher as a standalone app': 'Встановити OGCruncher як окрему програму',
   'ANALYZING…': 'РАХУЮ…',

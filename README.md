@@ -108,8 +108,9 @@ by an executable launch test; `neu build` success alone is insufficient.
 Inspected application code does not upload input audio. Assets/demo use HTTP requests;
 this is not a complete network privacy certification. Parameters and layout use
 localStorage; queue files and output blobs stay in memory and disappear on reload.
-Service-worker updates are surfaced without an automatic reload; the offline badge is
-not proof that every required resource is cached.
+Service-worker updates are surfaced without an automatic reload. The header only shows
+INSTALL APP when the browser offers installation; that is not proof that every required
+resource is cached.
 
 ## Author (`Ihor Sivochka / Figarist`)
 
