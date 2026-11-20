@@ -11,7 +11,7 @@
 import { state } from './state.js';
 import { log } from './utils.js';
 import { computeAudioMetrics, renderFilteredBuffer, processChannels } from './dsp.js';
-import { hashSeed } from './dsp-core.js';
+import { hashSeed, silenceTrimRange } from './dsp-core.js';
 import { t } from './i18n.js';
 
 let _dom = {};
@@ -160,12 +160,13 @@ async function renderBuffers(decoded, params, file, isCurrent) {
 
   const wetChannels = Array.from({ length: filtered.numberOfChannels }, (_, index) =>
     new Float32Array(filtered.getChannelData(index)));
+  // Trim the dry branch to the same window as the wet one, so A/B loops stay in phase.
+  const trimRange = params.trimSilence ? silenceTrimRange(wetChannels, filtered.sampleRate) : null;
   const processedWet = processChannels(wetChannels, { ...params, sampleRate: filtered.sampleRate }, hashSeed(`${file.name}:${file.size}`)) || wetChannels;
+  let dryChannels = Array.from({ length: dry.numberOfChannels }, (_, index) => new Float32Array(dry.getChannelData(index)));
+  if (trimRange) dryChannels = dryChannels.map(channel => channel.slice(trimRange.start, trimRange.start + trimRange.length));
   return {
-    dry: bufferFromChannels(
-      Array.from({ length: dry.numberOfChannels }, (_, index) => new Float32Array(dry.getChannelData(index))),
-      dry.sampleRate,
-    ),
+    dry: bufferFromChannels(dryChannels, dry.sampleRate),
     wet: bufferFromChannels(processedWet, filtered.sampleRate),
   };
 }
@@ -380,13 +381,13 @@ function updateMetricsPanel() {
   _dom.metricsPanel.style.display = 'flex';
   const original = computeAudioMetrics(previewDry);
   const crunched = computeAudioMetrics(previewWet);
-  const format = db => Number.isFinite(db) ? `${db.toFixed(1)} dB` : '−∞';
+  const format = db => Number.isFinite(db) ? `${db.toFixed(1)} ${t('dB')}` : '−∞';
   if (_dom.metricRmsOrig) _dom.metricRmsOrig.textContent = format(original.rmsDb);
   if (_dom.metricRmsCrunch) _dom.metricRmsCrunch.textContent = format(crunched.rmsDb);
   if (_dom.metricPeakOrig) _dom.metricPeakOrig.textContent = format(original.peakDb);
   if (_dom.metricPeakCrunch) _dom.metricPeakCrunch.textContent = format(crunched.peakDb);
-  if (_dom.metricDurOrig) _dom.metricDurOrig.textContent = `${previewDry.duration.toFixed(2)}s`;
-  if (_dom.metricDurCrunch) _dom.metricDurCrunch.textContent = `${previewWet.duration.toFixed(2)}s`;
+  if (_dom.metricDurOrig) _dom.metricDurOrig.textContent = `${previewDry.duration.toFixed(2)}${t('s')}`;
+  if (_dom.metricDurCrunch) _dom.metricDurCrunch.textContent = `${previewWet.duration.toFixed(2)}${t('s')}`;
 }
 
 function startVisualizer() {

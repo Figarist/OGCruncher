@@ -117,8 +117,9 @@ function processDSP(buf, bitDepth = 8, crushMode = true, dither = true,
   return clipped;
 }
 
-function trimSilenceChannels(channels, sampleRate = 22050, thresholdDb = -48, padMs = 2) {
-  if (!Array.isArray(channels) || !channels.length || !channels[0] || !channels[0].length) return channels;
+function silenceTrimRange(channels, sampleRate = 22050, thresholdDb = -48, padMs = 2) {
+  // Linked across channels; null means "keep everything" (nothing to trim or all silence).
+  if (!Array.isArray(channels) || !channels.length || !channels[0] || !channels[0].length) return null;
   const length = channels[0].length;
   const threshold = Math.pow(10, clamp(finiteOr(thresholdDb, -48), -96, -6) / 20);
   let start = length;
@@ -134,14 +135,19 @@ function trimSilenceChannels(channels, sampleRate = 22050, thresholdDb = -48, pa
       }
     }
   }
-  if (end < start) return channels;
+  if (end < start) return null;
   const rate = Math.max(1000, finiteOr(sampleRate, 22050));
   const padSamples = Math.round((clamp(finiteOr(padMs, 2), 0, 50) / 1000) * rate);
   const trimStart = Math.max(0, start - padSamples);
   const trimEnd = Math.min(length - 1, end + padSamples);
-  if (trimStart === 0 && trimEnd === length - 1) return channels;
-  const outLength = Math.max(1, trimEnd - trimStart + 1);
-  return channels.map(ch => ch.slice(trimStart, trimStart + outLength));
+  if (trimStart === 0 && trimEnd === length - 1) return null;
+  return { start: trimStart, length: Math.max(1, trimEnd - trimStart + 1) };
+}
+
+function trimSilenceChannels(channels, sampleRate = 22050, thresholdDb = -48, padMs = 2) {
+  const range = silenceTrimRange(channels, sampleRate, thresholdDb, padMs);
+  if (!range) return channels;
+  return channels.map(ch => ch.slice(range.start, range.start + range.length));
 }
 
 function applyMicroFadeChannels(channels, sampleRate = 22050, fadeInMs = 1, fadeOutMs = 4) {

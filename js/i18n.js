@@ -12,6 +12,23 @@ export const LANG = (typeof document !== 'undefined' && document.documentElement
   && String(document.documentElement.lang || '').toLowerCase().startsWith('uk')) ? 'uk' : 'en';
 
 const UK = {
+  // Units
+  'dB': 'дБ',
+  'dBFS': 'дБFS',
+  'kbps': 'кбіт/с',
+  'bit': 'біт',
+  'B': 'Б',
+  'KB': 'КБ',
+  'MB': 'МБ',
+  's': 'с',
+  'change unavailable': 'зміна невідома',
+
+  // Worker progress labels
+  'DSP…': 'обробка…',
+  'Encoding OGG…': 'зберігаю OGG…',
+  'Encoding WAV…': 'зберігаю WAV…',
+  'Encoding MP3…': 'зберігаю MP3…',
+
   // Toggles and statuses
   'ON': 'УВІМК',
   'OFF': 'ВИМК',
@@ -55,13 +72,13 @@ const UK = {
   'Remove {name} from queue': 'Прибрати {name} з черги',
   'DUAL VIEW: {state}': 'ДВА ГРАФІКИ: {state}',
   'Unavailable output formats': 'Формати, які не вдалося зберегти',
-  '{format} unavailable: {message}': '{format} не вдалося: {message}',
+  '{format} unavailable: {message}': '{format}: не вдалося зберегти ({message})',
 
   // Simple mode tiers
   'TINY (MICRO)': 'МІНІ',
   'LOW (PORTABLE)': 'МАЛИЙ',
-  'MEDIUM (RETRO)': 'СЕРЕДНІЙ (РЕТРО)',
-  'HIGH': 'ВИСОКА ЯКІСТЬ',
+  'MEDIUM (RETRO)': 'СЕРЕДНІЙ',
+  'HIGH': 'ВИСОКИЙ',
   'Micro size (8kHz / 8-bit) — telephone-like and intentionally lo-fi.':
     'Найменший файл (8 кГц / 8 біт) — звук як у старому телефоні.',
   'Low size (16kHz / 8-bit) — compact retro/mobile character.':
@@ -81,8 +98,8 @@ const UK = {
   '{mode} · {rate} Hz · {bits}-bit effect · {channels} output · filters {filters}':
     '{mode} · {rate} Гц · {bits} біт · {channels} · фільтри {filters}',
   'Codecs: {list}': 'Формати: {list}',
-  'Original names': 'старі назви файлів',
-  '{db} dBFS PEAK': '{db} dBFS ПІК',
+  'Original names': 'свої назви файлів',
+  '{db} dBFS PEAK': '{db} дБFS ПІК',
   'File {index}/{total} — {label}': 'Файл {index}/{total} — {label}',
   'Completed: {full} full, {partial} partial; failed: {failed}; cancelled: {cancelled}; not attempted: {skipped}.':
     'Готово: {full} повністю, {partial} частково; помилок: {failed}; скасовано: {cancelled}; не оброблено: {skipped}.',

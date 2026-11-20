@@ -27,7 +27,8 @@ HPF/LPF/bass -> optional linked silence trim (-48 dBFS, 2 ms pad) -> worker-comp
 per-channel DSP with finite-sample sanitization -> optional micro-fades (1 ms in, 4 ms out)
 -> linked normalization to the -1 or 0 dBFS ceiling -> the selected OGG, WAV and/or MP3
 encoders (with Lanczos-3 resampling for unsupported MP3 sample rates). `processChannels`
-returns the (possibly shorter) channel set; callers must use the return value. Preview uses the same offline render path for the selected output rate,
+returns the (possibly shorter) channel set; callers must use the return value. Preview
+trims its dry branch with the same `silenceTrimRange` window, so A/B loops stay in phase. Preview uses the same offline render path for the selected output rate,
 speed, channel mode, filters and DSP, then routes dry/wet buffers through a monitor
 crossfade. Source replacement and A/B branch selection are separate gain concerns:
 both source buffers remain available, branch gains select the monitor with a short

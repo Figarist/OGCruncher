@@ -71,9 +71,9 @@
           "Квантування звуку 1–16 біт і краш-режим (прибирання DC-зсуву, м’який експандер, антиаліасинг)",
           "Частота дискретизації від 4 000 до 48 000 Гц зі швидкими стандартними значеннями",
           "Tanh-сатурація, шум стрічки та TPDF-дизер",
-          "Фільтри HPF і LPF, підсилення басу на 80 Гц, швидкість/тон і нормалізація піку до -1 або 0 dBFS",
+          "Фільтри HPF і LPF, підсилення басу на 80 Гц, швидкість/тон і нормалізація піку до -1 або 0 дБFS",
           "Обробка повністю в браузері, без завантаження файлів",
-          "Пакетне збереження у вибрані формати OGG, 8/16-бітний WAV і MP3, старі назви файлів і ZIP-архів",
+          "Пакетне збереження у вибрані формати OGG, 8/16-бітний WAV і MP3, початкові назви файлів і ZIP-архів",
           "Обрізання тиші на початку й у кінці з короткими згасаннями без клацань",
           "Кнопка «ДЛЯ SCRATCH»: один WAV-файл на звук для Scratch 3.0"
         ],
@@ -179,7 +179,7 @@
             "name": "Чому MP3 на дуже низькій частоті (наприклад 4 000 Гц) зберігається як 8 000 Гц?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Стандарт MPEG для MP3 має лише дев’ять частот, найнижча — 8 000 Гц (8k, 11.025k, 12k, 16k, 22.05k, 24k, 32k, 44.1k і 48k). Якщо обрати нестандартну частоту, як-от 4 000 чи 28 000 Гц, WAV і OGG зберігають її точно, а MP3 перераховується вікновим Lanczos-3 до найближчої дозволеної частоти. На 8–12 кГц MP3 має 64 kbps, вище — 128 kbps."
+              "text": "Стандарт MPEG для MP3 має лише дев’ять частот, найнижча — 8 000 Гц (8k, 11.025k, 12k, 16k, 22.05k, 24k, 32k, 44.1k і 48k). Якщо обрати нестандартну частоту, як-от 4 000 чи 28 000 Гц, WAV і OGG зберігають її точно, а MP3 перераховується вікновим Lanczos-3 до найближчої дозволеної частоти. На 8–12 кГц MP3 має 64 кбіт/с, вище — 128 кбіт/с."
             }
           },
           {
@@ -289,7 +289,7 @@
         <canvas id="visualizer" width="300" height="120" style="display:none; width:100%; height:120px; border-radius:8px;"></canvas>
         <div id="metrics-panel" class="metrics-panel" style="display:none;">
           <div class="metrics-row">
-            <span class="metrics-label" title="Середня гучність (RMS)">ГУЧН.</span>
+            <span class="metrics-label" title="Середня гучність (RMS)">СЕРЕДН.</span>
              <span id="metric-rms-orig" class="metrics-val metrics-val--orig">БУЛО —</span>
             <span class="metrics-arrow">→</span>
              <span id="metric-rms-crunch" class="metrics-val metrics-val--crunch">СТАЛО —</span>
@@ -333,21 +333,21 @@
         <div class="savings-grid">
           <div class="savings-col">
             <span class="savings-label">БУЛО</span>
-            <span id="savings-original-size" class="savings-val">0 KB</span>
+            <span id="savings-original-size" class="savings-val">0 КБ</span>
           </div>
           <div class="savings-col highlight-wav">
             <span class="savings-label">≈ WAV</span>
-            <span id="savings-estimated-wav" class="savings-val">0 KB</span>
+            <span id="savings-estimated-wav" class="savings-val">0 КБ</span>
             <span id="savings-pct-wav" class="savings-sub">-0%</span>
           </div>
            <div class="savings-col highlight-ogg">
              <span class="savings-label">≈ OGG</span>
-             <span id="savings-estimated-ogg" class="savings-val">0 KB</span>
+             <span id="savings-estimated-ogg" class="savings-val">0 КБ</span>
              <span id="savings-pct-ogg" class="savings-sub">-0%</span>
            </div>
            <div class="savings-col highlight-mp3">
              <span class="savings-label">≈ MP3</span>
-             <span id="savings-estimated-mp3" class="savings-val">0 KB</span>
+             <span id="savings-estimated-mp3" class="savings-val">0 КБ</span>
              <span id="savings-pct-mp3" class="savings-sub">-0%</span>
            </div>
         </div>
@@ -417,7 +417,7 @@
         <div class="control-group" id="group-simple-quality" style="display:none;">
           <div class="control-header">
             <span class="control-label">РОЗМІР І ЯКІСТЬ</span>
-            <span id="out-simple-quality" class="control-value">ВИСОКА ЯКІСТЬ</span>
+            <span id="out-simple-quality" class="control-value">ВИСОКИЙ</span>
           </div>
           <div class="slider-wrapper">
             <input
@@ -514,7 +514,7 @@
         <!-- Noise -->
         <div class="control-group" id="group-noise">
           <div class="control-header">
-            <label for="slider-noise" class="control-label" data-tooltip="Додає тихе шипіння, як у старої техніки чи касети (у dBFS).">ШУМ</label>
+            <label for="slider-noise" class="control-label" data-tooltip="Додає тихе шипіння, як у старої техніки чи касети (у дБFS).">ШУМ</label>
             <output id="out-noise" for="slider-noise" class="control-value">ВИМК</output>
           </div>
           <div class="slider-track-wrap">
@@ -566,16 +566,16 @@
             <span class="toggle-track">
               <span class="toggle-thumb"></span>
             </span>
-            <span class="toggle-label-text">TPDF DITHER</span>
+            <span class="toggle-label-text">TPDF-ДИЗЕР</span>
           </button>
         </div>
 
         <!-- IMPROVEMENT 2: Normalize Toggle -->
         <div class="control-group" id="group-normalize">
           <div class="control-header">
-            <label for="toggle-normalize" class="control-label" data-tooltip="Вирівнює найгучнішу точку до -1 dBFS (безпечний запас для OGG/MP3) або до 0 dBFS.">ГУЧНІСТЬ</label>
+            <label for="toggle-normalize" class="control-label" data-tooltip="Вирівнює найгучнішу точку до -1 дБFS (безпечний запас для OGG/MP3) або до 0 дБFS.">ГУЧНІСТЬ</label>
             <div class="control-header-actions">
-              <button type="button" id="btn-norm-ceiling" class="btn btn--ghost btn--xs ceiling-pill" title="Перемкнути стелю між -1 dBFS (запас для OGG/MP3) і 0 dBFS">-1 dB</button>
+              <button type="button" id="btn-norm-ceiling" class="btn btn--ghost btn--xs ceiling-pill" title="Перемкнути стелю між -1 дБFS (запас для OGG/MP3) і 0 дБFS">-1 дБ</button>
               <span id="out-normalize" class="control-value">УВІМК</span>
             </div>
           </div>
@@ -589,7 +589,7 @@
             <span class="toggle-track">
               <span class="toggle-thumb"></span>
             </span>
-            <span id="norm-ceiling-label" class="toggle-label-text">-1 dBFS ПІК</span>
+            <span id="norm-ceiling-label" class="toggle-label-text">-1 дБFS ПІК</span>
           </button>
         </div>
 
@@ -616,7 +616,7 @@
         <!-- Auto-Trim Silence Toggle -->
         <div class="control-group" id="group-trim">
           <div class="control-header">
-            <label for="toggle-trim" class="control-label" data-tooltip="Обрізає тишу (тихіше за -48 dBFS) на початку й у кінці та робить коротке згасання без клацань.">ОБРІЗАТИ ТИШУ</label>
+            <label for="toggle-trim" class="control-label" data-tooltip="Обрізає тишу (тихіше за -48 дБFS) на початку й у кінці та робить коротке згасання без клацань.">ОБРІЗАТИ ТИШУ</label>
             <span id="out-trim" class="control-value" aria-live="polite">ВИМК</span>
           </div>
           <button
@@ -629,7 +629,7 @@
             <span class="toggle-track">
               <span class="toggle-thumb"></span>
             </span>
-            <span class="toggle-label-text">-48 dB + ЗГАСАННЯ</span>
+            <span class="toggle-label-text">-48 дБ + ЗГАСАННЯ</span>
           </button>
         </div>
 
@@ -649,7 +649,7 @@
               aria-label="Швидкість і тон"
             />
             <div class="slider-pips" aria-hidden="true">
-              <span>0.5x</span><span>1.0x</span><span>1.5x</span><span>2.0x</span>
+              <span>0,5×</span><span>1,0×</span><span>1,5×</span><span>2,0×</span>
             </div>
           </div>
         </div>
@@ -678,7 +678,7 @@
               <div class="filter-item filter-item--full">
                 <label for="slider-bass" class="filter-label" data-tooltip="Додає низьких частот, щоб удар був глибшим і сильнішим.">БІЛЬШЕ БАСУ (80 Гц)</label>
                 <input type="range" id="slider-bass" min="0" max="15" value="0" step="0.5" class="slider slider--small">
-                <output id="out-bass" class="filter-value">+0 dB</output>
+                <output id="out-bass" class="filter-value">0 дБ</output>
               </div>
             </div>
           </div>
@@ -704,7 +704,7 @@
             <button type="button" id="btn-fmt-mp3" class="btn btn--ghost btn--xs fmt-pill active" aria-pressed="true" title="Зберегти MP3 (.mp3)">MP3</button>
           </div>
           <button type="button" id="btn-scratch-mode" class="btn btn--ghost btn--xs fmt-pill" title="Scratch 3.0 відкриває лише WAV і MP3 (до 10 МБ на звук): збережемо тільки WAV">ДЛЯ SCRATCH</button>
-          <button type="button" id="btn-keep-names" class="btn btn--ghost btn--xs fmt-pill" aria-pressed="false" title="Зберегти старі назви файлів без приставки _crunched_8bit_22050hz (не ламає .meta в Unity та .import у Godot)">СТАРІ НАЗВИ</button>
+          <button type="button" id="btn-keep-names" class="btn btn--ghost btn--xs fmt-pill" aria-pressed="false" title="Зберегти початкові назви файлів без закінчення _crunched_8bit_22050hz (не ламає .meta в Unity та .import у Godot)">СВОЇ НАЗВИ</button>
         </div>
         <div class="action-row">
           <button id="btn-preview" class="btn btn--secondary" disabled aria-label="Послухати вибраний звук">
@@ -719,7 +719,7 @@
           </button>
         </div>
         <p class="codec-info export-hint">Робиш гру в Scratch? Натисни <strong>ДЛЯ SCRATCH</strong> — отримаєш один WAV-файл на кожен звук.</p>
-        <p id="codec-info" class="codec-info">Формати: OGG q0 (~64 kbps) · WAV 16-bit PCM · MP3 128 kbps</p>
+        <p id="codec-info" class="codec-info">Формати: OGG q0 (~64 кбіт/с) · WAV 16-біт PCM · MP3 128 кбіт/с</p>
         <p id="preview-file-name" class="preview-file-name" aria-live="polite"></p>
         <p id="effective-settings" class="effective-settings">Тут з’являться налаштування, коли додаси файл.</p>
         <p id="batch-summary" class="batch-summary" role="status" aria-live="polite"></p>
@@ -822,7 +822,7 @@
       <article class="seo-card">
         <h3>Пакетне збереження у WAV, OGG і MP3 для Unity та Godot</h3>
         <p>
-          Додай у чергу десятки ефектів і оброби їх з однаковими налаштуваннями. Обери потрібні формати: 8- чи 16-бітний <strong>PCM WAV</strong> для миттєвого відтворення, <strong>Ogg Vorbis</strong> для компактних лупів і <strong>MP3</strong> (128 kbps, на 8–12 кГц — 64 kbps). Кнопка «СТАРІ НАЗВИ» зберігає назви файлів, щоб не ламати <code>.meta</code> в Unity та <code>.import</code> у Godot, а «ОБРІЗАТИ ТИШУ» прибирає паузу перед ударом.
+          Додай у чергу десятки ефектів і оброби їх з однаковими налаштуваннями. Обери потрібні формати: 8- чи 16-бітний <strong>PCM WAV</strong> для миттєвого відтворення, <strong>Ogg Vorbis</strong> для компактних лупів і <strong>MP3</strong> (128 кбіт/с, на 8–12 кГц — 64 кбіт/с). Кнопка «СВОЇ НАЗВИ» лишає початкові назви файлів, щоб не ламати <code>.meta</code> в Unity та <code>.import</code> у Godot, а «ОБРІЗАТИ ТИШУ» прибирає паузу перед ударом.
         </p>
       </article>
     </div>
@@ -848,7 +848,7 @@
           <tr>
             <td><strong>Wear OS, телефони й WebGL: лупи та музика</strong></td>
             <td>12–16 біт · 22 050–32 000 Гц</td>
-            <td>Моно або стерео · Дизер УВІМК · Хруст 1.2</td>
+            <td>Моно або стерео · Дизер УВІМК · Хруст 1,2</td>
             <td>Ogg Vorbis (<code>.ogg</code>) — Safari/iOS підтримує OGG обмежено, тому для WebGL додай MP3</td>
           </tr>
           <tr>
@@ -866,7 +866,7 @@
           <tr>
             <td><strong>Amiga 500 / трекерна музика 90-х</strong></td>
             <td>8 біт · 28 000 Гц</td>
-            <td>Стерео · Хруст 1.5 · Шум -46 dB · LPF 10 кГц</td>
+            <td>Стерео · Хруст 1,5 · Шум -46 дБ · LPF 10 кГц</td>
             <td>8-бітний PCM WAV / MP3</td>
           </tr>
         </tbody>
@@ -897,7 +897,7 @@
       </details>
       <details class="faq-item">
         <summary>Чому MP3 на дуже низькій частоті (наприклад 4 000 Гц) зберігається як 8 000 Гц?</summary>
-        <p>Стандарт MPEG для MP3 має лише дев’ять частот, найнижча — 8 000 Гц (8k, 11.025k, 12k, 16k, 22.05k, 24k, 32k, 44.1k і 48k). Якщо обрати нестандартну частоту, як-от 4 000 чи 28 000 Гц, WAV і OGG зберігають її точно, а MP3 перераховується вікновим Lanczos-3 до найближчої дозволеної частоти. На 8–12 кГц MP3 має 64 kbps, вище — 128 kbps.</p>
+        <p>Стандарт MPEG для MP3 має лише дев’ять частот, найнижча — 8 000 Гц (8k, 11.025k, 12k, 16k, 22.05k, 24k, 32k, 44.1k і 48k). Якщо обрати нестандартну частоту, як-от 4 000 чи 28 000 Гц, WAV і OGG зберігають її точно, а MP3 перераховується вікновим Lanczos-3 до найближчої дозволеної частоти. На 8–12 кГц MP3 має 64 кбіт/с, вище — 128 кбіт/с.</p>
       </details>
       <details class="faq-item">
         <summary>Як працює пакетна обробка, ZIP і посилання з налаштуваннями?</summary>
@@ -906,7 +906,8 @@
       <details class="faq-item">
         <summary>Як за 10 секунд зробити 8-бітний звук для Unity чи Godot?</summary>
         <p>Додай чистий звук стрибка чи удару у WAV або MP3, постав бітність 4–8 і частоту 11 025–16 000 Гц (моно), увімкни краш-режим і збережи у OGG або 8-бітний WAV.</p>
-      </details>$1
+      </details>
+    </section>
 
     <aside class="seo-locale-card" lang="en" aria-labelledby="seo-locale-title">
       <h3 id="seo-locale-title">OGCruncher in English</h3>

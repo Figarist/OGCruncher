@@ -262,7 +262,7 @@ function formatGritLabel(val) {
 function formatNoiseLabel(val) {
   const num = Number(val);
   if (!Number.isFinite(num) || num <= 0) return t('OFF');
-  return `${Math.round(20 * Math.log10(num))} dB`;
+  return `${Math.round(20 * Math.log10(num))} ${t('dB')}`;
 }
 
 function syncGrit(val) {
@@ -335,7 +335,7 @@ function syncBass(val) {
   state.bass = +val;
   sliderBass.value = val;
   sliderBass.setAttribute('aria-valuenow', val);
-  outBass.textContent = val > 0 ? `+${val} dB` : '0 dB';
+  outBass.textContent = `${val > 0 ? '+' : ''}${val > 0 ? val : 0} ${t('dB')}`;
   updateSliderTrack(sliderBass);
   saveState();
 
@@ -359,7 +359,7 @@ function applyParamsToUI(p) {
   if (sliderSpeed) { sliderSpeed.value = state.playbackRate; sliderSpeed.setAttribute('aria-valuenow', state.playbackRate); outSpeed.textContent = `${Math.round(state.playbackRate * 100)}%`; updateSliderTrack(sliderSpeed); }
   if (sliderHpf) { sliderHpf.value = state.hpf; sliderHpf.setAttribute('aria-valuenow', state.hpf); outHpf.textContent = hz(state.hpf); updateSliderTrack(sliderHpf); }
   if (sliderLpf) { sliderLpf.value = state.lpf; sliderLpf.setAttribute('aria-valuenow', state.lpf); outLpf.textContent = state.lpf >= 20000 ? t('OFF') : hz(state.lpf); updateSliderTrack(sliderLpf); }
-  if (sliderBass) { sliderBass.value = state.bass; sliderBass.setAttribute('aria-valuenow', state.bass); outBass.textContent = state.bass > 0 ? `+${state.bass} dB` : '0 dB'; updateSliderTrack(sliderBass); }
+  if (sliderBass) { sliderBass.value = state.bass; sliderBass.setAttribute('aria-valuenow', state.bass); outBass.textContent = `${state.bass > 0 ? '+' : ''}${state.bass > 0 ? state.bass : 0} ${t('dB')}`; updateSliderTrack(sliderBass); }
 
   const switches = [
     [btnMarioToggle, state.crushMode, outMario],
@@ -369,7 +369,7 @@ function applyParamsToUI(p) {
   ];
   switches.forEach(([button, value, output]) => { if (button) { button.setAttribute('aria-checked', String(value)); button.classList.toggle('active', value); } if (output) output.textContent = t(value ? 'ON' : 'OFF'); });
   const ceilingDb = Number(state.normalizeCeiling) < 0 ? Number(state.normalizeCeiling) : 0;
-  if (btnNormCeiling) btnNormCeiling.textContent = `${ceilingDb} dB`;
+  if (btnNormCeiling) btnNormCeiling.textContent = `${ceilingDb} ${t('dB')}`;
   if (normCeilingLabel) normCeilingLabel.textContent = t('{db} dBFS PEAK', { db: ceilingDb });
   if (btnFmtOgg) { btnFmtOgg.classList.toggle('active', state.exportOgg !== false); btnFmtOgg.setAttribute('aria-pressed', String(state.exportOgg !== false)); }
   if (btnFmtWav) { btnFmtWav.classList.toggle('active', state.exportWav !== false); btnFmtWav.setAttribute('aria-pressed', String(state.exportWav !== false)); }
@@ -495,11 +495,11 @@ function updatePresetUI() {
   const codecInfo = $('codec-info');
   if (codecInfo) {
     const parts = [];
-    const wavBits = Math.round(state.bitDepth) <= 8 ? '8-bit' : '16-bit';
-    const mp3Kbps = state.sampleRate <= 12000 ? '64 kbps' : '128 kbps';
-    if (state.exportOgg !== false) parts.push('OGG q0 (~64 kbps)');
-    if (state.exportWav !== false) parts.push(`WAV ${wavBits} PCM`);
-    if (state.exportMp3 !== false) parts.push(`MP3 ${mp3Kbps}`);
+    const wavBits = Math.round(state.bitDepth) <= 8 ? 8 : 16;
+    const mp3Kbps = state.sampleRate <= 12000 ? 64 : 128;
+    if (state.exportOgg !== false) parts.push(`OGG q0 (~64 ${t('kbps')})`);
+    if (state.exportWav !== false) parts.push(`WAV ${wavBits}-${t('bit')} PCM`);
+    if (state.exportMp3 !== false) parts.push(`MP3 ${mp3Kbps} ${t('kbps')}`);
     codecInfo.textContent = t('Codecs: {list}', { list: `${parts.join(' · ')}${state.keepOriginalName ? ` · ${t('Original names')}` : ''}` });
   }
   updateSavingsEstimate();
@@ -793,7 +793,7 @@ btnNormalizeToggle.addEventListener('click', () => {
 btnNormCeiling?.addEventListener('click', () => {
   pushHistory();
   state.normalizeCeiling = Number(state.normalizeCeiling) < 0 ? 0 : -1;
-  btnNormCeiling.textContent = `${state.normalizeCeiling} dB`;
+  btnNormCeiling.textContent = `${state.normalizeCeiling} ${t('dB')}`;
   if (normCeilingLabel) normCeilingLabel.textContent = t('{db} dBFS PEAK', { db: state.normalizeCeiling });
   saveState();
   if (state.liveUpdate && state.normalize) requestPreviewUpdate();
@@ -986,13 +986,15 @@ btnSaveCustom.addEventListener('click', () => {
     lpf: state.lpf,
     bass: state.bass,
     normalize: state.normalize,
+    normalizeCeiling: state.normalizeCeiling,
+    trimSilence: state.trimSilence,
     playbackRate: state.playbackRate,
     ts: Date.now()
   };
   safeSet('ogcruncher_preset', JSON.stringify(preset));
   state.activePreset = 'user';
   btnPresetUser.disabled = false;
-  userPresetMeta.textContent = `${preset.bitDepth}-bit / ${preset.sampleRate}Hz`;
+  userPresetMeta.textContent = `${preset.bitDepth} ${t('bit')} / ${hz(preset.sampleRate)}`;
   updatePresetUI();
   saveState();
   log('custom preset saved to localstorage', 'ok');
@@ -1178,7 +1180,7 @@ window.addEventListener('keydown', (e) => {
   pausePersistence(true);
   const savedState = readSavedState();
   const hashState = parseHash();
-  const advancedUrlKeys = ['bitDepth', 'sampleRate', 'grit', 'noise', 'playbackRate', 'hpf', 'lpf', 'bass', 'crushMode', 'dither', 'stereo', 'normalize'];
+  const advancedUrlKeys = ['bitDepth', 'sampleRate', 'grit', 'noise', 'playbackRate', 'hpf', 'lpf', 'bass', 'crushMode', 'dither', 'stereo', 'normalize', 'normalizeCeiling', 'trimSilence'];
   const initial = { ...DEFAULTS, ...savedState, ...hashState };
   if (!Object.prototype.hasOwnProperty.call(hashState, 'simpleMode') && advancedUrlKeys.some(key => Object.prototype.hasOwnProperty.call(hashState, key))) initial.simpleMode = false;
   applyParamsToUI(initial, { persist: false, requestPreview: false });
@@ -1220,7 +1222,7 @@ window.addEventListener('keydown', (e) => {
     try {
       const p = sanitizeParams(JSON.parse(saved));
       btnPresetUser.disabled = false;
-      userPresetMeta.textContent = `${p.bitDepth}-bit / ${p.sampleRate}Hz`;
+      userPresetMeta.textContent = `${p.bitDepth} ${t('bit')} / ${hz(p.sampleRate)}`;
     } catch (_) {}
   }
 
@@ -1228,7 +1230,7 @@ window.addEventListener('keydown', (e) => {
     if (state.processing) { log('Settings link ignored while batch is processing.', 'warn'); return; }
     const values = parseHash();
     if (!Object.keys(values).length) return;
-    const advancedKeys = ['bitDepth', 'sampleRate', 'grit', 'noise', 'playbackRate', 'hpf', 'lpf', 'bass', 'crushMode', 'dither', 'stereo', 'normalize'];
+    const advancedKeys = ['bitDepth', 'sampleRate', 'grit', 'noise', 'playbackRate', 'hpf', 'lpf', 'bass', 'crushMode', 'dither', 'stereo', 'normalize', 'normalizeCeiling', 'trimSilence'];
     if (!Object.prototype.hasOwnProperty.call(values, 'simpleMode') && advancedKeys.some(key => Object.prototype.hasOwnProperty.call(values, key))) values.simpleMode = false;
     applyParamsToUI(values);
   });

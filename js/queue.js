@@ -500,7 +500,7 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot
     const channels = Array.from({ length: rendered.numberOfChannels }, (_, ch) => new Float32Array(rendered.getChannelData(ch)));
     const actualRate = rendered.sampleRate;
     log(`  Decoded ${decoded.numberOfChannels}ch → ${rendered.numberOfChannels}ch | ${decoded.sampleRate}Hz → ${actualRate}Hz`, 'sys');
-    setProgress((fileIndex / fileTotal) * 100 + 5 / fileTotal, t('File {index}/{total} — {label}', { index: fileIndex + 1, total: fileTotal, label: 'DSP…' }));
+    setProgress((fileIndex / fileTotal) * 100 + 5 / fileTotal, t('File {index}/{total} — {label}', { index: fileIndex + 1, total: fileTotal, label: t('DSP…') }));
 
     const result = await new Promise((resolve, reject) => {
       activeReject = reject;
@@ -516,7 +516,7 @@ async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot
         if (!isCurrentJob(job)) return;
         if (message.type === 'progress') {
           setProgress((fileIndex / fileTotal + (message.pct / 100) / fileTotal) * 100,
-            t('File {index}/{total} — {label}', { index: fileIndex + 1, total: fileTotal, label: message.label }));
+            t('File {index}/{total} — {label}', { index: fileIndex + 1, total: fileTotal, label: t(message.label) }));
         } else if (message.type === 'done') settle(resolve, message);
         else if (message.type === 'error') settle(reject, new Error(message.message));
       };

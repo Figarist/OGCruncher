@@ -33,11 +33,16 @@ larger WAV/MP3 files when OGG is off) and **KEEP NAMES** (no `_crunched_<bits>bi
 suffix, so Unity `.meta` / Godot `.import` references survive; batch collisions still get
 `-2`, `-3`). The codec line under CRUNCH shows what will be written.
 
+`npm test`/`npm run build` also fail when the Ukrainian page leaks a replacement token,
+has unbalanced tags, shows untranslated English words, or when a `t()` string in the UI
+has no Ukrainian translation.
+
 Normalization is linked peak normalization to a **-1 dBFS** ceiling by default (headroom for
 lossy codecs) or 0 dBFS. Share links without the `nc` parameter, including links made before
 this option existed, now use -1 dBFS. **TRIM SILENCE** removes leading/trailing audio below
 -48 dBFS with a 2 ms pad, then applies a 1 ms fade-in (inside the pad, so attacks keep their
-first peak) and a 4 ms fade-out. Preview has a LOOP toggle (`L`); loop and monitor volume are
+first peak) and a 4 ms fade-out; preview trims the ORIGINAL branch to the same window so
+A/B stays in sync. The custom preset (SAVE CURRENT) also stores the ceiling and trim. Preview has a LOOP toggle (`L`); loop and monitor volume are
 listening preferences, so they are not part of share links or undo history.
 
 Reload, share-link parsing, undo/redo, Simple/Advanced snapshots, filename rendering,
@@ -65,7 +70,6 @@ stay in English on purpose.
 After editing `index.html`, run `npm run locales`. `npm test` and `npm run build` fail when
 `uk/index.html` is stale or when an English string in `scripts/locales/uk.cjs` no longer
 exists in `index.html`.
-Queue files and output blobs remain in memory and disappear on reload.
 
 ## Development
 
@@ -83,6 +87,7 @@ Open the URL printed by Vite with the `/OGCruncher/` base path.
 npm run locales      # regenerate uk/index.html after editing index.html
 npm run build
 npm run preview -- --host 127.0.0.1 --port 5187 --strictPort
+npm test
 node scripts/regression.cjs
 node scripts/audit-numerics.cjs
 ```
@@ -96,7 +101,7 @@ to browser audio or perform lossy codec round-trips.
 ## Deployment and privacy
 
 `vite.config.js` targets GitHub Pages under `/OGCruncher/`. The GitHub workflow builds
-Pages and Neutralino artifacts. It was not dispatched during this remediation. Desktop
+Pages and Neutralino artifacts and deploys Pages on every push to `master`. Desktop
 root `/index.html` serving still needs reconciliation with the web asset base, followed
 by an executable launch test; `neu build` success alone is insufficient.
 

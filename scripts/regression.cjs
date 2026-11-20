@@ -107,4 +107,20 @@ assert.equal(queueContext.getOutputFilename('jump.wav', 'ogg', 8, 22050, '', fal
 assert.equal(queueContext.getOutputFilename('jump.wav', 'ogg', 8, 22050, '', true), 'jump.ogg', 'keepOriginalName omits suffix');
 assert.equal(queueContext.getOutputFilename('jump.wav', 'ogg', 8, 22050, '-2', true), 'jump-2.ogg', 'keepOriginalName preserves collision disambiguator');
 
-console.log('OGCruncher regression checks passed: DSP neutral/linked, -1 dBFS ceiling, trim/fade, PCM WAV, filenames, and state validation.');
+// Every literal passed to t() in the UI modules must have a Ukrainian translation.
+{
+  const i18nSource = read('js/i18n.js');
+  const ukBlock = i18nSource.slice(i18nSource.indexOf('const UK = {'), i18nSource.indexOf('const DICTIONARIES'));
+  const ukKeys = new Set([...ukBlock.matchAll(/^\s*'((?:[^'\\]|\\.)*)':/gm)].map(m => m[1]));
+  const missing = [];
+  for (const file of ['js/ui.js', 'js/queue.js', 'js/preview.js', 'js/sw-update.js', 'js/main.js', 'js/utils.js']) {
+    const source = read(file);
+    for (const m of source.matchAll(/\bt\(\s*'((?:[^'\\]|\\.)*)'/g)) if (!ukKeys.has(m[1])) missing.push(`${file}: ${m[1]}`);
+    for (const m of source.matchAll(/\bt\([^)]*?\?\s*'((?:[^'\\]|\\.)*)'\s*:\s*'((?:[^'\\]|\\.)*)'/g)) {
+      [m[1], m[2]].forEach(key => { if (!ukKeys.has(key)) missing.push(`${file}: ${key}`); });
+    }
+  }
+  assert.deepEqual(missing, [], `every t() string has a Ukrainian translation:\n${missing.join('\n')}`);
+}
+
+console.log('OGCruncher regression checks passed: DSP neutral/linked, -1 dBFS ceiling, trim/fade, PCM WAV, filenames, state validation, and Ukrainian string coverage.');
