@@ -39,6 +39,45 @@
   <link rel="apple-touch-icon" href="%BASE_URL%images/icon-192.png" />
 
   <title>OGCruncher — біткрашер і конвертер звуку онлайн</title>
+  <script>
+  (function () {
+    try {
+      if (!/^https?:$/.test(location.protocol) || window.NL_PORT) return;
+      var activeLang = (document.documentElement.lang || 'en').slice(0, 2).toLowerCase();
+      var supported = ['en', 'uk'];
+      var saved = localStorage.getItem('ogcruncher_lang');
+      if (!supported.includes(saved)) {
+        var hubLang = localStorage.getItem('preferred_lang');
+        saved = supported.includes(hubLang) ? hubLang : null;
+      }
+      var target = null;
+      if (saved && saved !== activeLang) {
+        target = saved;
+      } else if (
+        !saved &&
+        activeLang === 'en' &&
+        !navigator.webdriver &&
+        !/bot|crawl|spider|slurp|facebookexternalhit|lighthouse|headless|bingpreview|yandex|baidu|duckduckbot|applebot|semrush|ahrefs/i.test(navigator.userAgent || '')
+      ) {
+        var langs = (navigator.languages && navigator.languages.length)
+          ? navigator.languages
+          : [navigator.language || navigator.userLanguage || ''];
+        for (var i = 0; i < langs.length; i++) {
+          var base = String(langs[i] || '').toLowerCase().split('-')[0];
+          if (supported.includes(base)) {
+            if (base !== activeLang) target = base;
+            break;
+          }
+        }
+      }
+      if (target === 'uk' && activeLang === 'en') {
+        window.location.replace('uk/' + location.search + location.hash);
+      } else if (target === 'en' && activeLang === 'uk') {
+        window.location.replace('../' + location.search + location.hash);
+      }
+    } catch (e) {}
+  })();
+  </script>
 
   <script data-goatcounter="/m/e" async src="/m/v1.js"></script>
   <script type="application/ld+json">
@@ -223,18 +262,18 @@
         <div class="logo-block">
           <img src="%BASE_URL%images/logo.svg" class="logo-img" alt="" aria-hidden="true">
           <div class="logo-text">
-            <h1 class="logo-title">OGCruncher<span class="logo-title__kw"> безкоштовний біткрашер і конвертер звуку онлайн</span></h1>
+            <h1 class="logo-title"><span class="notranslate" translate="no">OGCruncher</span><span class="logo-title__kw"> безкоштовний біткрашер і конвертер звуку онлайн</span></h1>
           </div>
         </div>
       </a>
       <nav class="header-nav" aria-label="Навігація OGCruncher">
         <button id="btn-install" type="button" class="nav-btn nav-btn--accent" title="Встановити OGCruncher як окрему програму" hidden>⬇ ВСТАНОВИТИ</button>
-        <div class="lang-switch" role="group" aria-label="Мова">
+        <div class="lang-switch notranslate" translate="no" role="group" aria-label="Мова">
           <a class="lang-switch__item" href="../" hreflang="en" lang="en" title="English version">EN</a>
           <a class="lang-switch__item is-active" href="./" hreflang="uk" lang="uk" aria-current="page">УКР</a>
         </div>
         <button id="btn-info" type="button" class="nav-btn" title="Про OGCruncher">ПРО САЙТ</button>
-        <a data-goatcounter-click="ogcruncher-hub" class="nav-btn nav-btn--hub" href="https://sivochka.com/?ref=OGCruncher" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
+        <a data-goatcounter-click="ogcruncher-hub" class="nav-btn nav-btn--hub notranslate" translate="no" href="https://sivochka.com/?ref=OGCruncher" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
       </nav>
     </div>
   </header>

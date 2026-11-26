@@ -129,9 +129,9 @@ const pairs = [
   ['<span class="logo-title__kw"> Free Online Audio Bit-Crusher &amp; Compressor</span>', '<span class="logo-title__kw"> безкоштовний біткрашер і конвертер звуку онлайн</span>'],
   ['aria-label="OGCruncher navigation"', 'aria-label="Навігація OGCruncher"'],
   ['title="Install OGCruncher as a standalone app" hidden>⬇ INSTALL APP</button>', 'title="Встановити OGCruncher як окрему програму" hidden>⬇ ВСТАНОВИТИ</button>'],
-  ['<div class="lang-switch" role="group" aria-label="Language">', '<div class="lang-switch" role="group" aria-label="Мова">'],
-  ['<a class="lang-switch__item is-active" href="./" hreflang="en" lang="en" aria-current="page">EN</a>\n          <a class="lang-switch__item" href="uk/" hreflang="uk" lang="uk" title="Українська версія">УКР</a>',
-    '<a class="lang-switch__item" href="../" hreflang="en" lang="en" title="English version">EN</a>\n          <a class="lang-switch__item is-active" href="./" hreflang="uk" lang="uk" aria-current="page">УКР</a>'],
+  ['<div class="lang-switch notranslate" translate="no" role="group" aria-label="Language">', '<div class="lang-switch notranslate" translate="no" role="group" aria-label="Мова">'],
+  ['<a class="lang-switch__item is-active" href="./" hreflang="en" lang="en" aria-current="page">EN</a>', '<a class="lang-switch__item" href="../" hreflang="en" lang="en" title="English version">EN</a>'],
+  ['<a class="lang-switch__item" href="uk/" hreflang="uk" lang="uk" title="Українська версія">УКР</a>', '<a class="lang-switch__item is-active" href="./" hreflang="uk" lang="uk" aria-current="page">УКР</a>'],
   ['title="About OGCruncher">ABOUT</button>', 'title="Про OGCruncher">ПРО САЙТ</button>'],
 
   // Intro

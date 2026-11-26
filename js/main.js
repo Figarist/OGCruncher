@@ -48,3 +48,12 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 } else if (import.meta.env.PROD) {
   setBadge(t('WEB ONLY'), 'badge--amber');
 }
+
+document.querySelectorAll('.lang-switch__item[hreflang]').forEach((link) => {
+  link.addEventListener('click', () => {
+    const lang = link.getAttribute('hreflang');
+    if (lang === 'en' || lang === 'uk') {
+      try { localStorage.setItem('ogcruncher_lang', lang); } catch (_) {}
+    }
+  });
+});
