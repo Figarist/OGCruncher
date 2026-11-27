@@ -349,6 +349,7 @@ const pairs = [
   ['<span class="footer-note">Made by Ihor Sivochka for game developers and curious people.</span>', '<span class="footer-note">Зробив Ігор Сівочка для розробників ігор і всіх допитливих.</span>'],
   ['<a href="#guide" class="footer-link">Guide</a>', '<a href="#guide" class="footer-link">Довідка</a>'],
   ['<a href="#faq" class="footer-link">FAQ</a>', '<a href="#faq" class="footer-link">Запитання</a>'],
+  ['<a href="https://sivochka.com/privacy/" class="footer-link" target="_blank" rel="noopener noreferrer">Privacy policy</a>', '<a href="https://sivochka.com/uk/privacy/" class="footer-link" target="_blank" rel="noopener noreferrer">Політика конфіденційності</a>'],
   ['<strong>UPDATE READY</strong>', '<strong>Є ОНОВЛЕННЯ</strong>'],
   ['<span id="sw-update-message">A new version is waiting.</span>', '<span id="sw-update-message">Нова версія вже чекає.</span>'],
   ['class="btn btn--primary btn--xs">ACTIVATE &amp; RELOAD</button>', 'class="btn btn--primary btn--xs">ОНОВИТИ Й ПЕРЕЗАВАНТАЖИТИ</button>'],
