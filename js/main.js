@@ -49,11 +49,34 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   setBadge(t('WEB ONLY'), 'badge--amber');
 }
 
-document.querySelectorAll('.lang-switch__item[hreflang]').forEach((link) => {
+const langTrigger = document.getElementById('btn-lang-menu');
+const langMenu = document.getElementById('lang-menu');
+const closeLangMenu = () => {
+  if (!langMenu || !langTrigger) return;
+  langMenu.hidden = true;
+  langTrigger.setAttribute('aria-expanded', 'false');
+};
+if (langTrigger && langMenu) {
+  langTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = langMenu.hidden;
+    langMenu.hidden = !willOpen;
+    langTrigger.setAttribute('aria-expanded', String(willOpen));
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.lang-dropdown')) closeLangMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLangMenu();
+  });
+}
+
+document.querySelectorAll('.lang-btn[hreflang]').forEach((link) => {
   link.addEventListener('click', () => {
     const lang = link.getAttribute('hreflang');
-    if (lang === 'en' || lang === 'uk' || lang === 'pl' || lang === 'ru') {
+    if (lang === 'en' || lang === 'uk' || lang === 'pl' || lang === 'ru' || lang === 'ko') {
       try { localStorage.setItem('ogcruncher_lang', lang); } catch (_) {}
     }
+    closeLangMenu();
   });
 });

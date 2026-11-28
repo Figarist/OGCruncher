@@ -15,6 +15,7 @@
   <link rel="alternate" hreflang="uk" href="https://sivochka.com/OGCruncher/uk/" />
   <link rel="alternate" hreflang="pl" href="https://sivochka.com/OGCruncher/pl/" />
   <link rel="alternate" hreflang="ru" href="https://sivochka.com/OGCruncher/ru/" />
+  <link rel="alternate" hreflang="ko" href="https://sivochka.com/OGCruncher/ko/" />
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website" />
@@ -44,7 +45,9 @@
     try {
       if (!/^https?:$/.test(location.protocol) || window.NL_PORT) return;
       var activeLang = (document.documentElement.lang || 'en').slice(0, 2).toLowerCase();
-      var supported = ['en', 'uk', 'pl', 'ru'];
+      var localePattern = /\/(?:uk|pl|ru|ko)(?:\/|$)/;
+      if (activeLang === 'en' && localePattern.test(location.pathname)) return;
+      var supported = ['en', 'uk', 'pl', 'ru', 'ko'];
       var saved = localStorage.getItem('ogcruncher_lang');
       if (!supported.includes(saved)) {
         var hubLang = localStorage.getItem('preferred_lang');
@@ -71,9 +74,13 @@
         }
       }
       if (target && target !== activeLang) {
-        var prefix = activeLang === 'en' ? '' : '../';
-        var suffix = target === 'en' ? '' : (target + '/');
-        window.location.replace(prefix + suffix + location.search + location.hash);
+        var currentPath = location.pathname;
+        var rootPath = currentPath.replace(/index\.html$/, '').replace(/(?:uk|pl|ru|ko)(?:\/|$)/, '');
+        if (rootPath.slice(-1) !== '/') rootPath += '/';
+        var nextPath = rootPath + (target === 'en' ? '' : (target + '/'));
+        if (nextPath !== currentPath) {
+          window.location.replace(nextPath + location.search + location.hash);
+        }
       }
     } catch (e) {}
   })();
@@ -252,11 +259,19 @@
       </a>
       <nav class="header-nav" aria-label="OGCruncher navigation">
         <button id="btn-install" type="button" class="nav-btn nav-btn--accent" title="Install OGCruncher as a standalone app" hidden>⬇ INSTALL APP</button>
-        <div class="lang-switch notranslate" translate="no" role="group" aria-label="Language">
-          <a class="lang-switch__item is-active" href="./" hreflang="en" lang="en" aria-current="page">EN</a>
-          <a class="lang-switch__item" href="uk/" hreflang="uk" lang="uk" title="Українська версія">УКР</a>
-          <a class="lang-switch__item" href="pl/" hreflang="pl" lang="pl" title="Wersja polska">PL</a>
-          <a class="lang-switch__item" href="ru/" hreflang="ru" lang="ru" title="Русская версия">RU</a>
+        <div class="lang-dropdown notranslate" translate="no">
+          <button type="button" id="btn-lang-menu" class="lang-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="Language">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span id="lang-current">EN</span>
+            <span class="lang-caret" aria-hidden="true">▾</span>
+          </button>
+          <div id="lang-menu" class="lang-menu" role="menu" hidden>
+            <a class="lang-btn is-active" href="./" hreflang="en" lang="en" role="menuitem" aria-current="page">EN · English</a>
+            <a class="lang-btn" href="uk/" hreflang="uk" lang="uk" role="menuitem">UK · Українська</a>
+            <a class="lang-btn" href="pl/" hreflang="pl" lang="pl" role="menuitem">PL · Polski</a>
+            <a class="lang-btn" href="ru/" hreflang="ru" lang="ru" role="menuitem">RU · Русский</a>
+            <a class="lang-btn" href="ko/" hreflang="ko" lang="ko" role="menuitem">KO · 한국어</a>
+          </div>
         </div>
         <button id="btn-info" type="button" class="nav-btn" title="About OGCruncher">ABOUT</button>
         <a data-goatcounter-click="ogcruncher-hub" class="nav-btn nav-btn--hub notranslate" translate="no" href="https://sivochka.com/?ref=OGCruncher" target="_blank" rel="noopener noreferrer">FIGARIST <span aria-hidden="true">↗</span></a>
@@ -936,6 +951,7 @@
         <li><a href="uk/" hreflang="uk" lang="uk">Українська версія →</a></li>
         <li><a href="pl/" hreflang="pl" lang="pl">Wersja polska →</a></li>
         <li><a href="ru/" hreflang="ru" lang="ru">Русская версия →</a></li>
+        <li><a href="ko/" hreflang="ko" lang="ko">한국어 버전 →</a></li>
       </ul>
     </aside>
   </section>

@@ -44,11 +44,12 @@ assert.equal(
   `generated service worker precache list must not contain duplicates: ${precacheUrls.filter((u, i) => precacheUrls.indexOf(u) !== i).join(', ')}`,
 );
 
-// Localized pages: uk, pl, ru — reciprocal hreflang, localized metadata, precache, and i18n parity.
+// Localized pages: uk, pl, ru, ko — reciprocal hreflang, localized metadata, precache, and i18n parity.
 const LOCALE_CHECKS = [
   { lang: 'uk', marker: /ОБРОБИТИ/ },
   { lang: 'pl', marker: /PRZETWÓRZ/ },
   { lang: 'ru', marker: /ОБРАБОТАТЬ/ },
+  { lang: 'ko', marker: /크런치/ },
 ];
 const allPages = [html];
 for (const { lang, marker } of LOCALE_CHECKS) {
@@ -76,6 +77,7 @@ for (const page of allPages) {
   assert.match(page, /hreflang="uk" href="https:\/\/sivochka\.com\/OGCruncher\/uk\/"/, 'every page links the Ukrainian alternate');
   assert.match(page, /hreflang="pl" href="https:\/\/sivochka\.com\/OGCruncher\/pl\/"/, 'every page links the Polish alternate');
   assert.match(page, /hreflang="ru" href="https:\/\/sivochka\.com\/OGCruncher\/ru\/"/, 'every page links the Russian alternate');
+  assert.match(page, /hreflang="ko" href="https:\/\/sivochka\.com\/OGCruncher\/ko\/"/, 'every page links the Korean alternate');
   assert.match(page, /hreflang="x-default" href="https:\/\/sivochka\.com\/OGCruncher\/"/, 'every page declares x-default');
   assert.doesNotMatch(page, /hreflang="[^"]+" href="[^"]*#/, 'hreflang targets never use a #fragment');
   const og = page.match(/<meta property="og:description" content="([^"]*)"/)[1];
@@ -83,13 +85,13 @@ for (const page of allPages) {
   assert.equal(og, tw, 'og:description equals twitter:description');
 }
 
-assert.match(sw, /denylist:\[\/\\\/\(\?:uk\|pl\|ru\)/, 'service worker navigation fallback skips /uk/, /pl/, /ru/');
+assert.match(sw, /denylist:\[\/\\\/\(\?:uk\|pl\|ru\|ko\)/, 'service worker navigation fallback skips /uk/, /pl/, /ru/, /ko/');
 const sitemap = fs.readFileSync(path.join(dist, 'sitemap.xml'), 'utf8');
-for (const lang of ['uk', 'pl', 'ru']) {
+for (const lang of ['uk', 'pl', 'ru', 'ko']) {
   assert.match(sitemap, new RegExp(`<loc>https:\\/\\/sivochka\\.com\\/OGCruncher\\/${lang}\\/<\\/loc>`), `sitemap lists the ${lang} page`);
 }
 
-// Verify 100% key parity across uk, pl, ru in js/i18n.js and no Ukrainian Cyrillic leaks in pl/ru.
+// Verify 100% key parity across uk, pl, ru, ko in js/i18n.js and no Ukrainian Cyrillic leaks in pl/ru/ko.
 const i18nSrc = fs.readFileSync(path.join(root, 'js', 'i18n.js'), 'utf8');
 function extractDict(name) {
   const start = i18nSrc.indexOf(`const ${name} = {`);
@@ -100,9 +102,9 @@ function extractDict(name) {
   const keys = [...block.matchAll(/^\s*'((?:[^'\\]|\\.)*)':/gm)].map(m => m[1]);
   return { block, keys };
 }
-const dicts = { UK: extractDict('UK'), PL: extractDict('PL'), RU: extractDict('RU') };
+const dicts = { UK: extractDict('UK'), PL: extractDict('PL'), RU: extractDict('RU'), KO: extractDict('KO') };
 const ukKeySet = new Set(dicts.UK.keys);
-for (const lang of ['PL', 'RU']) {
+for (const lang of ['PL', 'RU', 'KO']) {
   const keySet = new Set(dicts[lang].keys);
   const missing = dicts.UK.keys.filter(k => !keySet.has(k));
   const extra = dicts[lang].keys.filter(k => !ukKeySet.has(k));
@@ -111,7 +113,9 @@ for (const lang of ['PL', 'RU']) {
   const ukLetters = dicts[lang].block.match(/[іїєґІЇЄҐ]+/g);
   assert.equal(ukLetters, null, `${lang} dictionary must not contain Ukrainian letters (found: ${(ukLetters || []).join(', ')})`);
 }
-const plCyrillic = dicts.PL.block.match(/[А-Яа-яЁё]+/g);
-assert.equal(plCyrillic, null, `PL dictionary must not contain Cyrillic letters (found: ${(plCyrillic || []).join(', ')})`);
+for (const lang of ['PL', 'KO']) {
+  const cyrillic = dicts[lang].block.match(/[А-Яа-яЁё]+/g);
+  assert.equal(cyrillic, null, `${lang} dictionary must not contain Cyrillic letters (found: ${(cyrillic || []).join(', ')})`);
+}
 
-console.log('Generated build checks passed: manifest link, icons, meta tags, clear button, deduplicated service worker, 4-locale parity, and uk/pl/ru pages.');
+console.log('Generated build checks passed: manifest link, icons, meta tags, clear button, deduplicated service worker, 5-locale parity, and uk/pl/ru/ko pages.');

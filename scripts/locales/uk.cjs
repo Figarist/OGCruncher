@@ -129,15 +129,27 @@ const pairs = [
   ['<span class="logo-title__kw"> Free Online Audio Bit-Crusher &amp; Compressor</span>', '<span class="logo-title__kw"> безкоштовний біткрашер і конвертер звуку онлайн</span>'],
   ['aria-label="OGCruncher navigation"', 'aria-label="Навігація OGCruncher"'],
   ['title="Install OGCruncher as a standalone app" hidden>⬇ INSTALL APP</button>', 'title="Встановити OGCruncher як окрему програму" hidden>⬇ ВСТАНОВИТИ</button>'],
-  ['<div class="lang-switch notranslate" translate="no" role="group" aria-label="Language">', '<div class="lang-switch notranslate" translate="no" role="group" aria-label="Мова">'],
-  [`<a class="lang-switch__item is-active" href="./" hreflang="en" lang="en" aria-current="page">EN</a>
-          <a class="lang-switch__item" href="uk/" hreflang="uk" lang="uk" title="Українська версія">УКР</a>
-          <a class="lang-switch__item" href="pl/" hreflang="pl" lang="pl" title="Wersja polska">PL</a>
-          <a class="lang-switch__item" href="ru/" hreflang="ru" lang="ru" title="Русская версия">RU</a>`,
-    `<a class="lang-switch__item" href="../" hreflang="en" lang="en" title="English version">EN</a>
-          <a class="lang-switch__item is-active" href="./" hreflang="uk" lang="uk" aria-current="page">УКР</a>
-          <a class="lang-switch__item" href="../pl/" hreflang="pl" lang="pl" title="Wersja polska">PL</a>
-          <a class="lang-switch__item" href="../ru/" hreflang="ru" lang="ru" title="Русская версия">RU</a>`],
+  ['aria-label="Language">', 'aria-label="Мова">'],
+  [`<span id="lang-current">EN</span>
+            <span class="lang-caret" aria-hidden="true">▾</span>
+          </button>
+          <div id="lang-menu" class="lang-menu" role="menu" hidden>
+            <a class="lang-btn is-active" href="./" hreflang="en" lang="en" role="menuitem" aria-current="page">EN · English</a>
+            <a class="lang-btn" href="uk/" hreflang="uk" lang="uk" role="menuitem">UK · Українська</a>
+            <a class="lang-btn" href="pl/" hreflang="pl" lang="pl" role="menuitem">PL · Polski</a>
+            <a class="lang-btn" href="ru/" hreflang="ru" lang="ru" role="menuitem">RU · Русский</a>
+            <a class="lang-btn" href="ko/" hreflang="ko" lang="ko" role="menuitem">KO · 한국어</a>
+          </div>`,
+    `<span id="lang-current">UK</span>
+            <span class="lang-caret" aria-hidden="true">▾</span>
+          </button>
+          <div id="lang-menu" class="lang-menu" role="menu" hidden>
+            <a class="lang-btn" href="../" hreflang="en" lang="en" role="menuitem">EN · English</a>
+            <a class="lang-btn is-active" href="./" hreflang="uk" lang="uk" role="menuitem" aria-current="page">UK · Українська</a>
+            <a class="lang-btn" href="../pl/" hreflang="pl" lang="pl" role="menuitem">PL · Polski</a>
+            <a class="lang-btn" href="../ru/" hreflang="ru" lang="ru" role="menuitem">RU · Русский</a>
+            <a class="lang-btn" href="../ko/" hreflang="ko" lang="ko" role="menuitem">KO · 한국어</a>
+          </div>`],
   ['title="About OGCruncher">ABOUT</button>', 'title="Про OGCruncher">ПРО САЙТ</button>'],
 
   // Intro
@@ -353,15 +365,17 @@ const pairs = [
         <li><a href="uk/" hreflang="uk" lang="uk">Українська версія →</a></li>
         <li><a href="pl/" hreflang="pl" lang="pl">Wersja polska →</a></li>
         <li><a href="ru/" hreflang="ru" lang="ru">Русская версия →</a></li>
+        <li><a href="ko/" hreflang="ko" lang="ko">한국어 버전 →</a></li>
       </ul>
     </aside>`,
     `<aside class="seo-locale-card" aria-labelledby="seo-locale-title">
       <h3 id="seo-locale-title">OGCruncher іншими мовами</h3>
-      <p>Повні версії інструмента англійською, польською та російською мовами.</p>
+      <p>Повні версії інструмента англійською, польською, російською та корейською мовами.</p>
       <ul class="seo-locale-links">
         <li><a href="../" hreflang="en" lang="en">English version →</a></li>
         <li><a href="../pl/" hreflang="pl" lang="pl">Wersja polska →</a></li>
         <li><a href="../ru/" hreflang="ru" lang="ru">Русская версия →</a></li>
+        <li><a href="../ko/" hreflang="ko" lang="ko">한국어 버전 →</a></li>
       </ul>
     </aside>`],
 
