@@ -112,7 +112,6 @@ input:focus-visible,
   z-index: 1000;
   width: min(calc(100% - 32px), 1180px);
   margin: calc(16px + var(--safe-top)) auto 0;
-  overflow: hidden;
   border: 1px solid rgba(26, 26, 46, .10);
   border-radius: 16px;
   background: rgba(255, 255, 255, .94);
