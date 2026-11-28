@@ -44,34 +44,74 @@ assert.equal(
   `generated service worker precache list must not contain duplicates: ${precacheUrls.filter((u, i) => precacheUrls.indexOf(u) !== i).join(', ')}`,
 );
 
-// Ukrainian page: its own HTML, reciprocal hreflang, Ukrainian metadata and precache entry.
-const ukPath = path.join(dist, 'uk', 'index.html');
-assert.ok(fs.existsSync(ukPath), 'generated build includes uk/index.html');
-const ukHtml = fs.readFileSync(ukPath, 'utf8');
-assert.match(ukHtml, /<html lang="uk">/, 'uk page declares lang="uk"');
-assert.match(ukHtml, /<link rel="canonical" href="https:\/\/sivochka\.com\/OGCruncher\/uk\/" \/>/, 'uk canonical points to /uk/');
-assert.match(ukHtml, /<meta property="og:url" content="https:\/\/sivochka\.com\/OGCruncher\/uk\/" \/>/, 'uk og:url equals canonical');
-for (const page of [html, ukHtml]) {
-  assert.match(page, /hreflang="en" href="https:\/\/sivochka\.com\/OGCruncher\/"/, 'both pages link the English alternate');
-  assert.match(page, /hreflang="uk" href="https:\/\/sivochka\.com\/OGCruncher\/uk\/"/, 'both pages link the Ukrainian alternate');
-  assert.match(page, /hreflang="x-default" href="https:\/\/sivochka\.com\/OGCruncher\/"/, 'both pages declare x-default');
+// Localized pages: uk, pl, ru — reciprocal hreflang, localized metadata, precache, and i18n parity.
+const LOCALE_CHECKS = [
+  { lang: 'uk', marker: /ОБРОБИТИ/ },
+  { lang: 'pl', marker: /PRZETWÓRZ/ },
+  { lang: 'ru', marker: /ОБРАБОТАТЬ/ },
+];
+const allPages = [html];
+for (const { lang, marker } of LOCALE_CHECKS) {
+  const locPath = path.join(dist, lang, 'index.html');
+  assert.ok(fs.existsSync(locPath), `generated build includes ${lang}/index.html`);
+  const locHtml = fs.readFileSync(locPath, 'utf8');
+  allPages.push(locHtml);
+  assert.match(locHtml, new RegExp(`<html lang="${lang}">`), `${lang} page declares lang="${lang}"`);
+  assert.match(locHtml, new RegExp(`<link rel="canonical" href="https:\\/\\/sivochka\\.com\\/OGCruncher\\/${lang}\\/" \\/>`), `${lang} canonical points to /${lang}/`);
+  assert.match(locHtml, new RegExp(`<meta property="og:url" content="https:\\/\\/sivochka\\.com\\/OGCruncher\\/${lang}\\/" \\/>`), `${lang} og:url equals canonical`);
+  const locTitle = locHtml.match(/<title>([^<]*)<\/title>/)[1];
+  assert.ok([...locTitle].length <= 60, `${lang} <title> fits 60 characters (got ${[...locTitle].length})`);
+  const locDesc = locHtml.match(/<meta name="description" content="([^"]*)"/)[1];
+  assert.ok([...locDesc].length >= 120 && [...locDesc].length <= 160, `${lang} description is 120–160 characters (got ${[...locDesc].length})`);
+  const locLd = JSON.parse(locHtml.match(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i)[1])['@graph'];
+  assert.ok(locLd.some(item => item['@type'] === 'BreadcrumbList' && item['@id'] === `https://sivochka.com/OGCruncher/${lang}/#breadcrumb`), `${lang} breadcrumb @id matches its canonical`);
+  assert.ok(locLd.some(item => item.author?.['@id'] === 'https://sivochka.com#person'), `${lang} JSON-LD keeps the shared #person entity`);
+  assert.ok(locLd.find(item => item['@type'] === 'FAQPage')?.mainEntity.length >= 6, `${lang} JSON-LD includes FAQ items`);
+  assert.match(locHtml, marker, `${lang} page body is translated`);
+  assert.ok(precacheUrls.includes(`${lang}/index.html`), `service worker precaches ${lang}/index.html`);
+}
+
+for (const page of allPages) {
+  assert.match(page, /hreflang="en" href="https:\/\/sivochka\.com\/OGCruncher\/"/, 'every page links the English alternate');
+  assert.match(page, /hreflang="uk" href="https:\/\/sivochka\.com\/OGCruncher\/uk\/"/, 'every page links the Ukrainian alternate');
+  assert.match(page, /hreflang="pl" href="https:\/\/sivochka\.com\/OGCruncher\/pl\/"/, 'every page links the Polish alternate');
+  assert.match(page, /hreflang="ru" href="https:\/\/sivochka\.com\/OGCruncher\/ru\/"/, 'every page links the Russian alternate');
+  assert.match(page, /hreflang="x-default" href="https:\/\/sivochka\.com\/OGCruncher\/"/, 'every page declares x-default');
   assert.doesNotMatch(page, /hreflang="[^"]+" href="[^"]*#/, 'hreflang targets never use a #fragment');
   const og = page.match(/<meta property="og:description" content="([^"]*)"/)[1];
   const tw = page.match(/<meta name="twitter:description" content="([^"]*)"/)[1];
   assert.equal(og, tw, 'og:description equals twitter:description');
 }
-const ukTitle = ukHtml.match(/<title>([^<]*)<\/title>/)[1];
-assert.ok([...ukTitle].length <= 60, `uk <title> fits 60 characters (got ${[...ukTitle].length})`);
-const ukDesc = ukHtml.match(/<meta name="description" content="([^"]*)"/)[1];
-assert.ok([...ukDesc].length >= 120 && [...ukDesc].length <= 160, `uk description is 120–160 characters (got ${[...ukDesc].length})`);
-const ukLd = JSON.parse(ukHtml.match(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i)[1])['@graph'];
-assert.ok(ukLd.some(item => item['@type'] === 'BreadcrumbList' && item['@id'] === 'https://sivochka.com/OGCruncher/uk/#breadcrumb'), 'uk breadcrumb @id matches its canonical');
-assert.ok(ukLd.some(item => item.author?.['@id'] === 'https://sivochka.com#person'), 'uk JSON-LD keeps the shared #person entity');
-assert.ok(ukLd.find(item => item['@type'] === 'FAQPage')?.mainEntity.length >= 6, 'uk JSON-LD includes FAQ items');
-assert.match(ukHtml, /ОБРОБИТИ/, 'uk page body is translated');
-assert.ok(precacheUrls.includes('uk/index.html'), 'service worker precaches uk/index.html');
-assert.match(sw, /denylist:\[\/\\\/uk/, 'service worker navigation fallback skips /uk/');
-const sitemap = fs.readFileSync(path.join(dist, 'sitemap.xml'), 'utf8');
-assert.match(sitemap, /<loc>https:\/\/sivochka\.com\/OGCruncher\/uk\/<\/loc>/, 'sitemap lists the Ukrainian page');
 
-console.log('Generated build checks passed: manifest link, icons, meta tags, clear button, deduplicated service worker, and the Ukrainian page.');
+assert.match(sw, /denylist:\[\/\\\/\(\?:uk\|pl\|ru\)/, 'service worker navigation fallback skips /uk/, /pl/, /ru/');
+const sitemap = fs.readFileSync(path.join(dist, 'sitemap.xml'), 'utf8');
+for (const lang of ['uk', 'pl', 'ru']) {
+  assert.match(sitemap, new RegExp(`<loc>https:\\/\\/sivochka\\.com\\/OGCruncher\\/${lang}\\/<\\/loc>`), `sitemap lists the ${lang} page`);
+}
+
+// Verify 100% key parity across uk, pl, ru in js/i18n.js and no Ukrainian Cyrillic leaks in pl/ru.
+const i18nSrc = fs.readFileSync(path.join(root, 'js', 'i18n.js'), 'utf8');
+function extractDict(name) {
+  const start = i18nSrc.indexOf(`const ${name} = {`);
+  assert.ok(start !== -1, `js/i18n.js defines ${name}`);
+  const end = i18nSrc.indexOf('\n};', start);
+  assert.ok(end !== -1, `js/i18n.js closes ${name}`);
+  const block = i18nSrc.slice(start, end);
+  const keys = [...block.matchAll(/^\s*'((?:[^'\\]|\\.)*)':/gm)].map(m => m[1]);
+  return { block, keys };
+}
+const dicts = { UK: extractDict('UK'), PL: extractDict('PL'), RU: extractDict('RU') };
+const ukKeySet = new Set(dicts.UK.keys);
+for (const lang of ['PL', 'RU']) {
+  const keySet = new Set(dicts[lang].keys);
+  const missing = dicts.UK.keys.filter(k => !keySet.has(k));
+  const extra = dicts[lang].keys.filter(k => !ukKeySet.has(k));
+  assert.deepEqual(missing, [], `${lang} dictionary is missing keys from UK: ${missing.join(', ')}`);
+  assert.deepEqual(extra, [], `${lang} dictionary has extra keys not in UK: ${extra.join(', ')}`);
+  const ukLetters = dicts[lang].block.match(/[іїєґІЇЄҐ]+/g);
+  assert.equal(ukLetters, null, `${lang} dictionary must not contain Ukrainian letters (found: ${(ukLetters || []).join(', ')})`);
+}
+const plCyrillic = dicts.PL.block.match(/[А-Яа-яЁё]+/g);
+assert.equal(plCyrillic, null, `PL dictionary must not contain Cyrillic letters (found: ${(plCyrillic || []).join(', ')})`);
+
+console.log('Generated build checks passed: manifest link, icons, meta tags, clear button, deduplicated service worker, 4-locale parity, and uk/pl/ru pages.');

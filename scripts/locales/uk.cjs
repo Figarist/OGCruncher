@@ -130,8 +130,14 @@ const pairs = [
   ['aria-label="OGCruncher navigation"', 'aria-label="Навігація OGCruncher"'],
   ['title="Install OGCruncher as a standalone app" hidden>⬇ INSTALL APP</button>', 'title="Встановити OGCruncher як окрему програму" hidden>⬇ ВСТАНОВИТИ</button>'],
   ['<div class="lang-switch notranslate" translate="no" role="group" aria-label="Language">', '<div class="lang-switch notranslate" translate="no" role="group" aria-label="Мова">'],
-  ['<a class="lang-switch__item is-active" href="./" hreflang="en" lang="en" aria-current="page">EN</a>', '<a class="lang-switch__item" href="../" hreflang="en" lang="en" title="English version">EN</a>'],
-  ['<a class="lang-switch__item" href="uk/" hreflang="uk" lang="uk" title="Українська версія">УКР</a>', '<a class="lang-switch__item is-active" href="./" hreflang="uk" lang="uk" aria-current="page">УКР</a>'],
+  [`<a class="lang-switch__item is-active" href="./" hreflang="en" lang="en" aria-current="page">EN</a>
+          <a class="lang-switch__item" href="uk/" hreflang="uk" lang="uk" title="Українська версія">УКР</a>
+          <a class="lang-switch__item" href="pl/" hreflang="pl" lang="pl" title="Wersja polska">PL</a>
+          <a class="lang-switch__item" href="ru/" hreflang="ru" lang="ru" title="Русская версия">RU</a>`,
+    `<a class="lang-switch__item" href="../" hreflang="en" lang="en" title="English version">EN</a>
+          <a class="lang-switch__item is-active" href="./" hreflang="uk" lang="uk" aria-current="page">УКР</a>
+          <a class="lang-switch__item" href="../pl/" hreflang="pl" lang="pl" title="Wersja polska">PL</a>
+          <a class="lang-switch__item" href="../ru/" hreflang="ru" lang="ru" title="Русская версия">RU</a>`],
   ['title="About OGCruncher">ABOUT</button>', 'title="Про OGCruncher">ПРО САЙТ</button>'],
 
   // Intro
@@ -340,10 +346,24 @@ const pairs = [
   ['<td>8-Bit PCM WAV / MP3 preview</td>', '<td>8-бітний PCM WAV / MP3</td>'],
   [/<h2 id="faq-heading" class="seo-guide__subtitle">Frequently Asked Questions \(FAQ\)<\/h2>[\s\S]*?(?=\n    <\/section>)/,
     `<h2 id="faq-heading" class="seo-guide__subtitle">Часті запитання</h2>\n${faqHtml}`],
-  ['<h3 id="seo-locale-title">OGCruncher українською</h3>', '<h3 id="seo-locale-title">OGCruncher in English</h3>'],
-  ['<aside class="seo-locale-card" lang="uk" aria-labelledby="seo-locale-title">', '<aside class="seo-locale-card" lang="en" aria-labelledby="seo-locale-title">'],
-  ['<p>Повна українська версія інструмента з поясненнями простими словами та порадами для Scratch, Unity і Godot.</p>', '<p>The original English version of the tool with the full game-audio guide.</p>'],
-  ['<li><a href="uk/" hreflang="uk">Відкрити українську версію →</a></li>', '<li><a href="../" hreflang="en">Open the English version →</a></li>'],
+  [`<aside class="seo-locale-card" aria-labelledby="seo-locale-title">
+      <h3 id="seo-locale-title">OGCruncher in other languages</h3>
+      <p>Full localized versions of the tool with plain-language guides for Scratch, Unity, and Godot.</p>
+      <ul class="seo-locale-links">
+        <li><a href="uk/" hreflang="uk" lang="uk">Українська версія →</a></li>
+        <li><a href="pl/" hreflang="pl" lang="pl">Wersja polska →</a></li>
+        <li><a href="ru/" hreflang="ru" lang="ru">Русская версия →</a></li>
+      </ul>
+    </aside>`,
+    `<aside class="seo-locale-card" aria-labelledby="seo-locale-title">
+      <h3 id="seo-locale-title">OGCruncher іншими мовами</h3>
+      <p>Повні версії інструмента англійською, польською та російською мовами.</p>
+      <ul class="seo-locale-links">
+        <li><a href="../" hreflang="en" lang="en">English version →</a></li>
+        <li><a href="../pl/" hreflang="pl" lang="pl">Wersja polska →</a></li>
+        <li><a href="../ru/" hreflang="ru" lang="ru">Русская версия →</a></li>
+      </ul>
+    </aside>`],
 
   // Footer, notices, modal
   ['<span class="footer-note">Made by Ihor Sivochka for game developers and curious people.</span>', '<span class="footer-note">Зробив Ігор Сівочка для розробників ігор і всіх допитливих.</span>'],

@@ -8,7 +8,7 @@
 import { state, DEFAULTS, saveState, updateHash, parseHash, readSavedState, sanitizeParams, getStateSnapshot, pushHistory, undo, redo, pauseHistory, pausePersistence, setOnStateChange } from './state.js';
 import { initUtils, log, showToast, setBadge, updateSliderTrack } from './utils.js';
 import { initQueue, addFiles, clearQueue, cancelProcessing, startProcessing, loadDemoTrack, handleItems, updateSavingsEstimate } from './queue.js';
-import { t, hz } from './i18n.js';
+import { t, hz, formatNumber } from './i18n.js';
 import { initPreview, togglePreview, toggleAB, requestPreviewUpdate, invalidatePreviewUpdates, setPreviewVolume, setPreviewLoop } from './preview.js';
 
 const SITE_URL = window.location.origin + window.location.pathname;
@@ -487,7 +487,7 @@ function updatePresetUI() {
   const effective = $('effective-settings');
   if (effective) effective.textContent = t('{mode} · {rate} Hz · {bits}-bit effect · {channels} output · filters {filters}', {
     mode: t(state.simpleMode ? 'Simple' : 'Advanced'),
-    rate: state.sampleRate.toLocaleString(),
+    rate: formatNumber(state.sampleRate),
     bits: state.bitDepth,
     channels: t(state.stereo ? 'stereo' : 'mono'),
     filters: t(state.hpf > 20 || state.lpf < 20000 || state.bass > 0 ? 'on' : 'off'),

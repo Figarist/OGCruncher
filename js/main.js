@@ -52,7 +52,7 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 document.querySelectorAll('.lang-switch__item[hreflang]').forEach((link) => {
   link.addEventListener('click', () => {
     const lang = link.getAttribute('hreflang');
-    if (lang === 'en' || lang === 'uk') {
+    if (lang === 'en' || lang === 'uk' || lang === 'pl' || lang === 'ru') {
       try { localStorage.setItem('ogcruncher_lang', lang); } catch (_) {}
     }
   });

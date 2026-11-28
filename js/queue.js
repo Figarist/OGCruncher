@@ -9,7 +9,7 @@ import { log, showToast, formatBytes, formatSizeChange, setBadge } from './utils
 import { buildFilterChain, safeOfflineCtx } from './dsp.js';
 import { hashSeed } from './dsp-core.js';
 import { stopPreview } from './preview.js';
-import { t } from './i18n.js';
+import { t, plural } from './i18n.js';
 
 let _dom = {};
 let worker = null;
@@ -464,7 +464,7 @@ function assertCurrentJob(job) {
 }
 
 async function processFile(file, id, setProgress, fileIndex, fileTotal, snapshot, job, usedOutputNames) {
-  setItemState(id, 'processing', `PROCESSING ${fileIndex + 1}/${fileTotal}`);
+  setItemState(id, 'processing', `${t('PROCESSING')} ${fileIndex + 1}/${fileTotal}`);
   log(`Processing ${file.name} (${fileIndex + 1}/${fileTotal})`, 'accent');
   try {
     assertCurrentJob(job);
@@ -635,7 +635,15 @@ function renderResult(result) {
     if (_dom.btnDownloadZip) _dom.btnDownloadZip.hidden = batchArchiveEntries.length <= 1;
     if (_dom.resultsBatchSummary) {
       const count = batchArchiveEntries.length;
-      _dom.resultsBatchSummary.textContent = t(count === 1 ? '{count} file ready' : '{count} files ready', { count });
+      _dom.resultsBatchSummary.textContent = t(
+        plural(count, {
+          one: '{count} file ready',
+          few: '{count} files ready (few)',
+          many: '{count} files ready',
+          other: '{count} files ready',
+        }),
+        { count },
+      );
     }
   }
 }
